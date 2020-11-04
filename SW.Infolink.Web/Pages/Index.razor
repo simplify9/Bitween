@@ -49,7 +49,7 @@
                 {
                     <span class="badge badge-warning">Running</span>
                     <span class="badge badge-secondary">
-                        @(((XchangeRow)context.Model).StartedOn.Humanize())
+                        @(((XchangeRow)context.Model).StartedOn.ToString("ddMMM-HH:mm"))
                     </span>
                 }
                 else if (((XchangeRow)context.Model).Status.Value)
@@ -60,14 +60,14 @@
                         <span class="badge badge-success">Aggregated</span>
                     }
                     <span class="badge badge-secondary">
-                        @(((XchangeRow)context.Model).StartedOn.Humanize())
+                        @(((XchangeRow)context.Model).StartedOn.ToString("ddMMM-HH:mm"))
                     </span> <span class="badge badge-secondary">@(((XchangeRow)context.Model).Duration)</span>
                 }
                 else
                 {
                     <a href="JavaScript:void(0);" @onclick="() => FailMessageClick(((XchangeRow)context.Model).Id)" class="badge badge-danger">Fail</a>
                     <span class="badge badge-secondary">
-                        @(((XchangeRow)context.Model).StartedOn.Humanize())
+                        @(((XchangeRow)context.Model).StartedOn.ToString("ddMMM-HH:mm"))
                     </span>
                     <span class="badge badge-secondary">@(((XchangeRow)context.Model).Duration)</span>
                 }
