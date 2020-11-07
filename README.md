@@ -22,10 +22,9 @@ subscribers.
 
 ### Partners
 
-A **Partner** is simply a way to associated a subscriber with a specific entity. Simply name one to
-add it to the system, so when a subscriber is created it can be associated with one.
+A **Partner** is a way to to assign multiple subscriptions for multiple entities of a document and to create a partner key as a header for authentication purposes for the caller to use. Simply name one to add it to the system, so when a subscriber is created it can be associated with one.
 
-### Subscriber
+### Subscription
 
 A **Subscriber** is a *listner*. It keeps watching the queue for a certain **Document**. If
 a document is found, it will pass through the following stages.
@@ -44,16 +43,8 @@ The mapper is, in facem a **serverless adapter**- explained below.
 The handling phase is where a certain action is performed using the mapped(if a mapper was given)
 data. Like, for example, making a POST request to a certain URL.
 
-Note, that the handler is also a **serverless adapter**.
-
 ---
 
-### Serverless adapter
-
-
-A serverless adapter is console application hosted on the cloud, that will be downloaded and ran at
-runtime. For more information on adapters, their installation and details please take a look at the
-[serverless repository](https://github.com/simplify9/serverless)
 
 
 
