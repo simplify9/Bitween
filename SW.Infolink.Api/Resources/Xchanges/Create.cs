@@ -8,6 +8,7 @@ using SW.PrimitiveTypes;
 
 namespace SW.Infolink.Resources.Xchanges
 {
+    [Returns(Type = typeof(int),StatusCode = 200)]
     public class Create: ICommandHandler<CreateXchange>
     {
         private readonly XchangeService _xchangeService;

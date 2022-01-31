@@ -11,6 +11,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Xchanges
 {
+    [Returns(Type = typeof(XchangeRow),StatusCode = 200)]
     [HandlerName("internal")]
     class GetInternal : IGetHandler<int>
     {

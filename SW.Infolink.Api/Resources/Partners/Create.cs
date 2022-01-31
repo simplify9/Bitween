@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 namespace SW.Infolink.Resources.Partners
 {
+    [Returns(Type = typeof(int),StatusCode = 200)]
     class Create : ICommandHandler<PartnerCreate>
     {
         private readonly InfolinkDbContext dbContext;

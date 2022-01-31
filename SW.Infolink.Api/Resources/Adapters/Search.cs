@@ -1,10 +1,13 @@
-﻿using SW.PrimitiveTypes;
+﻿using System.Collections.Generic;
+using SW.PrimitiveTypes;
 using System.Threading.Tasks;
 using System.Linq;
 using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Adapters
 {
+    [Returns(Type = typeof(Dictionary<string,string>),StatusCode = 200)]
+
     class Search : IQueryHandler<AdapterSearchRequest>
     {
         private readonly ServerlessOptions serverlessOptions;

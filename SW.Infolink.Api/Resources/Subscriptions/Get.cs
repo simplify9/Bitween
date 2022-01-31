@@ -11,6 +11,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Subscriptions
 {
+    [Returns(Type = typeof(SearchyResponse<ScheduleView>),StatusCode = 200)]
     class Get : IGetHandler<int>
     {
         private readonly InfolinkDbContext dbContext;

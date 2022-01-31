@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace SW.Infolink.Resources.Xchanges
 {
+    [Returns(Type = typeof(Dictionary<string, string>),StatusCode = 200)]
     [HandlerName("statuslist")]
     class StatusList : ISearchyHandler
     {

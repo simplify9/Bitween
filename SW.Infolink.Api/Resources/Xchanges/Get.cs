@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 namespace SW.Infolink.Resources.Xchanges
 {
     [Unprotect]
+    [Returns(Type = typeof(XchangeGetResultResponse),StatusCode = 200)]
     class Get : IGetHandler<string>
     {
         private readonly InfolinkDbContext dbContext;

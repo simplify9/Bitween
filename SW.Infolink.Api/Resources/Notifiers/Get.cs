@@ -8,6 +8,7 @@ using SW.PrimitiveTypes;
 
 namespace SW.Infolink.Resources.Notifiers
 {
+    [Returns(Type = typeof(NotifierGet),StatusCode = 200)]
     public class Get: IGetHandler<int>
     {
         private readonly InfolinkDbContext dbContext;
@@ -31,7 +32,7 @@ namespace SW.Infolink.Resources.Notifiers
             }
            
             
-            return new
+            return new NotifierGet
             {
                 Id = notifier.Id,
                 Name = notifier.Name,

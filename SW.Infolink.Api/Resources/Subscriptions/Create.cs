@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace SW.Infolink.Resources.Subscriptions
 {
+    [Returns(Type = typeof(int),StatusCode = 200)]
     class Create : ICommandHandler<SubscriptionCreate>
     {
         private readonly InfolinkDbContext dbContext;

@@ -8,6 +8,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Partners
 {
+    [Returns(Type = typeof(SearchyResponse<PartnerRow>),StatusCode = 200)]
     class Search : ISearchyHandler
     {
         private readonly InfolinkDbContext dbContext;

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 namespace SW.Infolink.Resources.Documents
 {
     [HandlerName("properties")]
+    [Returns(Type = typeof(Dictionary<string,string>),StatusCode = 200)]
     class GetProperties : IGetHandler<int>
     {
         private readonly InfolinkDbContext dbContext;

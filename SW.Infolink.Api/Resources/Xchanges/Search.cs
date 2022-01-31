@@ -12,6 +12,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Xchanges
 {
+    [Returns(Type = typeof(SearchyResponse<XchangeRow>),StatusCode = 200)]
     class Search : ISearchyHandler
     {
         private readonly InfolinkDbContext dbContext;

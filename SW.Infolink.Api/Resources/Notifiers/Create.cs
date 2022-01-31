@@ -6,6 +6,7 @@ using SW.PrimitiveTypes;
 
 namespace SW.Infolink.Resources.Notifiers
 {
+    [Returns(Type = typeof(int),StatusCode = 200)]
     public class Create:ICommandHandler<NotifierCreate>
     {
         private readonly InfolinkDbContext dbContext;

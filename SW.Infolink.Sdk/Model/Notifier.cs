@@ -36,5 +36,12 @@ namespace SW.Infolink.Model
         public bool? Inactive { get; set; }
     }
 
+    public class NotifierGet : NotifierSearch
+    {
+        public ICollection<KeyAndValue> HandlerProperties { get; set; }
+        public List<NotifierSubscription> RunOnSubscriptions { get; set; }
+
+    }
+
    
 }

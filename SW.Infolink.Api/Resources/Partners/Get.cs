@@ -8,6 +8,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Resources.Partners
 {
+    [Returns(Type = typeof(SubscriptionSearch),StatusCode = 200)]
     class Get : IGetHandler<int>
     {
         private readonly InfolinkDbContext dbContext;

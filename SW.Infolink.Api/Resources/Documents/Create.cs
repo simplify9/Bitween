@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 
 namespace SW.Infolink.Api.Resources.Documents
 {
+    [Returns(Type = typeof(int),StatusCode = 200)]
+
     class Create : ICommandHandler<DocumentCreate>
     {
         private readonly InfolinkDbContext dbContext;

@@ -11,6 +11,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Api.Resources.Documents
 {
+    [Returns(Type = typeof(SearchyResponse<DocumentRow>),StatusCode = 200)]
     class Search : ISearchyHandler
     {
         private readonly InfolinkDbContext dbContext;

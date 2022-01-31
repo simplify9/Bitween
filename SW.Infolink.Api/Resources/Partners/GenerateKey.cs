@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace SW.Infolink.Resources.Partners
 {
+    [Returns(Type = typeof(string),StatusCode = 200)]
     [HandlerName("generatekey") ]
     class GenerateKey : IQueryHandler
     {

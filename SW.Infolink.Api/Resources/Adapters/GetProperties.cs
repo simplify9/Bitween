@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 namespace SW.Infolink.Resources.Adapters
 {
     [HandlerName("properties")]
+    [Returns(Type = typeof(Dictionary<string,string>),StatusCode = 200)]
     class GetProperties : IGetHandler<string>
     {
         private readonly IServerlessService serverless;

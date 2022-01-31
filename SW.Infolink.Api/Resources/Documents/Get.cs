@@ -11,6 +11,7 @@ using SW.Infolink.Model;
 
 namespace SW.Infolink.Api.Resources.Documents
 {
+    [Returns(Type = typeof(DocumentUpdate),StatusCode = 200)]
     class Get : IGetHandler<int>
     {
         private readonly InfolinkDbContext dbContext;

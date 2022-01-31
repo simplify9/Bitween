@@ -8,6 +8,7 @@ using SW.PrimitiveTypes;
 
 namespace SW.Infolink.Resources.Notifiers
 {
+    [Returns(Type = typeof(SearchyResponse<NotifierSearch>),StatusCode = 200)]
     public class Search: ISearchyHandler
     {
         private readonly InfolinkDbContext dbContext;
