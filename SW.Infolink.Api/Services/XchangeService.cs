@@ -297,7 +297,7 @@ namespace SW.Infolink
                     case true when !message.ResponseBad && notifier.RunOnSuccessfulResult:
                     case true when message.ResponseBad && notifier.RunOnBadResult:
                     case false when notifier.RunOnFailedResult:
-                        await NotifyResult(notifier, xchangeResult, xchange.CorrelationId ?? xchange.Id);
+                        await NotifyResult(notifier, xchangeResult, xchange?.CorrelationId ?? xchange?.Id);
                         break;
                 }
             }
@@ -308,8 +308,8 @@ namespace SW.Infolink
            
             if (xchangeResult == null) throw new InfolinkException($"Xchange Result '{xchangeResult.Id}' not found.");
 
-            if (notifier.HandlerId == null) return;
-            
+            if (notifier?.HandlerId == null) return;
+
             var notificationData = new XchangeResultNotification
             {
                 Id = xchangeResult.Id,
@@ -318,26 +318,26 @@ namespace SW.Infolink
                 FinishedOn = xchangeResult.FinishedOn,
                 OutputBad = xchangeResult.OutputBad,
                 ResponseBad = xchangeResult.ResponseBad,
-                
             };
-            
+
             var serverless = serviceProvider.GetRequiredService<IServerlessService>();
 
             var handlerProperties = notifier.HandlerProperties.ToDictionary();
             handlerProperties["xchangeid"] = xchangeResult.Id;
-            
+
             try
             {
                 await serverless.StartAsync(notifier.HandlerId, correlationId, handlerProperties);
-                var xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle), 
+                var xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle),
                     new XchangeFile(JsonConvert.SerializeObject(notificationData), xchangeResult.Id));
 
-                dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id,notifier.Name));
+                dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name));
             }
             catch (Exception ex)
             {
-                dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id,notifier.Name,ex.ToString()));
+                dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name, ex.ToString()));
             }
+
             await dbContext.SaveChangesAsync();
 
         }
