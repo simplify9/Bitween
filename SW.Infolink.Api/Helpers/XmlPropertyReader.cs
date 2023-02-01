@@ -17,7 +17,7 @@ public class XmlPropertyReader : IPropertyReader
         value = default(string);
         var node = _doc.XPathSelectElement(path);
         if (node == null) return false;
-        var trimmed = node.Value.Trim();
+        var trimmed = node.Value?.Trim();
         value = trimmed == string.Empty ? default(string) : trimmed;
         return true;
     }
