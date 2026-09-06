@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SW.Bitween.Services.Adapters;
 using SW.Bus.RabbitMqExtensions;
 
 namespace SW.Bitween;
@@ -35,13 +36,13 @@ public class XchangeService :
     private readonly ILogger _logger;
     private readonly IInfolinkCache _BitweenCache;
     private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-    private readonly AdapterInvoker _adapterInvoker;
+    private readonly IAdapterInvoker _adapterInvoker;
 
     public XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
         FilterService filterService,
         ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
         IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
-        NativeAdapterDiscoveryService nativeAdapterDiscovery, AdapterInvoker adapterInvoker)
+        NativeAdapterDiscoveryService nativeAdapterDiscovery, IAdapterInvoker adapterInvoker)
     {
         _adapterInvoker = adapterInvoker;
         _BitweenSettings = BitweenSettings;
@@ -262,18 +263,12 @@ public class XchangeService :
         mapperProperties["xchangeid"] = xchange.Id;
 
         // Check if it's a native adapter
-        if (xchange.MapperId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var handler = _nativeAdapterDiscovery.GetNativeMapper(xchange.MapperId, mapperProperties);
-            xchangeFile = await handler.Handle(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(xchange.MapperId, xchange.CorrelationId ?? xchange.Id, mapperProperties);
-            xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle), xchangeFile);
-        }
+        // No branching on the adapter's kind: the invoker decides which of the three runtimes
+        // owns this id — in-process, spawned, or a rented resident instance — and the pipeline
+        // only says what it wants run.
+        xchangeFile = await _adapterInvoker.InvokeAsync<XchangeFile>(
+            xchange.MapperId, AdapterRole.Mapper, nameof(IInfolinkHandler.Handle), xchangeFile,
+            mapperProperties, xchange.CorrelationId ?? xchange.Id);
 
         if (xchangeFile is null)
             throw new BitweenException(
@@ -288,23 +283,9 @@ public class XchangeService :
     {
         if (validatorId == null) return;
 
-        InfolinkValidatorResult result;
-
-        // Check if it's a native adapter
-        if (validatorId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var validator = _nativeAdapterDiscovery.GetNativeValidator(validatorId, properties);
-
-            result = await validator.Validate(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(validatorId, null, properties);
-            result = await serverless.InvokeAsync<InfolinkValidatorResult>(nameof(IInfolinkValidator.Validate),
-                xchangeFile);
-        }
+        var result = await _adapterInvoker.InvokeAsync<InfolinkValidatorResult>(
+            validatorId, AdapterRole.Validator, nameof(IInfolinkValidator.Validate),
+            xchangeFile, properties);
 
         if (!result.Success)
             throw new SWValidationException(result.Validations);
@@ -317,19 +298,9 @@ public class XchangeService :
         var handlerProperties = xchange.HandlerProperties.ToDictionary();
         handlerProperties["xchangeid"] = xchange.Id;
 
-        // Check if it's a native adapter
-        if (xchange.HandlerId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var handler = _nativeAdapterDiscovery.GetNativeHandler(xchange.HandlerId, handlerProperties);
-            xchangeFile = await handler.Handle(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(xchange.HandlerId, xchange.CorrelationId ?? xchange.Id, handlerProperties);
-            xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle), xchangeFile);
-        }
+        xchangeFile = await _adapterInvoker.InvokeAsync<XchangeFile>(
+            xchange.HandlerId, AdapterRole.Handler, nameof(IInfolinkHandler.Handle), xchangeFile,
+            handlerProperties, xchange.CorrelationId ?? xchange.Id);
 
         if (xchangeFile != null)
             await AddFile(xchange.Id, XchangeFileType.Response, xchangeFile);
@@ -744,8 +715,10 @@ public class XchangeService :
 
         try
         {
-            await _adapterInvoker.Handle(notifier.HandlerId, handlerProperties, correlationId,
-                new XchangeFile(JsonConvert.SerializeObject(notificationData), xchangeResult.Id));
+            await _adapterInvoker.InvokeAsync<XchangeFile>(
+                notifier.HandlerId, AdapterRole.Handler, nameof(IInfolinkHandler.Handle),
+                new XchangeFile(JsonConvert.SerializeObject(notificationData), xchangeResult.Id),
+                handlerProperties, correlationId);
 
             _dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name));
         }

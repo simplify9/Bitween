@@ -28,6 +28,7 @@ using DotNet.Testcontainers.Containers;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Xunit;
+using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween.IntegrationTests.Fixtures;
 
@@ -251,7 +252,12 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<AdapterRequirements>();
                     services.AddScoped<AdapterSecretProperties>();
                     services.AddScoped<RetryUsageReport>();
-                    services.AddScoped<AdapterInvoker>();
+                    // Registration ORDER is the routing order: each runtime is asked whether an
+                    // adapter is its own, and the classic one claims everything, so it must be asked last.
+                    services.AddScoped<IAdapterRuntime, NativeAdapterRuntime>();
+                    services.AddScoped<IAdapterRuntime, ResidentAdapterRuntime>();
+                    services.AddScoped<IAdapterRuntime, ClassicAdapterRuntime>();
+                    services.AddScoped<IAdapterInvoker, AdapterInvoker>();
                     services.AddScoped<XchangeService>();
                     services.AddScoped<RunFlagUpdater>();
                     services.AddScoped<ReceivingJob>();

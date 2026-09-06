@@ -45,6 +45,7 @@ using SW.Scheduler.PgSql;
 using SW.Scheduler.SqlServer;
 using SqlAuthenticationProvider = Microsoft.Data.SqlClient.SqlAuthenticationProvider;
 using SqlAuthenticationMethod = Microsoft.Data.SqlClient.SqlAuthenticationMethod;
+using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween.Web
 {
@@ -80,7 +81,12 @@ namespace SW.Bitween.Web
             services.AddScoped<NativeAdapterDiscoveryService>();
             services.AddScoped<AdapterSecretProperties>();
             services.AddScoped<RetryUsageReport>();
-            services.AddScoped<AdapterInvoker>();
+            // Registration ORDER is the routing order: each runtime is asked whether an
+            // adapter is its own, and the classic one claims everything, so it must be asked last.
+            services.AddScoped<IAdapterRuntime, NativeAdapterRuntime>();
+            services.AddScoped<IAdapterRuntime, ResidentAdapterRuntime>();
+            services.AddScoped<IAdapterRuntime, ClassicAdapterRuntime>();
+            services.AddScoped<IAdapterInvoker, AdapterInvoker>();
             services.AddScoped<XchangeService>();
             services.AddScoped<Resources.Ops.LaneResolver>();
             services.AddScoped<AdapterRequirements>();
