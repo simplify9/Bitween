@@ -154,6 +154,108 @@ public class ExternalBusGatewayTests
         Assert.Equal(0, await db.Set<Xchange>().CountAsync(x => x.DocumentId == invoiceDoc));
     }
 
+    /// <summary>
+    /// A gateway with no endpoint is the catch-all: it claims whatever no other gateway does. The
+    /// exact match has to win, or a data source that gains a catch-all silently starts routing
+    /// every specific endpoint's messages to the wrong Document — running the wrong subscriptions,
+    /// against the wrong mapping, with nothing in the audit trail saying so.
+    ///
+    /// Driven through the sink rather than the broker: this is a routing decision, and the queue
+    /// only adds latency to it.
+    /// </summary>
+    [Fact]
+    public async Task An_exact_endpoint_match_beats_the_catch_all_gateway()
+    {
+        var invoices = Unique("catchall-x");
+
+        var dataSourceId = await CreateDataSourceAsync(invoices, withGateway: false);
+        var catchAllDoc = await AddGatewayAsync(dataSourceId, endpoint: null);
+        var invoiceDoc = await AddGatewayAsync(dataSourceId, invoices);
+
+        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+
+        var outcome = await sink.OnEventAsync(new InboundEvent
+        {
+            AdapterId = BusAdapters.RabbitMq,
+            InstanceKey = dataSourceId.ToString(),
+            Endpoint = invoices,
+            DedupeKey = Guid.NewGuid().ToString("N"),
+            Payload = Encoding.UTF8.GetBytes("{\"invoiceId\":9}")
+        }, CancellationToken.None);
+
+        Assert.True(outcome.Accepted, outcome.Error);
+
+        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+
+        Assert.Equal(1, await db.Set<Xchange>().CountAsync(x => x.DocumentId == invoiceDoc));
+        Assert.Equal(0, await db.Set<Xchange>().CountAsync(x => x.DocumentId == catchAllDoc));
+    }
+
+    /// <summary>
+    /// And the catch-all still catches what nothing else claims — otherwise the fix above would
+    /// just be a way of disabling it.
+    /// </summary>
+    [Fact]
+    public async Task The_catch_all_gateway_still_claims_an_unmatched_endpoint()
+    {
+        var known = Unique("catchall-k");
+
+        var dataSourceId = await CreateDataSourceAsync(known, withGateway: false);
+        var catchAllDoc = await AddGatewayAsync(dataSourceId, endpoint: null);
+        var knownDoc = await AddGatewayAsync(dataSourceId, known);
+
+        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+
+        var outcome = await sink.OnEventAsync(new InboundEvent
+        {
+            AdapterId = BusAdapters.RabbitMq,
+            InstanceKey = dataSourceId.ToString(),
+            Endpoint = Unique("unclaimed"),
+            DedupeKey = Guid.NewGuid().ToString("N"),
+            Payload = Encoding.UTF8.GetBytes("{\"stray\":true}")
+        }, CancellationToken.None);
+
+        Assert.True(outcome.Accepted, outcome.Error);
+
+        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+
+        Assert.Equal(1, await db.Set<Xchange>().CountAsync(x => x.DocumentId == catchAllDoc));
+        Assert.Equal(0, await db.Set<Xchange>().CountAsync(x => x.DocumentId == knownDoc));
+    }
+
+    /// <summary>
+    /// Deleting a data source that still feeds a gateway must be refused.
+    ///
+    /// The alternative is worse than an error: a nullable foreign key that quietly becomes null
+    /// turns that gateway back into an INTERNAL bus gateway, and Bitween starts consuming its own
+    /// bus for a Document that was configured to read a customer's broker. Nothing fails, nothing
+    /// logs, and the integration is simply pointed somewhere else.
+    /// </summary>
+    [Fact]
+    public async Task A_data_source_still_feeding_a_gateway_cannot_be_deleted()
+    {
+        var queue = Unique("delete-guard");
+        var dataSourceId = await CreateDataSourceAsync(queue, withGateway: false);
+        await AddGatewayAsync(dataSourceId, queue);
+
+        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+
+        db.Remove(await db.Set<DataSource>().FirstAsync(d => d.Id == dataSourceId));
+        await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        // And the gateway is untouched — still external, still on its data source.
+        await using var check = _fixture.App.Services.CreateAsyncScope();
+        var fresh = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
+        var gateway = await fresh.Set<BusGateway>().AsNoTracking()
+            .FirstAsync(g => g.DataSourceId == dataSourceId);
+
+        Assert.Equal(dataSourceId, gateway.DataSourceId);
+        Assert.Equal(queue, gateway.Endpoint);
+    }
+
     // ---------------------------------------------------------------- egress
 
     [Fact]

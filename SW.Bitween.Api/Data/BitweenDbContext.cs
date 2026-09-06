@@ -155,6 +155,17 @@ namespace SW.Bitween
                 ds.HasIndex(p => p.Name).IsUnique();
             });
 
+            // Declared here rather than only in the PgSql context: leader election needs this table
+            // on every provider Bitween supports, and a node whose database has no cluster_lease
+            // cannot fence anything — which means two nodes can consume one queue, silently.
+            modelBuilder.Entity<Domain.Cluster.ClusterLease>(cl =>
+            {
+                cl.ToTable("ClusterLeases");
+                cl.HasKey(i => i.Id);
+                cl.Property(i => i.Id).HasMaxLength(200).IsUnicode(false);
+                cl.Property(i => i.OwnerNode).HasMaxLength(200).IsUnicode(false);
+            });
+
             modelBuilder.Entity<InboundMessage>(im =>
             {
                 im.ToTable("InboundMessages");

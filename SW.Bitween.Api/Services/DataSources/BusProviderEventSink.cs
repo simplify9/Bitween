@@ -55,7 +55,12 @@ public class BusProviderEventSink : IAdapterEventSink
         var gateway = await dbContext.Set<BusGateway>()
             .Where(g => g.DataSourceId == dataSourceId && !g.Inactive)
             .Where(g => g.Endpoint == inboundEvent.Endpoint || g.Endpoint == null)
-            .OrderByDescending(g => g.Endpoint)   // an exact endpoint match beats the catch-all
+            // An exact endpoint match beats the catch-all. Ordering by the endpoint itself does
+            // NOT express that: PostgreSQL sorts NULLS FIRST on a descending order, so the
+            // catch-all would win every race and every specific endpoint's messages would be
+            // filed against the wrong Document. Order by the match itself instead — true first,
+            // and it means the same thing on all three providers.
+            .OrderByDescending(g => g.Endpoint == inboundEvent.Endpoint)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (gateway == null)

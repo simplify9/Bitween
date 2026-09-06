@@ -6,7 +6,6 @@ using SW.Serverless.Sdk.Resident;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,6 +32,12 @@ public class RabbitBusHandler : IResidentAdapter
     private IConnection _connection;
     private IModel _consumeChannel;
     private IModel _publishChannel;
+
+    // RabbitMQ.Client does not support concurrent application operations on one IModel, and every
+    // delivery is handled on the thread pool — so acks, nacks and the shutdown calls all go through
+    // these. Two gates rather than one: a publish must never queue behind a slow ack.
+    private readonly object _consumeGate = new();
+    private readonly object _publishGate = new();
     private CancellationTokenSource _stopping;
 
     private readonly List<string> _endpoints = new();
@@ -139,10 +144,16 @@ public class RabbitBusHandler : IResidentAdapter
         _state = "Draining";
         _stopping?.Cancel();
 
-        foreach (var tag in _consumerTags.Values)
-            try { _consumeChannel?.BasicCancel(tag); } catch { }
+        lock (_consumeGate)
+        {
+            foreach (var tag in _consumerTags.Values)
+                try { _consumeChannel?.BasicCancel(tag); } catch { }
 
-        try { _consumeChannel?.Close(); _publishChannel?.Close(); } catch { }
+            try { _consumeChannel?.Close(); } catch { }
+        }
+
+        lock (_publishGate)
+            try { _publishChannel?.Close(); } catch { }
         try { _connection?.Close(TimeSpan.FromSeconds(3)); } catch { }
         _connection?.Dispose();
 
@@ -206,11 +217,15 @@ public class RabbitBusHandler : IResidentAdapter
 
             var result = await _context.PublishAsync(
                 delivery.Body,
-                // The broker's own message id when it has one, otherwise a content hash. NOT the
-                // delivery tag: tags are per channel and restart at 1 on every reconnect.
+                // The broker's own message id, and nothing else. NOT the delivery tag — tags are
+                // per channel and restart at 1 on every reconnect — and NOT a content hash: two
+                // messages that legitimately carry the same body are two messages, and hashing
+                // them would silently drop the second for the whole deduplication window. An
+                // unkeyed delivery is handled once per delivery, which is the honest answer when
+                // the publisher gave us nothing to identify it by.
                 dedupeKey: delivery.BasicProperties?.MessageId is { Length: > 0 } id
                     ? $"rabbit:{_options.Host}:{endpoint}:{id}"
-                    : $"rabbit:{_options.Host}:{endpoint}:{Convert.ToHexString(SHA256.HashData(delivery.Body.Span))[..32]}",
+                    : WarnUnkeyed(endpoint),
                 endpoint: endpoint,
                 headers: headers,
                 contentType: delivery.BasicProperties?.ContentType ?? "application/json",
@@ -218,14 +233,14 @@ public class RabbitBusHandler : IResidentAdapter
 
             if (result.Accepted)
             {
-                _consumeChannel.BasicAck(delivery.DeliveryTag, multiple: false);
+                lock (_consumeGate) _consumeChannel.BasicAck(delivery.DeliveryTag, multiple: false);
                 Interlocked.Increment(ref _acked);
                 _lastMessageOn = DateTimeOffset.UtcNow;
                 _context.Metric("bitween.bus.rabbitmq.acked", 1);
             }
             else
             {
-                _consumeChannel.BasicNack(delivery.DeliveryTag, multiple: false, requeue: true);
+                lock (_consumeGate) _consumeChannel.BasicNack(delivery.DeliveryTag, multiple: false, requeue: true);
                 Interlocked.Increment(ref _nacked);
                 _lastError = result.Error;
                 _logger.LogWarning("Bitween rejected a message from {Endpoint}: {Error}. Requeued.",
@@ -234,15 +249,27 @@ public class RabbitBusHandler : IResidentAdapter
         }
         catch (OperationCanceledException)
         {
-            try { _consumeChannel.BasicNack(delivery.DeliveryTag, false, requeue: true); } catch { }
+            try { lock (_consumeGate) _consumeChannel.BasicNack(delivery.DeliveryTag, false, requeue: true); } catch { }
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _failed);
             _lastError = ex.Message;
             _logger.LogError(ex, "Failed to hand a delivery from {Endpoint} to Bitween.", endpoint);
-            try { _consumeChannel.BasicNack(delivery.DeliveryTag, false, requeue: true); } catch { }
+            try { lock (_consumeGate) _consumeChannel.BasicNack(delivery.DeliveryTag, false, requeue: true); } catch { }
         }
+    }
+
+    private long _unkeyed;
+
+    private string WarnUnkeyed(string endpoint)
+    {
+        if (Interlocked.Increment(ref _unkeyed) == 1)
+            _logger.LogWarning(
+                "A message arrived on {Endpoint} with no MessageId, so it cannot be deduplicated. " +
+                "A redelivery of it will be processed again. Publishers should set one.", endpoint);
+
+        return null;
     }
 
     // ---------------------------------------------------------------- commands
@@ -256,23 +283,28 @@ public class RabbitBusHandler : IResidentAdapter
         if (string.IsNullOrWhiteSpace(request?.Endpoint) && string.IsNullOrWhiteSpace(request?.Exchange))
             throw new ArgumentException("Either Endpoint or Exchange is required.");
 
-        var properties = _publishChannel.CreateBasicProperties();
-        properties.ContentType = request.ContentType ?? "application/json";
-        properties.MessageId = request.MessageId ?? Guid.NewGuid().ToString("N");
-        properties.DeliveryMode = (byte)(_options.Durable ? 2 : 1);
-
         var body = System.Text.Encoding.UTF8.GetBytes(request.Body ?? "");
+        var messageId = request.MessageId ?? Guid.NewGuid().ToString("N");
 
-        lock (_publishChannel)
+        // CreateBasicProperties is itself a channel operation, so it belongs inside the gate with
+        // the publish rather than beside it.
+        lock (_publishGate)
+        {
+            var properties = _publishChannel.CreateBasicProperties();
+            properties.ContentType = request.ContentType ?? "application/json";
+            properties.MessageId = messageId;
+            properties.DeliveryMode = (byte)(_options.Durable ? 2 : 1);
+
             _publishChannel.BasicPublish(
                 exchange: request.Exchange ?? "",
                 routingKey: request.Exchange == null ? request.Endpoint : request.RoutingKey ?? "",
                 mandatory: false,
                 basicProperties: properties,
                 body: body);
+        }
 
         Interlocked.Increment(ref _published);
-        return Task.FromResult<object>(new { messageId = properties.MessageId, bytes = body.Length });
+        return Task.FromResult<object>(new { messageId, bytes = body.Length });
     }
 
     /// <summary>The control the UI needs before a data source is saved. Staged, so a failure names the step.</summary>

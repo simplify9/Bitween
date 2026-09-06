@@ -162,9 +162,10 @@ namespace SW.Bitween.Web
                 configure.AdapterRemotePath = bitweenOptions.AdapterPath;
             });
 
-            // External bus providers. Off by default: a broker connection is exclusive, and
-            // placement across nodes is not implemented yet, so every instance would otherwise
-            // try to hold the same connection. Turn it on only where a single instance owns them.
+            // External bus providers. Off by default because it is opt-in, not because it is
+            // unsafe to run on more than one node: a broker connection is exclusive, and every
+            // data source is held through a lease with a database-issued fencing term, so only
+            // one node consumes any given source. See BusProviderSupervisor and ILeaderElection.
             if (bitweenOptions.BusProvidersEnabled)
             {
                 services.AddResidentAdapters<BusProviderEventSink>(configure =>

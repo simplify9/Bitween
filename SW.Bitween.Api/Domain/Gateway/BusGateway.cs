@@ -33,6 +33,13 @@ public class BusGateway : BaseEntity, IAudited
     /// Per-gateway overrides handed to the adapter alongside the data source's own properties —
     /// prefetch, consumer group, visibility timeout. Connection settings belong on the DataSource;
     /// these are about this one subscription to it.
+    ///
+    /// NOT YET CONSUMED. The supervisor namespaces these and passes them through as
+    /// <c>Endpoint:&lt;endpoint&gt;:&lt;key&gt;</c> startup values, but neither bundled adapter reads
+    /// them, so setting one currently has no effect. The transport is in place; binding them is
+    /// per-adapter work — RabbitMQ can apply queue type and durability per endpoint at declare
+    /// time, SQS a per-queue visibility timeout, and prefetch would need a consume channel per
+    /// endpoint rather than the single one it has now.
     /// </summary>
     public Dictionary<string, string> EndpointProperties { get; set; } = new();
 

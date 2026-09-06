@@ -91,7 +91,12 @@ public class BusProviderSupervisor : BackgroundService
             await ReleaseAsync(dataSourceId);
     }
 
-    private async Task ReconcileAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// One reconciliation pass. Public because "reconcile now" is a real operation — the same
+    /// shape as the receivenow endpoint for subscriptions — and because a supervisor whose only
+    /// entry point is a thirty-second timer cannot be tested at all.
+    /// </summary>
+    public async Task ReconcileAsync(CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
@@ -250,7 +255,10 @@ public class BusProviderSupervisor : BackgroundService
         if (wanted.Count > 0) values["Endpoints"] = string.Join(",", wanted);
 
         // Per-gateway overrides, namespaced so they cannot collide with connection settings.
-        foreach (var gateway in mine)
+        // See BusGateway.EndpointProperties: no bundled adapter reads these yet. Skipping the
+        // catch-all gateway is deliberate — an override with no endpoint to attach to would land
+        // under the meaningless key "Endpoint::something".
+        foreach (var gateway in mine.Where(g => !string.IsNullOrWhiteSpace(g.Endpoint)))
             foreach (var kv in gateway.EndpointProperties ?? new())
                 values[$"Endpoint:{gateway.Endpoint}:{kv.Key}"] = kv.Value;
 
