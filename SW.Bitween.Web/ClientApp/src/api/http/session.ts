@@ -42,6 +42,18 @@ const buildSession = (profile: Profile): Session => {
 
 const loadSession = async (): Promise<Session> => buildSession(await get<Profile>("/accounts/profile"));
 
+/**
+ * The most recent sign-out's server call, which every sign-in waits for.
+ *
+ * The logout response carries `Clear-Site-Data: "cookies", "storage"`. Arriving
+ * *after* a fresh sign-in it wipes that sign-in's Jwt and refresh cookie, and the
+ * user is thrown back to the page they just left. The two can genuinely overlap
+ * now that signing out no longer blocks the UI: the login page appears at once,
+ * and a password manager can fill and submit it before the logout lands. Awaiting
+ * a promise that has already settled costs nothing, so this is never cleared.
+ */
+let lastLogout: Promise<void> | null = null;
+
 export const sessionMethods = {
   async getSession(): Promise<Session | null> {
     // No stored Jwt → anonymous; don't probe the backend (an expired token still
@@ -57,6 +69,7 @@ export const sessionMethods = {
   },
 
   async login(email: string, password: string): Promise<Session> {
+    await lastLogout;
     const { jwt } = await post<LoginResult>("/accounts/login", {
       Username: email,
       Password: password,
@@ -66,6 +79,7 @@ export const sessionMethods = {
   },
 
   async loginWithMicrosoft(): Promise<Session> {
+    await lastLogout;
     const cfg = await getAppConfig();
     if (!cfg.msalClientId)
       throw new ApiRequestError("MS_NOT_CONFIGURED", "Microsoft sign-in isn't configured.");
@@ -94,11 +108,24 @@ export const sessionMethods = {
   },
 
   async logout(): Promise<void> {
-    try {
-      await post("/accounts/logout");
-    } finally {
-      clearToken();
-    }
+    // Cleared first and unconditionally. This used to run in a `finally`, which
+    // deleted the Jwt and then let the error through — the worst pairing, because
+    // the caller aborted before it could end the session and the app carried on
+    // rendering as if signed in. Removing the key here is also what wakes the
+    // other tabs (see the `storage` listener in SessionContext).
+    clearToken();
+    lastLogout = (async () => {
+      try {
+        await post("/accounts/logout");
+      } catch {
+        // Swallowed on purpose: signing out must not depend on the server
+        // answering. Only the server can invalidate the refresh cookie — it is
+        // HttpOnly, so JS cannot touch it — so if this never lands the cookie
+        // outlives the sign-out. This browser has no Jwt to pair with it, and the
+        // next sign-in replaces it.
+      }
+    })();
+    return lastLogout;
   },
 
   async updateProfile(changes: { displayName: string }): Promise<Session> {

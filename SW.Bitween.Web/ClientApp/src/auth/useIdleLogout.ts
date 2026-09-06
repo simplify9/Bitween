@@ -22,8 +22,6 @@ const writeSharedActivity = (ts: number) => {
   }
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Signs the user out after a period with no activity in any tab. Runs the normal
  * sign-out path, so an idle session ends exactly like clicking Sign out.
@@ -67,20 +65,10 @@ export function useIdleLogout(
 
       window.clearInterval(interval);
       ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, markActivity));
-      try {
-        await signOutRef.current();
-      } catch {
-        // Only the server call invalidates the refresh-token cookie (it is HttpOnly,
-        // so JS cannot clear it). Retry once before giving up.
-        await sleep(2000);
-        try {
-          await signOutRef.current();
-        } catch {
-          // api.logout() clears the stored Jwt in a finally, so it is already gone by
-          // now; reloading is what drops the in-memory session and shows the login page.
-          window.location.reload();
-        }
-      }
+      // No retry, and nothing to reload around: `signOut` ends the session before it
+      // calls the server and swallows a failed call, so this cannot leave the user
+      // looking at the app. It used to need both.
+      await signOutRef.current();
     }, CHECK_INTERVAL_MS);
 
     return () => {
