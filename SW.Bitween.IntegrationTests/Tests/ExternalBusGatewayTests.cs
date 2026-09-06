@@ -12,7 +12,9 @@ using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.IntegrationTests.Fixtures;
 using SW.Bitween.Model;
+using SW.PrimitiveTypes;
 using SW.Serverless.Resident;
+using SW.Bitween.Services.DataSources;
 using Xunit;
 
 namespace SW.Bitween.IntegrationTests.Tests;
@@ -73,28 +75,57 @@ public class ExternalBusGatewayTests
             "an unclaimed message should be drained, not left to requeue for ever");
     }
 
+    /// <summary>
+    /// The sink must REJECT what it cannot persist, because a rejection is what makes the adapter
+    /// nack and the broker redeliver.
+    ///
+    /// This replaces a test that published malformed content and expected a nack. That premise was
+    /// wrong: Bitween persists first and validates afterwards, so bad content becomes an Xchange
+    /// carrying a bad result — a pipeline outcome, not an ingest failure. Exercising the rejection
+    /// path means making the SINK fail, which is what an unattributable event does.
+    ///
+    /// That the adapter then nacks and the broker redelivers is proven against a real broker in
+    /// SW-Serverless (A_rejected_message_is_nacked_back_and_redelivered); what belongs here is
+    /// Bitween's half of that contract.
+    /// </summary>
     [Fact]
-    public async Task A_rejected_message_stays_on_the_broker_for_redelivery()
+    public async Task The_sink_rejects_an_event_it_cannot_attribute_to_a_data_source()
     {
-        var queue = Unique("reject");
-        var (dataSourceId, documentId) = await ArrangeAsync(queue);
+        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
-        // A payload the document's format cannot accept makes SubmitFilterXchange throw, which is
-        // what the sink turns into a rejection.
-        await using var adapter = await StartAsync(dataSourceId);
+        var outcome = await sink.OnEventAsync(new InboundEvent
+        {
+            AdapterId = BusAdapters.RabbitMq,
+            InstanceKey = "not-a-data-source-id",
+            Endpoint = "anything",
+            Payload = Encoding.UTF8.GetBytes("{}")
+        }, CancellationToken.None);
 
-        Publish(queue, "this is not json at all");
+        Assert.False(outcome.Accepted);
+        Assert.Contains("not a data source id", outcome.Error);
+    }
 
-        // It comes back to the queue rather than vanishing. Depth may briefly read 0 while the
-        // message is unacked, so assert it is NOT permanently drained.
-        await Task.Delay(TimeSpan.FromSeconds(6));
+    /// <summary>
+    /// The opposite case, and it must NOT reject. An endpoint no gateway claims is a
+    /// misconfiguration, not a Bitween failure — rejecting would requeue it for ever and the
+    /// customer's queue would never drain.
+    /// </summary>
+    [Fact]
+    public async Task The_sink_accepts_and_discards_an_event_no_gateway_claims()
+    {
+        var dataSourceId = await CreateDataSourceAsync(Unique("orphan"), withGateway: false);
+        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
-        var stats = await adapter.Instance.InvokeAsync<Dictionary<string, object>>("GetStats");
-        var nacked = Convert.ToInt64(stats["nacked"]);
-        var acked = Convert.ToInt64(stats["acked"]);
+        var outcome = await sink.OnEventAsync(new InboundEvent
+        {
+            AdapterId = BusAdapters.RabbitMq,
+            InstanceKey = dataSourceId.ToString(),
+            Endpoint = "a-queue-no-gateway-wants",
+            Payload = Encoding.UTF8.GetBytes("{}")
+        }, CancellationToken.None);
 
-        Assert.True(nacked > 0 || acked == 0,
-            $"a message Bitween could not persist must be nacked, not acked (acked={acked}, nacked={nacked})");
+        Assert.True(outcome.Accepted, "an unclaimed endpoint must drain, not requeue for ever");
+        Assert.Equal("unclaimed", outcome.Reference);
     }
 
     [Fact]
@@ -103,7 +134,9 @@ public class ExternalBusGatewayTests
         var invoices = Unique("invoices");
         var shipments = Unique("shipments");
 
-        var dataSourceId = await CreateDataSourceAsync(invoices, withGateway: false);
+        // Both, because the adapter consumes what the DATA SOURCE lists — a gateway naming an
+        // endpoint nobody is consuming would simply never see a message.
+        var dataSourceId = await CreateDataSourceAsync($"{invoices},{shipments}", withGateway: false);
         var invoiceDoc = await AddGatewayAsync(dataSourceId, invoices);
         var shipmentDoc = await AddGatewayAsync(dataSourceId, shipments);
 
@@ -126,18 +159,25 @@ public class ExternalBusGatewayTests
     [Fact]
     public async Task Bitween_can_publish_out_to_an_external_broker()
     {
-        var queue = Unique("outbound");
-        var dataSourceId = await CreateDataSourceAsync(queue, withGateway: false);
+        var consumed = Unique("outbound");
+        var target = Unique("outbox");
+
+        // Publish to a queue the adapter is NOT consuming. Measuring depth on a queue it drains
+        // is unwinnable: the message is consumed as fast as it is published and depth reads 0
+        // whether the publish worked or not.
+        var dataSourceId = await CreateDataSourceAsync(consumed, withGateway: false);
+
+        DeclareQueue(target);
 
         await using var adapter = await StartAsync(dataSourceId);
 
         await adapter.Instance.InvokeAsync<object>("Publish", new
         {
-            Endpoint = queue,
+            Endpoint = target,
             Body = "{\"pushed\":true}"
         });
 
-        await WaitAsync(() => Depth(queue) >= 1, TimeSpan.FromSeconds(15),
+        await WaitAsync(() => Depth(target) >= 1, TimeSpan.FromSeconds(15),
             "the published message never arrived on the external queue");
     }
 
@@ -257,6 +297,11 @@ public class ExternalBusGatewayTests
         });
         await db.SaveChangesAsync();
 
+        // The infolink cache is a singleton holding a ten-minute snapshot. Without revoking it,
+        // XchangeService resolves this brand-new Document to null and builds an Xchange that no
+        // DocumentId query can find — which acks the message and silently drops it.
+        scope.ServiceProvider.GetRequiredService<IInfolinkCache>().Revoke();
+
         return document.Id;
     }
 
@@ -314,6 +359,13 @@ public class ExternalBusGatewayTests
         properties.DeliveryMode = 2;
 
         channel.BasicPublish("", queue, properties, Encoding.UTF8.GetBytes(body));
+    }
+
+    private void DeclareQueue(string queue)
+    {
+        using var connection = ExternalConnection();
+        using var channel = connection.CreateModel();
+        channel.QueueDeclare(queue, durable: true, exclusive: false, autoDelete: false);
     }
 
     private uint Depth(string queue)
