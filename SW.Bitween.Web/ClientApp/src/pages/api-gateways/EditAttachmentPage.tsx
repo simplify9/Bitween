@@ -53,7 +53,7 @@ export function EditAttachmentPage() {
       clear();
       void queryClient.invalidateQueries({ queryKey: keys.apiGateways.all });
       void queryClient.invalidateQueries({ queryKey: keys.subscriptions.all });
-      navigate(`/api-gateways/${gatewayId}`);
+      navigate(`/api-gateways/${gatewayId}`, { replace: true });
     },
   });
 
@@ -88,7 +88,7 @@ export function EditAttachmentPage() {
         />
         <FormError>{save.error?.message}</FormError>
         <div className="flex justify-end gap-2 border-t border-ink-100 pt-4">
-          <Button onClick={() => navigate(`/api-gateways/${gatewayId}`)}>Cancel</Button>
+          <Button onClick={() => navigate(`/api-gateways/${gatewayId}`, { replace: true })}>Cancel</Button>
           <Button
             variant="primary"
             busy={save.isPending}

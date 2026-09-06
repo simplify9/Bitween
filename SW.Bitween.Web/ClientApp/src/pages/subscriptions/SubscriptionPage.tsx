@@ -524,7 +524,7 @@ export function SubscriptionPage() {
           onConfirm={async () => {
             await api.deleteSubscription(subscriptionId);
             void queryClient.invalidateQueries({ queryKey: keys.subscriptions.all });
-            navigate("/subscriptions");
+            navigate("/subscriptions", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

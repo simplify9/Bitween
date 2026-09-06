@@ -497,7 +497,7 @@ export function RetryPolicyPage() {
           onConfirm={async () => {
             await api.deleteRetryPolicy(policyId);
             void queryClient.invalidateQueries({ queryKey: keys.retryPolicies.all });
-            navigate("/retry-policies");
+            navigate("/retry-policies", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

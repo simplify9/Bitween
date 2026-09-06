@@ -188,7 +188,7 @@ export function GlobalValueSetPage() {
           onConfirm={async () => {
             await api.deleteValueSet(id);
             void queryClient.invalidateQueries({ queryKey: keys.valueSets.all });
-            navigate("/global-values");
+            navigate("/global-values", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

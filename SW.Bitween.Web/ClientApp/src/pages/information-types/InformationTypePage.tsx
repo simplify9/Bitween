@@ -159,7 +159,7 @@ export function InformationTypePage() {
           onConfirm={async () => {
             await api.deleteInformationType(typeId);
             void queryClient.invalidateQueries({ queryKey: keys.informationTypes.all });
-            navigate("/information-types");
+            navigate("/information-types", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

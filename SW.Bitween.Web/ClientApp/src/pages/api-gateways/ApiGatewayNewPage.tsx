@@ -20,7 +20,7 @@ export function ApiGatewayNewPage() {
     onSuccess: (gateway) => {
       void queryClient.invalidateQueries({ queryKey: keys.apiGateways.all });
       const base = `/api-gateways/${gateway.id}`;
-      navigate(base);
+      navigate(base, { replace: true });
     },
   });
 

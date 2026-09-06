@@ -38,7 +38,7 @@ export function BusGatewayNewPage() {
       clear();
       void queryClient.invalidateQueries({ queryKey: keys.busGateways.all });
       const base = `/bus-gateways/${gateway.id}`;
-      navigate(base);
+      navigate(base, { replace: true });
     },
   });
 

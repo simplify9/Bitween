@@ -317,7 +317,7 @@ export function ApiGatewayPage() {
             await api.deleteApiGateway(gatewayId);
             void queryClient.invalidateQueries({ queryKey: keys.apiGateways.all });
             void queryClient.invalidateQueries({ queryKey: keys.subscriptions.all });
-            navigate("/api-gateways");
+            navigate("/api-gateways", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />
