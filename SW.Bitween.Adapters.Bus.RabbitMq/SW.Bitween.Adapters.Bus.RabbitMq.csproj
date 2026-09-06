@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8.0 on purpose: adapters run as their own processes, and this one must stay runnable
+         on hosts that predate the r10 move to net10.0. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <RootNamespace>SW.Bitween.Adapters.Bus.RabbitMq</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
+    <ProjectReference Include="..\..\SW-Serverless\SW.Serverless.Sdk\SW.Serverless.Sdk.csproj" />
+  </ItemGroup>
+</Project>

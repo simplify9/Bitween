@@ -27,7 +27,9 @@
     <PackageReference Include="Testcontainers.RabbitMq" Version="3.10.0" />
 
     <!-- Serverless runtime -->
-    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.11" />
+    <!-- Local while simplify9/SW-Serverless#108 and #109 await approval. Restore the
+         PackageReference once they are merged and published. -->
+    <ProjectReference Include="..\..\SW-Serverless\SW.Serverless\SW.Serverless.csproj" />
 
     <!-- Bus (for IPublish + AddBus registration) -->
     <PackageReference Include="SimplyWorks.Bus" Version="8.1.18" />

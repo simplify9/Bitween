@@ -6,6 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Local while simplify9/SW-Serverless#108 and #109 await approval. Restore a
+         PackageReference to SimplyWorks.Serverless once they are merged and published. -->
+    <ProjectReference Include="..\..\SW-Serverless\SW.Serverless\SW.Serverless.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="Services\AccessKeySetService.cs" />
     <Compile Remove="Services\AdapterService.cs" />
     <Compile Remove="Services\DocumemtService.cs" />

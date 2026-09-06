@@ -15,6 +15,8 @@ namespace SW.Bitween
             DatabaseType = "MySql";
             AdminDatabaseName = "defaultdb";
             ServerlessCommandTimeout = 300;
+            BusProvidersEnabled = false;
+            BusProviderMaxInFlight = 16;
             ApiCallSubscriptionResponseAcceptedStatusCode = 202;
             StorageProvider = "S3";
             JwtExpiryMinutes = 60;
@@ -36,6 +38,15 @@ namespace SW.Bitween
         public string AdminCredentials { get; set; }
         public string DocumentPrefix { get; set; }
         public int ServerlessCommandTimeout { get; set; }
+
+        /// <summary>
+        /// Runs BusGateways whose DataSourceId is set, through resident adapters. Off by default
+        /// because a broker connection is exclusive and node placement is not implemented yet.
+        /// </summary>
+        public bool BusProvidersEnabled { get; set; }
+
+        /// <summary>Unacknowledged messages one bus adapter may have in flight with the host.</summary>
+        public int BusProviderMaxInFlight { get; set; }
         public bool AreXChangeFilesPrivate { get; set; } = false;
         public int? ApiCallSubscriptionResponseAcceptedStatusCode { get; set; }
 

@@ -29,6 +29,8 @@ using Npgsql;
 using SW.Bitween.Domain;
 using SW.Bitween.Resources.Accounts;
 using SW.Bitween.Services;
+using SW.Bitween.Services.DataSources;
+using SW.Serverless.Resident;
 using SW.CqApi.AuthOptions;
 using SW.Logger.Console;
 using SW.Logger.ElasticSerach;
@@ -158,6 +160,19 @@ namespace SW.Bitween.Web
                 configure.CommandTimeout = bitweenOptions.ServerlessCommandTimeout;
                 configure.AdapterRemotePath = bitweenOptions.AdapterPath;
             });
+
+            // External bus providers. Off by default: a broker connection is exclusive, and
+            // placement across nodes is not implemented yet, so every instance would otherwise
+            // try to hold the same connection. Turn it on only where a single instance owns them.
+            if (bitweenOptions.BusProvidersEnabled)
+            {
+                services.AddResidentAdapters<BusProviderEventSink>(configure =>
+                {
+                    configure.HeartbeatInterval = TimeSpan.FromSeconds(15);
+                    configure.MaxInFlight = bitweenOptions.BusProviderMaxInFlight;
+                });
+                services.AddHostedService<BusProviderSupervisor>();
+            }
             services.AddScoped<RequestContext>();
 
             // Get and validate connection string

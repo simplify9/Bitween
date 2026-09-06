@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using SW.Bitween.Domain.Accounts;
+using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.JsonConverters;
 
@@ -130,6 +131,28 @@ namespace SW.Bitween
                     .OnDelete(DeleteBehavior.Restrict);
                 bg.HasMany(p => p.Routes).WithOne(p => p.BusGateway).HasForeignKey(p => p.BusGatewayId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                // Nullable on purpose: null keeps meaning "the internal bus", so no existing row
+                // changes behaviour and the migration is additive only.
+                bg.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+                bg.Property(p => p.Endpoint).HasMaxLength(500).IsUnicode(false);
+                bg.Property(p => p.EndpointProperties).StoreAsJson();
+            });
+
+            modelBuilder.Entity<DataSource>(ds =>
+            {
+                ds.ToTable("DataSources");
+                ds.HasKey(i => i.Id);
+                ds.Property(i => i.Id).ValueGeneratedOnAdd();
+                ds.Property(p => p.Name).IsRequired().HasMaxLength(200);
+                ds.Property(p => p.AdapterId).IsRequired().HasMaxLength(200).IsUnicode(false);
+                ds.Property(p => p.Kind).HasConversion<int>();
+                ds.Property(p => p.Properties).StoreAsJson();
+                ds.Property(p => p.SecretProperties).StoreAsJson();
+                ds.Property(p => p.LastKnownState).HasMaxLength(100).IsUnicode(false);
+                ds.Property(p => p.OwnedByNode).HasMaxLength(200).IsUnicode(false);
+                ds.HasIndex(p => p.Name).IsUnique();
             });
 
             modelBuilder.Entity<BusGatewayRoute>(bgr =>

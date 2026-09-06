@@ -48,7 +48,9 @@
     <PackageReference Include="SimplyWorks.Logger.Console" Version="8.1.5" />
     <PackageReference Include="SimplyWorks.Logger.ElasticSearch" Version="8.1.1" />
     <PackageReference Include="SimplyWorks.PrimitiveTypes" Version="8.1.5" />
-    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.11" />
+    <!-- Local while simplify9/SW-Serverless#108 and #109 await approval. Restore the
+         PackageReference once they are merged and published. -->
+    <ProjectReference Include="..\..\SW-Serverless\SW.Serverless\SW.Serverless.csproj" />
     <PackageReference Include="SimplyWorks.SimplyRazor" Version="5.0.5" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.1.0" />
 
