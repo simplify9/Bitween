@@ -15,7 +15,8 @@ internal static class AdapterInstaller
         Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "test-adapters");
 
     public static async Task InstallAsync(ICloudFilesService cloudFiles,
-        string projectName, string adapterId, string entryAssembly)
+        string projectName, string adapterId, string entryAssembly,
+        IDictionary<string, string>? extraMetadata = null)
     {
         var publishDir = Path.Combine(AdaptersRoot, projectName);
 
@@ -37,16 +38,20 @@ internal static class AdapterInstaller
         var bytes = zipStream.ToArray();
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLower()[..16];
 
+        var metadata = new Dictionary<string, string>
+        {
+            { "EntryAssembly", entryAssembly },
+            { "Hash", hash }
+        };
+        foreach (var kv in extraMetadata ?? new Dictionary<string, string>())
+            metadata[kv.Key] = kv.Value;
+
         using var uploadStream = new MemoryStream(bytes);
         await cloudFiles.WriteAsync(uploadStream, new WriteFileSettings
         {
             Key = $"adapters/{adapterId}".ToLower(),
             ContentType = "application/zip",
-            Metadata = new Dictionary<string, string>
-            {
-                { "EntryAssembly", entryAssembly },
-                { "Hash", hash }
-            }
+            Metadata = metadata
         });
     }
 }

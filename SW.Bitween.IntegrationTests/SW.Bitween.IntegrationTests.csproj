@@ -25,6 +25,10 @@
     <!-- Testcontainers — Docker-based infrastructure -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
     <PackageReference Include="Testcontainers.RabbitMq" Version="3.10.0" />
+    <!-- Talks the SQS API without LocalStack's weight; the fixture already starts a plain
+         container for MailHog, so this follows the same pattern. -->
+    <PackageReference Include="AWSSDK.SQS" Version="3.7.400.87" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
 
     <!-- Serverless runtime -->
     <!-- Local while simplify9/SW-Serverless#108 and #109 await approval. Restore the
@@ -46,6 +50,8 @@
   <Target Name="PublishTestAdapters" AfterTargets="Build">
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.SampleHandler -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.SampleHandler --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.SampleConfigurableAdapter -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.SampleConfigurableAdapter --no-self-contained" />
+    <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Bus.RabbitMq -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Bus.RabbitMq --no-self-contained" />
+    <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Bus.Sqs -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Bus.Sqs --no-self-contained" />
   </Target>
 
 </Project>
