@@ -88,6 +88,22 @@ have to carry Amazon's wrapper.
 The SP-API *request/response* calls are ordinary HTTPS and belong in a mapper or handler, not
 here. This covers the push half.
 
+## Deduplication is NOT enforced
+
+Every adapter chooses its dedupe key deliberately — the broker message id for RabbitMQ, the SP-API
+notification id for SQS (stable across a redelivery, where the SQS `MessageId` is not), a content
+hash as the fallback — and `BusProviderEventSink` carries it onto the Xchange as a reference.
+
+**Nothing then checks it.** A redelivered message produces a second Xchange.
+
+At-least-once delivery is not optional here: it is what persist-then-acknowledge buys, and the
+price is that duplicates are normal rather than exceptional. A crash between persisting and
+acknowledging redelivers by design. So the check is required, not a refinement — the key is
+carried, which is the precondition, and the enforcement is missing.
+
+`A_notification_carries_its_notification_id_as_the_dedupe_reference` asserts the key arrives and
+names this gap rather than pretending to cover it.
+
 ## Not done yet
 
 - **Node placement and leader election** — the reason this is off by default.
@@ -95,4 +111,4 @@ here. This covers the push half.
 - **Secret protection at rest.** `SecretProperties` names the fields; wiring it to
   `SettingsProtector` is outstanding, so treat credentials in `DataSource.Properties` as
   plaintext until that lands.
-- **Integration tests** against a real broker, in the style of the SW-Serverless suite.
+- **Deduplication enforcement**, as above — the highest-value item on this list.

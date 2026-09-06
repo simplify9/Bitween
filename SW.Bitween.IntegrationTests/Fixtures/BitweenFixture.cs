@@ -120,6 +120,31 @@ public sealed class BitweenFixture : IAsyncLifetime
         ["VisibilityTimeoutSeconds"] = "10"
     };
 
+    /// <summary>
+    /// Creates a queue and returns a URL that actually resolves from the test host.
+    ///
+    /// ElasticMQ builds QueueUrl from its own node address, which is the port INSIDE the
+    /// container, not the mapped one — so the URL it hands back is unreachable. Only the path is
+    /// trustworthy; the authority has to come from the mapped endpoint.
+    /// </summary>
+    public async Task<string> CreateSqsQueueAsync(string name)
+    {
+        using var sqs = CreateSqsClient();
+        var created = await sqs.CreateQueueAsync(name);
+
+        var path = new Uri(created.QueueUrl).AbsolutePath;
+        return SqsServiceUrl.TrimEnd('/') + path;
+    }
+
+    public Amazon.SQS.IAmazonSQS CreateSqsClient() =>
+        new Amazon.SQS.AmazonSQSClient(
+            new Amazon.Runtime.BasicAWSCredentials("x", "x"),
+            new Amazon.SQS.AmazonSQSConfig
+            {
+                ServiceURL = SqsServiceUrl,
+                AuthenticationRegion = "elasticmq"
+            });
+
     public IHost App { get; private set; } = null!;
 
     private ExceptionDispatchInfo? _initError;
