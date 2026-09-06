@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AWSSDK.SQS" Version="3.7.400.87" />
-    <ProjectReference Include="..\..\SW-Serverless\SW.Serverless.Sdk\SW.Serverless.Sdk.csproj" />
+    <PackageReference Include="SimplyWorks.Serverless.Sdk" Version="8.1.14" />
   </ItemGroup>
 </Project>
