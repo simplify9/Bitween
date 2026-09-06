@@ -39,6 +39,14 @@ namespace SW.Bitween.Resources.BusGateways
                 .Select(d => d.Name)
                 .FirstOrDefaultAsync();
 
+            var dataSource = gateway.DataSourceId == null
+                ? null
+                : await _dbContext.Set<Domain.DataSources.DataSource>()
+                    .AsNoTracking()
+                    .Where(d => d.Id == gateway.DataSourceId)
+                    .Select(d => new { d.Name, d.LastKnownState })
+                    .FirstOrDefaultAsync();
+
             return new BusGatewayRow
             {
                 Id = gateway.Id,
@@ -46,6 +54,11 @@ namespace SW.Bitween.Resources.BusGateways
                 DocumentId = gateway.DocumentId,
                 Inactive = gateway.Inactive,
                 DocumentName = documentName,
+                DataSourceId = gateway.DataSourceId,
+                DataSourceName = dataSource?.Name,
+                DataSourceState = dataSource?.LastKnownState,
+                Endpoint = gateway.Endpoint,
+                EndpointProperties = gateway.EndpointProperties ?? new(),
                 RoutesCount = gateway.Routes.Count,
                 Routes = gateway.Routes.Select(r => new BusGatewayRouteDto
                 {

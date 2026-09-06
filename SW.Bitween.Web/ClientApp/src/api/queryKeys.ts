@@ -69,6 +69,15 @@ export const keys = {
     detail: (id: number | string) => ["bus-gateways", "detail", id] as const,
   },
 
+  dataSources: {
+    all: ["data-sources"] as const,
+    list: ["data-sources", "list"] as const,
+    search: (params: Record<string, unknown>) => ["data-sources", "search", params] as const,
+    detail: (id: number | string) => ["data-sources", "detail", id] as const,
+    /** Live heartbeat, polled — deliberately its own key so refreshing it never refetches the form. */
+    telemetry: (id: number | string) => ["data-sources", "telemetry", id] as const,
+  },
+
   workGroups: {
     all: ["work-groups"] as const,
     list: ["work-groups", "list"] as const,

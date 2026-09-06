@@ -10,6 +10,26 @@ namespace SW.Bitween.Model
 
         /// <summary>Off but kept, with its routes. Messages stop reaching them.</summary>
         public bool Inactive { get; set; }
+
+        /// <summary>
+        /// Null is the INTERNAL bus — the only behaviour that existed before, and still the
+        /// default. Set it and this gateway is fed by an external broker instead, through the
+        /// resident adapter that data source names.
+        /// </summary>
+        public int? DataSourceId { get; set; }
+
+        /// <summary>
+        /// Which queue, topic or subscription on that data source feeds this gateway. Required for
+        /// an external gateway; meaningless for the internal bus, where the Document's own
+        /// BusMessageTypeName does the routing.
+        /// </summary>
+        public string Endpoint { get; set; }
+
+        /// <summary>
+        /// Per-gateway overrides passed to the adapter. NOT YET CONSUMED by either bundled
+        /// adapter — see BusGateway.EndpointProperties on the entity.
+        /// </summary>
+        public Dictionary<string, string> EndpointProperties { get; set; } = new();
     }
 
     public class BusGatewayUpdate : BusGatewayCreate
@@ -20,6 +40,12 @@ namespace SW.Bitween.Model
     {
         public int Id { get; set; }
         public string DocumentName { get; set; }
+
+        /// <summary>Null for an internal gateway, which is what the list column reads.</summary>
+        public string DataSourceName { get; set; }
+
+        /// <summary>Health of the connection behind it, so a broken broker is visible on the gateway.</summary>
+        public string DataSourceState { get; set; }
         public int? RoutesCount { get; set; }
         public ICollection<BusGatewayRouteDto> Routes { get; set; }
     }

@@ -28,6 +28,7 @@ namespace SW.Bitween.Resources.BusGateways
                 await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.View);
 
             var documents = _dbContext.Set<Document>();
+            var dataSources = _dbContext.Set<Domain.DataSources.DataSource>();
 
             var query = from gateway in _dbContext.Set<BusGateway>()
                         select new BusGatewayRow
@@ -38,6 +39,16 @@ namespace SW.Bitween.Resources.BusGateways
                             Inactive = gateway.Inactive,
                             DocumentName = documents.Where(d => d.Id == gateway.DocumentId)
                                 .Select(d => d.Name).FirstOrDefault(),
+
+                            // Null name means the internal bus, which is what the list column
+                            // reads — an operator should be able to tell at a glance which of
+                            // their gateways reach outside.
+                            DataSourceId = gateway.DataSourceId,
+                            DataSourceName = dataSources.Where(d => d.Id == gateway.DataSourceId)
+                                .Select(d => d.Name).FirstOrDefault(),
+                            DataSourceState = dataSources.Where(d => d.Id == gateway.DataSourceId)
+                                .Select(d => d.LastKnownState).FirstOrDefault(),
+                            Endpoint = gateway.Endpoint,
                             RoutesCount = gateway.Routes.Count
                         };
 

@@ -727,7 +727,109 @@ export interface BusGateway {
   /** Off but kept, with its routes. The message stops being offered to them. */
   inactive: boolean;
   createdOn: string;
+
+  /**
+   * Where the messages come from. Null is Bitween's own internal bus — the only behaviour that
+   * existed before data sources, and still the default, so no gateway changes meaning. Set it and
+   * this gateway is fed by a broker outside Bitween instead.
+   */
+  dataSourceId: number | null;
+  dataSourceName: string | null;
+  /** Health of that connection, so a broker that has gone away shows on the gateway itself. */
+  dataSourceState: string | null;
+  /** Which queue, topic or SQS URL on that data source feeds this gateway. */
+  endpoint: string | null;
 }
+
+// ——— Data sources ———
+
+/**
+ * A connection to something outside Bitween — today a broker.
+ *
+ * It holds the connection and nothing else: what Bitween does with the messages belongs to the bus
+ * gateway pointing at it, which is why one data source can feed many gateways the way one broker
+ * connection serves many queues.
+ */
+export interface DataSource {
+  id: number;
+  name: string;
+  /** The adapter that speaks this protocol, e.g. bitween.bus.rabbitmq. */
+  adapterId: string;
+  kind: string;
+  inactive: boolean;
+  /**
+   * How long a message's deduplication key is remembered. Has to exceed the widest redelivery
+   * window this broker can produce. Zero turns deduplication off.
+   */
+  deduplicationWindowDays: number;
+
+  // Health, written back by the supervisor from the adapter's heartbeat.
+  lastKnownState: string | null;
+  lastHeartbeatOn: string | null;
+  lastException: string | null;
+  consecutiveFailures: number;
+  /** Which node holds this connection, and at which fencing term. */
+  ownedByNode: string | null;
+}
+
+export interface DataSourceRow extends DataSource {
+  /** How many bus gateways read from it. Deleting is refused while any do. */
+  gatewayCount: number;
+}
+
+export interface DataSourceDetail extends DataSourceRow {
+  /** Connection settings. Secret values arrive as the sentinel, never in clear. */
+  properties: Record<string, string>;
+  /** Which of those names hold credentials. */
+  secretProperties: string[];
+}
+
+/**
+ * What the connection is doing right now, read from the adapter's heartbeat rather than from the
+ * data source row — which only carries what the last reconcile wrote back.
+ */
+export interface DataSourceTelemetry {
+  /** False when this node is not the one holding the connection. Not a fault: it is exclusive. */
+  runningHere: boolean;
+  ownedByNode: string | null;
+
+  connected: boolean;
+  state: string | null;
+  lastMessageOn: string | null;
+  inFlight: number;
+  lastError: string | null;
+
+  /** Whatever the adapter reports — per-queue depth, counters, prefetch. Untyped by design. */
+  details: Record<string, string>;
+
+  // Host-observed: these keep working when the adapter is wedged, which is when they matter.
+  processId: number | null;
+  workingSetBytes: number;
+  cpuPercent: number;
+  threadCount: number;
+  uptime: string;
+  restartCount: number;
+  missedHeartbeats: number;
+  quarantined: boolean;
+  lastHeartbeatOn: string | null;
+
+  commands: string[];
+}
+
+export interface DataSourceTestStage {
+  name: string;
+  succeeded: boolean;
+  detail: string | null;
+}
+
+export interface DataSourceTestResult {
+  succeeded: boolean;
+  error: string | null;
+  stages: DataSourceTestStage[];
+}
+
+/** Secret values come back as this. Saving it again keeps whatever is stored. */
+export const SECRET_SENTINEL = "__private__";
 export interface BusGatewayRow extends BusGateway {
   informationTypeCode: string;
   routeCount: number;

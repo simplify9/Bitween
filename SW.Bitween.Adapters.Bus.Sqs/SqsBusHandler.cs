@@ -75,9 +75,13 @@ public class SqsBusHandler : IResidentAdapter
             _options.Region, _endpoints.Count, _options.WaitTimeSeconds);
 
         // One poller per queue. Long polling means these are cheap: a blocked receive costs
-        // nothing until a message arrives or the wait expires.
-        foreach (var endpoint in _endpoints)
-            _pollers.Add(Task.Run(() => PollAsync(endpoint, _stopping.Token)));
+        // nothing until a message arrives or the wait expires. Skipped entirely for a connection
+        // test, which still checks every endpoint because TestConnection reads _endpoints.
+        if (_options.Consume)
+            foreach (var endpoint in _endpoints)
+                _pollers.Add(Task.Run(() => PollAsync(endpoint, _stopping.Token)));
+        else
+            _state = "Idle";
 
         return Task.CompletedTask;
     }

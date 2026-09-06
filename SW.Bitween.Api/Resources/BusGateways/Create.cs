@@ -29,11 +29,16 @@ namespace SW.Bitween.Resources.BusGateways
             if (!documentExists)
                 throw new SWNotFoundException($"Document with Id {model.DocumentId} not found");
 
+            await EnsureDataSourceAsync(_dbContext, model);
+
             var entity = new BusGateway
             {
                 Name = model.Name,
                 DocumentId = model.DocumentId,
-                Inactive = model.Inactive
+                Inactive = model.Inactive,
+                DataSourceId = model.DataSourceId,
+                Endpoint = model.DataSourceId == null ? null : model.Endpoint,
+                EndpointProperties = model.EndpointProperties ?? new()
             };
 
             _dbContext.Add(entity);
@@ -42,11 +47,40 @@ namespace SW.Bitween.Resources.BusGateways
             return entity.Id;
         }
 
+        /// <summary>
+        /// Shared by Create and Update. An endpoint is what the supervisor turns into the adapter's
+        /// consume list, so an external gateway without one is a gateway that can never receive
+        /// anything — and it would fail silently, which is the worst way for it to fail.
+        /// </summary>
+        internal static async Task EnsureDataSourceAsync(BitweenDbContext dbContext, BusGatewayCreate model)
+        {
+            if (model.DataSourceId == null) return;
+
+            var exists = await dbContext.Set<Domain.DataSources.DataSource>()
+                .AnyAsync(d => d.Id == model.DataSourceId);
+            if (!exists)
+                throw new SWNotFoundException($"DataSource with Id {model.DataSourceId} not found");
+
+            if (string.IsNullOrWhiteSpace(model.Endpoint))
+                throw new SWException(
+                    "An external bus gateway needs an endpoint — the queue, topic or subscription "
+                    + "on that data source it reads from.");
+
+            // Two gateways consuming one endpoint on one data source would both be offered every
+            // message, and only the one the sink happens to pick would ever run.
+            var endpointTaken = await dbContext.Set<BusGateway>()
+                .AnyAsync(g => g.DataSourceId == model.DataSourceId && g.Endpoint == model.Endpoint);
+            if (endpointTaken)
+                throw new SWException(
+                    $"Another bus gateway on this data source already reads '{model.Endpoint}'.");
+        }
+
         private class Validate : AbstractValidator<BusGatewayCreate>
         {
             public Validate()
             {
                 RuleFor(i => i.Name).NotEmpty().MaximumLength(200);
+                RuleFor(i => i.Endpoint).MaximumLength(500);
             }
         }
     }

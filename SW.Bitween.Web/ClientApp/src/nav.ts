@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   BellRing,
   Cable,
+  Database,
   CalendarClock,
   FileText,
   Handshake,
@@ -62,6 +63,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "API gateways", path: "/api-gateways", icon: Webhook, permissions: ["api-gateways.view"] },
       { label: "Bus gateways", path: "/bus-gateways", icon: Cable, permissions: ["bus-gateways.view"] },
+      // Directly under bus gateways: a data source is only ever reached through one, and the
+      // question it answers — "where do these messages come from?" — is a gateway's question.
+      { label: "Data sources", path: "/data-sources", icon: Database, permissions: ["data-sources.view"] },
       { label: "Scheduled jobs", path: "/scheduled-jobs", icon: CalendarClock, permissions: ["subscriptions.view"] },
       // Directly under scheduled jobs: it is the other thing that runs on a schedule,
       // and it collects what one of these produced.

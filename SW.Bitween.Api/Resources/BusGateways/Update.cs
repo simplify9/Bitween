@@ -30,13 +30,44 @@ namespace SW.Bitween.Resources.BusGateways
             if (entity == null)
                 throw new SWNotFoundException($"BusGateway with Id {key} not found");
 
-            // Name only; the bound document is fixed at creation (routes' subscriptions belong to it).
+            await EnsureEndpointFreeAsync(_dbContext, key, model);
+
+            // The bound document is still fixed at creation — routes' subscriptions belong to it —
+            // but where the messages COME from is exactly the thing an operator needs to change
+            // without rebuilding the gateway and all of its routes.
             entity.Name = model.Name;
             entity.Inactive = model.Inactive;
+            entity.DataSourceId = model.DataSourceId;
+            entity.Endpoint = model.DataSourceId == null ? null : model.Endpoint;
+            entity.EndpointProperties = model.EndpointProperties ?? new();
 
             await _dbContext.SaveChangesAsync();
             await _cache.BroadcastRevoke();
             return null;
+        }
+
+        private static async Task EnsureEndpointFreeAsync(
+            BitweenDbContext dbContext, int key, BusGatewayUpdate model)
+        {
+            if (model.DataSourceId == null) return;
+
+            var exists = await dbContext.Set<Domain.DataSources.DataSource>()
+                .AnyAsync(d => d.Id == model.DataSourceId);
+            if (!exists)
+                throw new SWNotFoundException($"DataSource with Id {model.DataSourceId} not found");
+
+            if (string.IsNullOrWhiteSpace(model.Endpoint))
+                throw new SWException(
+                    "An external bus gateway needs an endpoint — the queue, topic or subscription "
+                    + "on that data source it reads from.");
+
+            var endpointTaken = await dbContext.Set<BusGateway>()
+                .AnyAsync(g => g.DataSourceId == model.DataSourceId
+                               && g.Endpoint == model.Endpoint
+                               && g.Id != key);
+            if (endpointTaken)
+                throw new SWException(
+                    $"Another bus gateway on this data source already reads '{model.Endpoint}'.");
         }
 
         private class Validate : AbstractValidator<BusGatewayUpdate>
@@ -44,6 +75,7 @@ namespace SW.Bitween.Resources.BusGateways
             public Validate()
             {
                 RuleFor(i => i.Name).NotEmpty().MaximumLength(200);
+                RuleFor(i => i.Endpoint).MaximumLength(500);
             }
         }
     }

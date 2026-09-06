@@ -84,6 +84,17 @@ public static class Permissions
         public const string Delete = "bus-gateways.delete";
     }
 
+    public static class DataSources
+    {
+        public const string View = "data-sources.view";
+        public const string Create = "data-sources.create";
+        public const string Edit = "data-sources.edit";
+        public const string Delete = "data-sources.delete";
+
+        /// <summary>Test a connection, which reaches out to the customer's broker.</summary>
+        public const string Operate = "data-sources.operate";
+    }
+
     public static class WorkGroups
     {
         public const string View = "workgroups.view";
@@ -224,6 +235,14 @@ public static class PermissionCatalog
             (Delete, "Delete bus gateways.")),
 
         // ——— Configuration ———
+        Area("data-sources", "Data sources", "Configuration",
+            "Connections to external brokers that bus gateways can read from.",
+            (View, "Browse data sources and their connection health."),
+            (Create, "Create data sources."),
+            (Edit, "Change connection settings and credentials."),
+            (Delete, "Delete data sources."),
+            (Operate, "Test a connection, which reaches out to the broker.")),
+
         Area("workgroups", "Work groups", "Configuration", "Processing lanes that spread load across queues.",
             (View, "See work groups and their throughput."),
             (Create, "Create work groups."),

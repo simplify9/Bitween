@@ -2,6 +2,12 @@ namespace SW.Bitween.Adapters.Bus.Sqs;
 
 public class SqsOptions
 {
+    /// <summary>
+    /// False creates the client but starts no pollers. This is what a connection test runs as:
+    /// without it, testing a data source would start receiving from the customer's queue.
+    /// </summary>
+    public bool Consume { get; set; } = true;
+
     public string Region { get; set; } = "eu-west-1";
 
     /// <summary>

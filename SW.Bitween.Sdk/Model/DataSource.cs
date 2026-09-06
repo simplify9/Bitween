@@ -1,0 +1,146 @@
+using System;
+using System.Collections.Generic;
+
+namespace SW.Bitween.Model;
+
+/// <summary>
+/// How to reach an external system. A BusGateway with no data source still means the internal bus,
+/// so setting one on a gateway is the single act that moves it onto a customer's broker.
+/// </summary>
+public class DataSourceCreate : IName
+{
+    public string Name { get; set; }
+
+    /// <summary>The adapter that speaks this protocol, e.g. <c>bitween.bus.rabbitmq</c>.</summary>
+    public string AdapterId { get; set; }
+
+    public string Kind { get; set; } = "Broker";
+
+    /// <summary>
+    /// Connection settings, handed to the adapter as startup values. Untyped on purpose: a provider
+    /// must not be limited to the subset of a broker's model Bitween happens to have modelled.
+    /// </summary>
+    public Dictionary<string, string> Properties { get; set; } = new();
+
+    /// <summary>
+    /// Which names in <see cref="Properties"/> hold credentials. Those come back from the API
+    /// masked, and a masked value saved again keeps whatever is already stored.
+    /// </summary>
+    public List<string> SecretProperties { get; set; } = new();
+
+    public bool Inactive { get; set; }
+
+    /// <summary>
+    /// How long a message's dedupe key is remembered. It has to exceed the widest redelivery window
+    /// this broker can produce. Zero turns deduplication off.
+    /// </summary>
+    public int DeduplicationWindowDays { get; set; } = 30;
+}
+
+public class DataSourceUpdate : DataSourceCreate
+{
+}
+
+public class DataSourceRow : DataSourceUpdate
+{
+    public int Id { get; set; }
+
+    /// <summary>How many bus gateways this data source feeds. Deleting is refused while any do.</summary>
+    public int GatewayCount { get; set; }
+
+    // ------------------------------------------------------------------ health
+
+    public string LastKnownState { get; set; }
+    public DateTime? LastHeartbeatOn { get; set; }
+    public string LastException { get; set; }
+    public int ConsecutiveFailures { get; set; }
+
+    /// <summary>Which node holds this connection, and at which fencing term.</summary>
+    public string OwnedByNode { get; set; }
+}
+
+/// <summary>
+/// Nothing to send: the data source already holds everything the test needs. It exists because a
+/// keyed command takes a body, and an operator pressing Test is not supplying anything.
+/// </summary>
+public class DataSourceTestRequest
+{
+}
+
+/// <summary>
+/// What a Test button reports. Staged rather than a single boolean, because "it did not work" is
+/// not an answer anyone can act on: the failing stage names what to go and fix.
+/// </summary>
+public class DataSourceTestResult
+{
+    public bool Succeeded { get; set; }
+    public string Error { get; set; }
+
+    /// <summary>Stage name to outcome, in the order the adapter attempted them.</summary>
+    public List<DataSourceTestStage> Stages { get; set; } = new();
+
+    /// <summary>Whatever the adapter chose to report — endpoint, queue depths, visibility timeout.</summary>
+    public Dictionary<string, string> Details { get; set; } = new();
+}
+
+public class DataSourceTestStage
+{
+    public string Name { get; set; }
+    public bool Succeeded { get; set; }
+    public string Detail { get; set; }
+}
+
+/// <summary>
+/// What the connection is doing right now, as opposed to what it was configured to do.
+///
+/// Read live from the resident adapter host rather than from the data source row, because the row
+/// only carries what the last reconcile happened to write back — a summary, thirty seconds stale at
+/// worst. This is the heartbeat itself: the counters the adapter keeps, the queue depths it can
+/// see, and what the host observes about the process without needing the adapter's cooperation.
+/// </summary>
+public class DataSourceTelemetry
+{
+    /// <summary>
+    /// False when this node is not running the adapter. That is not a fault: a broker connection is
+    /// exclusive, so at most one node holds it and every other node answers this honestly rather
+    /// than reporting an outage it cannot see.
+    /// </summary>
+    public bool RunningHere { get; set; }
+
+    /// <summary>Which node holds the connection, from the data source row — filled in even when it is not this one.</summary>
+    public string OwnedByNode { get; set; }
+
+    // ---------------------------------------------------------------- adapter-reported
+
+    public bool Connected { get; set; }
+    public string State { get; set; }
+    public DateTime? LastMessageOn { get; set; }
+    public long InFlight { get; set; }
+    public string LastError { get; set; }
+
+    /// <summary>
+    /// Whatever the adapter chose to report: per-queue depth, messages received and acknowledged,
+    /// prefetch, the endpoint it is connected to. Untyped on purpose — Bitween does not model any
+    /// broker's telemetry any more than it models its topology.
+    /// </summary>
+    public Dictionary<string, string> Details { get; set; } = new();
+
+    // ------------------------------------------------------- host-observed (no cooperation needed)
+
+    /// <summary>These keep working when the adapter is wedged, which is exactly when they matter.</summary>
+    public int? ProcessId { get; set; }
+    public long WorkingSetBytes { get; set; }
+    public double CpuPercent { get; set; }
+    public int ThreadCount { get; set; }
+    public TimeSpan Uptime { get; set; }
+    public int RestartCount { get; set; }
+    public int MissedHeartbeats { get; set; }
+
+    /// <summary>Restarted too many times too quickly, so the supervisor stopped trying.</summary>
+    public bool Quarantined { get; set; }
+
+    public DateTime? LastHeartbeatOn { get; set; }
+
+    /// <summary>What the adapter says it can do — the commands the UI could offer against it.</summary>
+    public List<string> Commands { get; set; } = new();
+}

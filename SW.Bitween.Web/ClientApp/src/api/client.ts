@@ -10,6 +10,10 @@ import type {
   BusGateway,
   BusGatewayDetail,
   BusGatewayRow,
+  DataSourceDetail,
+  DataSourceRow,
+  DataSourceTelemetry,
+  DataSourceTestResult,
   DashboardData,
   ExchangeQuery,
   ExchangeRow,
@@ -295,8 +299,47 @@ export interface ApiClient {
   }): Promise<Paged<BusGatewayRow>>;
   getBusGateway(id: number): Promise<BusGatewayDetail>;
   createBusGateway(input: { name: string; informationTypeId: number }): Promise<BusGateway>;
-  updateBusGateway(id: number, changes: { name: string; inactive: boolean }): Promise<BusGateway>;
+  updateBusGateway(
+    id: number,
+    changes: {
+      name: string;
+      inactive: boolean;
+      /** Omit to leave the source alone; null moves the gateway back onto the internal bus. */
+      dataSourceId?: number | null;
+      endpoint?: string | null;
+    },
+  ): Promise<BusGateway>;
   deleteBusGateway(id: number): Promise<void>;
+
+  // ——— Data sources ———
+  listDataSources(): Promise<DataSourceRow[]>;
+  searchDataSources(query: {
+    search: string;
+    offset: number;
+    limit: number;
+  }): Promise<Paged<DataSourceRow>>;
+  getDataSource(id: number): Promise<DataSourceDetail>;
+  createDataSource(input: {
+    name: string;
+    adapterId: string;
+    properties: Record<string, string>;
+    secretProperties: string[];
+  }): Promise<{ id: number }>;
+  updateDataSource(
+    id: number,
+    changes: {
+      name: string;
+      adapterId: string;
+      kind: string;
+      properties: Record<string, string>;
+      secretProperties: string[];
+      inactive: boolean;
+      deduplicationWindowDays: number;
+    },
+  ): Promise<void>;
+  deleteDataSource(id: number): Promise<void>;
+  testDataSource(id: number): Promise<DataSourceTestResult>;
+  getDataSourceTelemetry(id: number): Promise<DataSourceTelemetry>;
   /** The subscription is either an existing id or defined inline; the endpoint commits both as one. */
   addBusRoute(id: number, input: AddBusRouteInput): Promise<void>;
   updateBusRoute(

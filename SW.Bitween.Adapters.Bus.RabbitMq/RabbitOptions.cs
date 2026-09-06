@@ -29,6 +29,12 @@ public class RabbitOptions
     public string ExchangeType { get; set; } = "topic";
     public string RoutingKey { get; set; }
 
+    /// <summary>
+    /// False connects and declares but does not consume. This is what a connection test runs as:
+    /// without it, testing a data source would start pulling messages off the customer's queue.
+    /// </summary>
+    public bool Consume { get; set; } = true;
+
     /// <summary>Broker-side backpressure; pairs with the host's credit window.</summary>
     public ushort Prefetch { get; set; } = 16;
 

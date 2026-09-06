@@ -93,6 +93,16 @@ public class RabbitBusHandler : IResidentAdapter
 
         DeclareTopology(_consumeChannel);
 
+        // Manage-only: the connection is up and the topology is declared, but nothing is consumed.
+        // TestConnection still checks every endpoint, because it reads _endpoints rather than the
+        // consumers — so a test proves the queues exist without draining them.
+        if (!_options.Consume)
+        {
+            _state = "Idle";
+            _logger.LogInformation("Connected to {Host} without consuming (Consume=false).", _options.Host);
+            return Task.CompletedTask;
+        }
+
         foreach (var endpoint in _endpoints)
         {
             var consumer = new EventingBasicConsumer(_consumeChannel);

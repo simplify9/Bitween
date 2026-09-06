@@ -2,6 +2,7 @@ import type { ApiClient } from "../client";
 import { NotWiredError } from "../types";
 import { adapterMethods } from "./adapters";
 import { dashboardMethods } from "./dashboard";
+import { dataSourceMethods } from "./dataSources";
 import { documentMethods } from "./documents";
 import { exchangeMethods } from "./exchanges";
 import { gatewayMethods } from "./gateways";
@@ -36,6 +37,7 @@ const wired: Partial<ApiClient> = {
   ...exchangeMethods,
   ...queueHealthMethods,
   ...dashboardMethods,
+  ...dataSourceMethods,
   ...mapperMethods,
   ...notifierMethods,
   ...teamMethods,

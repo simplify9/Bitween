@@ -23,6 +23,8 @@ import {
 } from "./studio/Inspector";
 import { PartnerDialog } from "../../components/config/PartnerDialog";
 import { RouteList, type Selection } from "./studio/RouteList";
+import { SourceDialog } from "./SourceDialog";
+import { ConnectionBadge } from "../data-sources/ConnectionBadge";
 import { BackLink } from "../../components/ui/BackLink";
 import { keys } from "../../api/queryKeys";
 import {
@@ -107,6 +109,7 @@ export function BusGatewayPage() {
   const [removingRoute, setRemovingRoute] = useState<number | null>(null);
   const [deletingGateway, setDeletingGateway] = useState(false);
   const [confirmingActive, setConfirmingActive] = useState(false);
+  const [editingSource, setEditingSource] = useState(false);
   /** A move the user asked for that would drop unsaved edits. */
   const [guarded, setGuarded] = useState<null | { what: string; go: () => void }>(null);
 
@@ -486,6 +489,8 @@ export function BusGatewayPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {editingSource && <SourceDialog gateway={g} onClose={() => setEditingSource(false)} />}
+
       {/* ——— toolbar ——— */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-ink-200 bg-white px-4 py-2.5">
         <BackLink to="/bus-gateways" label="Bus gateways" className="shrink-0" />
@@ -518,12 +523,20 @@ export function BusGatewayPage() {
         <Link
           to={`/information-types/${g.informationTypeId}`}
           className="flex shrink-0 items-center gap-1.5"
-          title={`${g.informationTypeName} — listens on the bus${
-            ownType?.busMessageTypeName ? ` as ${ownType.busMessageTypeName}` : ""
-          }`}
+          title={
+            g.dataSourceId == null
+              ? `${g.informationTypeName} — listens on the bus${
+                  ownType?.busMessageTypeName ? ` as ${ownType.busMessageTypeName}` : ""
+                }`
+              : `${g.informationTypeName} — arrives from ${g.dataSourceName}`
+          }
         >
           <CodeBadge code={g.informationTypeCode} name={g.informationTypeName} />
-          {ownType &&
+          {/* The bus message name, and the warning when there isn't one, apply only to a gateway
+              on the INTERNAL bus. An external one is fed by its data source's adapter and never
+              touches Bitween's own bus, so "not on the bus" would be a fault it does not have. */}
+          {g.dataSourceId == null &&
+            ownType &&
             (ownType.busMessageTypeName ? (
               <code className="font-mono text-[11px] text-ink-400">{ownType.busMessageTypeName}</code>
             ) : (
@@ -532,6 +545,31 @@ export function BusGatewayPage() {
               </span>
             ))}
         </Link>
+
+        {/* Where the messages come from. Next to the information type because the two are one
+            thought — what arrives, and from where — and both belong to the gateway rather than to
+            any one route. */}
+        <button
+          type="button"
+          onClick={() => canEdit && setEditingSource(true)}
+          disabled={!canEdit}
+          title={
+            g.dataSourceId == null
+              ? "Reads Bitween's own internal bus. Click to read a broker outside Bitween instead."
+              : `Reads ${g.endpoint ?? "—"} on ${g.dataSourceName}. Click to change.`
+          }
+          className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] text-ink-600 enabled:hover:bg-ink-100"
+        >
+          {g.dataSourceId == null ? (
+            <span className="text-ink-500">Internal bus</span>
+          ) : (
+            <>
+              <span className="font-medium text-ink-800">{g.dataSourceName}</span>
+              <code className="font-mono text-[11px] text-ink-400">{g.endpoint}</code>
+              <ConnectionBadge state={g.dataSourceState} />
+            </>
+          )}
+        </button>
 
         {/* With the list hidden there still has to be a way to reach route 94 of
             127, and scrolling isn't it. */}
