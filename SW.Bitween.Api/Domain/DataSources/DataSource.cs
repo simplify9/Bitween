@@ -44,6 +44,17 @@ public class DataSource : BaseEntity, IAudited
     /// <summary>Stops the adapter without deleting the configuration, mirroring BusGateway.Inactive.</summary>
     public bool Inactive { get; set; }
 
+    /// <summary>
+    /// How long a message's dedupe key is remembered. It has to exceed the widest redelivery
+    /// window this broker can actually produce — its message TTL, a dead-letter replay, someone
+    /// re-driving a queue by hand — because a key forgotten too early lets a redelivery through
+    /// as a fresh message. That number is a property of the customer's broker, not of Bitween,
+    /// which is why it lives here rather than in configuration.
+    ///
+    /// Zero turns deduplication off for this data source.
+    /// </summary>
+    public int DeduplicationWindowDays { get; set; } = 30;
+
     // ---------------------------------------------------------------- health
 
     /// <summary>Last state the adapter reported on its heartbeat: Connected, Idle, Disconnected...</summary>

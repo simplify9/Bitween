@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.EfCoreExtensions;
 using SW.PrimitiveTypes;
@@ -67,6 +68,21 @@ public class BusProviderEventSink : IAdapterEventSink
             return EventOutcome.Ok("unclaimed");
         }
 
+        var dataSource = await dbContext.Set<DataSource>().AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == dataSourceId, cancellationToken);
+
+        var dedupeKey = BuildDedupeKey(dataSourceId, inboundEvent.DedupeKey);
+        var deduplicating = dedupeKey != null && (dataSource?.DeduplicationWindowDays ?? 0) > 0;
+
+        if (deduplicating)
+        {
+            // Added to the SAME DbContext the Xchange will be written through, so both commit in
+            // one SaveChanges. Splitting them would give two failure modes, and the worse one is
+            // silent: the dedupe row committing while the Xchange fails suppresses that message
+            // for ever.
+            dbContext.Add(new InboundMessage(dedupeKey!, dataSourceId, xchangeId: null));
+        }
+
         try
         {
             var payload = Encoding.UTF8.GetString(inboundEvent.Payload ?? Array.Empty<byte>());
@@ -84,6 +100,17 @@ public class BusProviderEventSink : IAdapterEventSink
 
             return EventOutcome.Ok(inboundEvent.DedupeKey);
         }
+        catch (DbUpdateException ex) when (deduplicating && IsUniqueViolation(ex))
+        {
+            // The insert lost the race, so this message has already been persisted. ACCEPT it:
+            // rejecting would nack and redeliver a message that is by definition already handled,
+            // and the queue would never drain.
+            _logger.LogInformation(
+                "Duplicate message on data source {DataSourceId} endpoint {Endpoint} (key {Key}); already persisted.",
+                dataSourceId, inboundEvent.Endpoint, dedupeKey);
+
+            return EventOutcome.Ok(inboundEvent.DedupeKey);
+        }
         catch (Exception ex)
         {
             // Rejecting is the right answer: the adapter nacks, the broker redelivers, and nothing
@@ -92,5 +119,36 @@ public class BusProviderEventSink : IAdapterEventSink
                 dataSourceId, inboundEvent.Endpoint);
             return EventOutcome.Rejected(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Namespaced by data source, always. The adapters already qualify their keys by host and
+    /// queue, but an SP-API key is just the notification id — globally unique, so two data sources
+    /// subscribed to the same notification would silently deduplicate against each other. That
+    /// might occasionally be wanted; it should never be something you get by accident.
+    /// </summary>
+    private static string BuildDedupeKey(int dataSourceId, string adapterKey) =>
+        string.IsNullOrWhiteSpace(adapterKey) ? null : $"{dataSourceId}:{adapterKey}";
+
+    /// <summary>
+    /// Bitween runs on three providers, and each reports a unique-constraint violation its own
+    /// way: PostgreSQL 23505, MySQL 1062, SQL Server 2601 and 2627.
+    /// </summary>
+    private static bool IsUniqueViolation(DbUpdateException exception)
+    {
+        for (var inner = exception.InnerException; inner != null; inner = inner.InnerException)
+        {
+            var state = inner.GetType().GetProperty("SqlState")?.GetValue(inner) as string;
+            if (state == "23505") return true;
+
+            var number = inner.GetType().GetProperty("Number")?.GetValue(inner);
+            if (number is int code && code is 1062 or 2601 or 2627) return true;
+
+            if (inner.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                inner.Message.Contains("Duplicate entry", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 }

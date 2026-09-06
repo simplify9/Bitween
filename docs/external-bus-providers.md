@@ -88,21 +88,48 @@ have to carry Amazon's wrapper.
 The SP-API *request/response* calls are ordinary HTTPS and belong in a mapper or handler, not
 here. This covers the push half.
 
-## Deduplication is NOT enforced
+## Deduplication
 
-Every adapter chooses its dedupe key deliberately — the broker message id for RabbitMQ, the SP-API
-notification id for SQS (stable across a redelivery, where the SQS `MessageId` is not), a content
-hash as the fallback — and `BusProviderEventSink` carries it onto the Xchange as a reference.
+At-least-once delivery is what persist-then-acknowledge buys: a crash between committing the
+Xchange and acknowledging the broker redelivers **by design**. Duplicates are normal, not
+exceptional, so something has to recognise them.
 
-**Nothing then checks it.** A redelivered message produces a second Xchange.
+Each adapter supplies a key — the broker message id for RabbitMQ, the SP-API notification id for
+SQS (stable across a redelivery, where the SQS `MessageId` is not), a content hash otherwise. The
+host prefixes the `DataSourceId` and records it in `inbound_message`.
 
-At-least-once delivery is not optional here: it is what persist-then-acknowledge buys, and the
-price is that duplicates are normal rather than exceptional. A crash between persisting and
-acknowledging redelivers by design. So the check is required, not a refinement — the key is
-carried, which is the precondition, and the enforcement is missing.
+**The key is the primary key, and the database is the arbiter.** A duplicate is detected by the
+insert *failing*, never by a lookup succeeding — "check whether it exists, then insert" is
+check-then-act and races, so two concurrent deliveries of one key would both miss and both
+persist. `Concurrent_deliveries_of_one_key_produce_exactly_one_Xchange` fires eight at once
+precisely to prove the constraint is doing the work.
 
-`A_notification_carries_its_notification_id_as_the_dedupe_reference` asserts the key arrives and
-names this gap rather than pretending to cover it.
+**It commits with the Xchange, in one transaction.** The sink adds the row to the same `DbContext`
+the Xchange is written through, so `SubmitFilterXchange`'s existing save commits both. Splitting
+them gives two failure modes and the worse one is silent: a dedupe row committing while the
+Xchange fails would suppress that message for ever.
+
+A duplicate is **accepted**, never rejected — rejecting would nack and redeliver a message that is
+by definition already handled, and the queue would never drain. An event with no key is never
+deduplicated, because collapsing unidentified messages would lose data.
+
+`DataSource.DeduplicationWindowDays` (default 30, zero to disable) sets how long a key is
+remembered, and `InboundMessagePruneJob` forgets them nightly. Forgetting **too early** is the
+dangerous direction: a redelivery after the key is gone is processed as a fresh message. That
+window is a property of the customer's broker — its message TTL, dead-letter replay, someone
+re-driving a queue by hand — which is why it sits on the data source rather than in configuration.
+
+## A trap in the PostgreSQL context
+
+`SW.Bitween.PgSql.BitweenDbContext` does **not** call `base.OnModelCreating` — it redeclares the
+model. Anything configured only in `SW.Bitween.Api`'s context is inert on the primary provider.
+
+`DataSource` reached the model regardless, by convention, through the `BusGateway.DataSource`
+navigation — which is why it worked while its intended configuration (unique index on `Name`,
+explicit lengths) was silently never applied. `InboundMessage` has no such navigation and simply
+did not exist until it was declared here.
+
+Anything added to the model needs configuring in the provider contexts, not just the Api one.
 
 ## Not done yet
 
@@ -111,4 +138,5 @@ names this gap rather than pretending to cover it.
 - **Secret protection at rest.** `SecretProperties` names the fields; wiring it to
   `SettingsProtector` is outstanding, so treat credentials in `DataSource.Properties` as
   plaintext until that lands.
-- **Deduplication enforcement**, as above — the highest-value item on this list.
+- **Re-applying `DataSource`'s intended configuration** in the provider contexts — the unique
+  index on `Name` is currently missing, per the trap above.

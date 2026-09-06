@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SW.Bitween.Domain.Accounts;
+using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Scheduler.PgSql;
 
@@ -146,6 +147,27 @@ namespace SW.Bitween.PgSql
                     .OnDelete(DeleteBehavior.Restrict);
                 agp.HasOne(p => p.Subscription).WithMany().HasForeignKey(p => p.SubscriptionId)
                     .IsRequired().OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // NOTE: this context does NOT call base.OnModelCreating — it redeclares the model.
+            // Anything configured only in SW.Bitween.Api's context is inert here. DataSource
+            // reached the model anyway, by convention, through the BusGateway.DataSource
+            // navigation; InboundMessage has no such navigation and has to be declared.
+            modelBuilder.Entity<InboundMessage>(im =>
+            {
+                im.ToTable("inbound_message");
+
+                // The dedupe key IS the primary key. Deduplication is decided by an insert
+                // failing, not by a lookup succeeding — see the type's remarks.
+                im.HasKey(i => i.Id);
+                im.Property(i => i.Id).HasMaxLength(400);
+                im.Property(i => i.XchangeId).HasMaxLength(50);
+
+                // Pruning scans by age; without this it table-scans a table that only grows.
+                im.HasIndex(i => i.SeenOn);
+
+                im.HasOne<DataSource>().WithMany().HasForeignKey(i => i.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<BusGateway>(bg =>

@@ -155,6 +155,23 @@ namespace SW.Bitween
                 ds.HasIndex(p => p.Name).IsUnique();
             });
 
+            modelBuilder.Entity<InboundMessage>(im =>
+            {
+                im.ToTable("InboundMessages");
+
+                // The dedupe key IS the key. A unique constraint the database enforces is the
+                // whole mechanism — see the type's remarks.
+                im.HasKey(i => i.Id);
+                im.Property(i => i.Id).HasMaxLength(400).IsUnicode(false);
+                im.Property(i => i.XchangeId).HasMaxLength(50).IsUnicode(false);
+
+                // Pruning scans by age; without this it table-scans a table that only ever grows.
+                im.HasIndex(i => i.SeenOn);
+
+                im.HasOne<DataSource>().WithMany().HasForeignKey(i => i.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<BusGatewayRoute>(bgr =>
             {
                 bgr.ToTable("BusGatewayRoutes");

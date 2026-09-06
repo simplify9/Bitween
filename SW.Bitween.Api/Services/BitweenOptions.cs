@@ -17,6 +17,7 @@ namespace SW.Bitween
             ServerlessCommandTimeout = 300;
             BusProvidersEnabled = false;
             BusProviderMaxInFlight = 16;
+            InboundMessagePruneCron = "0 30 3 * * ?";
             ApiCallSubscriptionResponseAcceptedStatusCode = 202;
             StorageProvider = "S3";
             JwtExpiryMinutes = 60;
@@ -47,6 +48,9 @@ namespace SW.Bitween
 
         /// <summary>Unacknowledged messages one bus adapter may have in flight with the host.</summary>
         public int BusProviderMaxInFlight { get; set; }
+
+        /// <summary>When to forget dedupe keys past their data source's window. Nightly by default.</summary>
+        public string InboundMessagePruneCron { get; set; }
         public bool AreXChangeFilesPrivate { get; set; } = false;
         public int? ApiCallSubscriptionResponseAcceptedStatusCode { get; set; }
 
