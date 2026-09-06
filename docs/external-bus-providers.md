@@ -43,10 +43,44 @@ One data source serves many gateways, exactly as one connection serves many queu
 "Bitween": { "BusProvidersEnabled": true, "BusProviderMaxInFlight": 16 }
 ```
 
-**Off by default, and single-instance only for now.** A broker connection is exclusive, so exactly
-one node may hold it — and placement across nodes is not implemented yet, so every instance would
-try. `DataSource.OwnedByNode` exists for that election to write into. Run this on one instance
-until it lands.
+**Safe on every node.** Each data source is owned through a lease, so exactly one node consumes it
+and the rest stand by. Still opt-in, but for a different reason than before: it opens outbound
+connections to third-party brokers, and that should be a decision rather than a default.
+
+## Placement: the bus provides the lock, the database provides the fence
+
+Two nodes consuming one queue is duplicate processing — the failure this whole design exists to
+prevent. So ownership is granted per data source, not globally: whichever node wins each race owns
+that source, so connection load spreads without anyone scheduling it, and one node leaving does not
+move everything at once.
+
+**The lock** is a RabbitMQ exclusive queue, `bitween.lease.datasource.{id}`. An exclusive queue
+belongs to a single connection, so declaring it succeeds for exactly one node and fails for every
+other — and the broker releases it the moment that connection dies. Liveness for free: no lease
+renewal to get wrong, no clock to trust.
+
+**The fence** is a monotonic `term` in `cluster_lease`, because the lock alone is not enough. A
+node can be paused long enough — a stop-the-world GC, a partition that heals — for its queue to be
+released and reclaimed while it still believes it owns the resource, and RabbitMQ has no counter
+that would reveal it. Acquiring bumps the term; a holder whose term is no longer current has been
+superseded and stops immediately.
+
+Three details that are load-bearing:
+
+* **Recovery is off on the election connection.** A recovered connection silently re-declares the
+  exclusive queue, so a node that lost ownership during an outage would take it back *without
+  bumping the term* — two owners, neither aware.
+* **Releasing DELETES the queue.** An exclusive queue belongs to the connection, not the channel,
+  so closing the channel releases nothing. Without the delete, mutual exclusion and crash failover
+  both work while GRACEFUL handover silently never completes — ownership sits with a shut-down
+  node until its connection finally drops, which is precisely what a rolling restart does.
+* **Losing a lease stops the adapter WITHOUT draining.** Another node may already be consuming, so
+  finishing in-flight work risks handling the same messages twice.
+
+`ILeaderElection` exists so the mechanism can be replaced when the internal bus is no longer
+RabbitMQ — not so two implementations can be maintained at once.
+
+## Not done yet
 
 ## The two providers
 
@@ -133,7 +167,6 @@ Anything added to the model needs configuring in the provider contexts, not just
 
 ## Not done yet
 
-- **Node placement and leader election** — the reason this is off by default.
 - **CRUD API and UI** for `DataSource`. Rows must be inserted directly for now.
 - **Secret protection at rest.** `SecretProperties` names the fields; wiring it to
   `SettingsProtector` is outstanding, so treat credentials in `DataSource.Properties` as

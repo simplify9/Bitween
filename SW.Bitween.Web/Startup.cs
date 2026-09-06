@@ -29,6 +29,7 @@ using Npgsql;
 using SW.Bitween.Domain;
 using SW.Bitween.Resources.Accounts;
 using SW.Bitween.Services;
+using SW.Bitween.Services.Cluster;
 using SW.Bitween.Services.DataSources;
 using SW.Serverless.Resident;
 using SW.CqApi.AuthOptions;
@@ -171,6 +172,8 @@ namespace SW.Bitween.Web
                     configure.HeartbeatInterval = TimeSpan.FromSeconds(15);
                     configure.MaxInFlight = bitweenOptions.BusProviderMaxInFlight;
                 });
+                // One election implementation, deliberately — see ILeaderElection's remarks.
+                services.AddSingleton<ILeaderElection, RabbitMqLeaderElection>();
                 services.AddHostedService<BusProviderSupervisor>();
             }
             services.AddScoped<RequestContext>();

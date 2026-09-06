@@ -153,6 +153,14 @@ namespace SW.Bitween.PgSql
             // Anything configured only in SW.Bitween.Api's context is inert here. DataSource
             // reached the model anyway, by convention, through the BusGateway.DataSource
             // navigation; InboundMessage has no such navigation and has to be declared.
+            modelBuilder.Entity<Domain.Cluster.ClusterLease>(cl =>
+            {
+                cl.ToTable("cluster_lease");
+                cl.HasKey(i => i.Id);
+                cl.Property(i => i.Id).HasMaxLength(200);
+                cl.Property(i => i.OwnerNode).HasMaxLength(200);
+            });
+
             modelBuilder.Entity<InboundMessage>(im =>
             {
                 im.ToTable("inbound_message");

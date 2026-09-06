@@ -41,8 +41,11 @@ namespace SW.Bitween
         public int ServerlessCommandTimeout { get; set; }
 
         /// <summary>
-        /// Runs BusGateways whose DataSourceId is set, through resident adapters. Off by default
-        /// because a broker connection is exclusive and node placement is not implemented yet.
+        /// Runs BusGateways whose DataSourceId is set, through resident adapters.
+        ///
+        /// Safe on every node: each data source is owned through a lease, so exactly one node
+        /// consumes it and the rest stand by. Still opt-in, because it opens outbound connections
+        /// to third-party brokers and that should be a decision rather than a default.
         /// </summary>
         public bool BusProvidersEnabled { get; set; }
 

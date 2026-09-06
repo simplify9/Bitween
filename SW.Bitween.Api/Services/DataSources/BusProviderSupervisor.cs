@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
+using SW.Bitween.Services.Cluster;
 using SW.Serverless.Resident;
 using System;
 using System.Collections.Generic;
@@ -21,10 +22,15 @@ namespace SW.Bitween.Services.DataSources;
 /// restarts what has changed — the same shape as the Quartz schedule reconciliation that already
 /// exists for subscriptions.
 ///
-/// PLACEMENT IS NOT DONE HERE YET. A broker connection is exclusive, so exactly one node may hold
-/// it; today every node would try. Until leader election lands, run this on a single instance or
-/// leave <see cref="BitweenOptions.BusProvidersEnabled"/> off. The DataSource.OwnedByNode column
-/// exists for that election to write into.
+/// PLACEMENT. A broker connection is exclusive — two nodes consuming the same queue is duplicate
+/// processing, which is the failure this whole design exists to prevent. So every data source is
+/// owned through a lease, granted per data source rather than globally: whichever node wins each
+/// race owns that source, so load spreads without anyone scheduling it.
+///
+/// A lease is checked, not assumed. Before every reconcile the supervisor revalidates what it
+/// believes it owns, because holding the lock is not the same as still being the current owner —
+/// a node paused long enough for its queue to be released and reclaimed would otherwise carry on
+/// consuming. Losing a lease stops its adapter immediately.
 /// </summary>
 public class BusProviderSupervisor : BackgroundService
 {
@@ -32,18 +38,25 @@ public class BusProviderSupervisor : BackgroundService
 
     private readonly IServiceProvider _serviceProvider;
     private readonly IResidentAdapterHost _adapters;
+    private readonly ILeaderElection _election;
     private readonly ILogger<BusProviderSupervisor> _logger;
 
     // What we last started, and the configuration fingerprint it was started with.
     private readonly Dictionary<int, string> _running = new();
 
+    // What this node currently owns. Nothing runs without an entry here.
+    private readonly Dictionary<int, IResourceLease> _leases = new();
+
     public BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAdapterHost adapters,
-        ILogger<BusProviderSupervisor> logger)
+        ILeaderElection election, ILogger<BusProviderSupervisor> logger)
     {
         _serviceProvider = serviceProvider;
         _adapters = adapters;
+        _election = election;
         _logger = logger;
     }
+
+    private static string ResourceOf(DataSource dataSource) => $"datasource.{dataSource.Id}";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -68,6 +81,16 @@ public class BusProviderSupervisor : BackgroundService
         }
     }
 
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+
+        // Release on the way out so a rolling restart hands ownership over in seconds rather than
+        // leaving the next node to wait for the broker to time the connection out.
+        foreach (var dataSourceId in _leases.Keys.ToList())
+            await ReleaseAsync(dataSourceId);
+    }
+
     private async Task ReconcileAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
@@ -85,8 +108,19 @@ public class BusProviderSupervisor : BackgroundService
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        // Revalidate first. A lease that is no longer current must stop its adapter before
+        // anything else happens this pass, not after.
+        await ReleaseLostLeasesAsync(cancellationToken);
+
         foreach (var dataSource in desired)
         {
+            if (!await EnsureOwnedAsync(dataSource, cancellationToken))
+            {
+                // Owned by another node. If we were running it, we are not any more.
+                await StopIfRunningAsync(dataSource.Id, dataSource.AdapterId, cancellationToken);
+                continue;
+            }
+
             var startupValues = BuildStartupValues(dataSource, endpoints);
             var fingerprint = Fingerprint(dataSource, startupValues);
 
@@ -123,17 +157,77 @@ public class BusProviderSupervisor : BackgroundService
             }
         }
 
-        // Anything running that is no longer desired.
+        // Anything running that is no longer desired. Its lease goes too — holding a lock on a
+        // data source nobody wants would block a node that later does.
         var wanted = desired.Select(d => d.Id).ToHashSet();
         foreach (var id in _running.Keys.Where(k => !wanted.Contains(k)).ToList())
         {
-            var adapterId = desired.FirstOrDefault(d => d.Id == id)?.AdapterId;
-            if (adapterId != null)
-                await _adapters.StopAsync(adapterId, id.ToString(), drain: true, cancellationToken);
-            _running.Remove(id);
+            await StopIfRunningAsync(id, adapterId: null, cancellationToken);
+            await ReleaseAsync(id);
         }
 
         await WriteBackHealthAsync(dbContext, cancellationToken);
+    }
+
+    /// <summary>
+    /// True when this node owns the data source. Acquires the lease if it does not hold one, and
+    /// revalidates the term if it does.
+    /// </summary>
+    private async Task<bool> EnsureOwnedAsync(DataSource dataSource, CancellationToken cancellationToken)
+    {
+        if (_leases.TryGetValue(dataSource.Id, out var held))
+        {
+            if (await held.ValidateAsync(cancellationToken)) return true;
+
+            _logger.LogWarning(
+                "Lease on data source {Name} is no longer current; another node has taken it.",
+                dataSource.Name);
+
+            await ReleaseAsync(dataSource.Id);
+            return false;
+        }
+
+        var lease = await _election.TryAcquireAsync(ResourceOf(dataSource), cancellationToken);
+        if (lease == null) return false;
+
+        _leases[dataSource.Id] = lease;
+        return true;
+    }
+
+    private async Task ReleaseLostLeasesAsync(CancellationToken cancellationToken)
+    {
+        foreach (var (dataSourceId, lease) in _leases.ToList())
+        {
+            if (await lease.ValidateAsync(cancellationToken)) continue;
+
+            _logger.LogWarning("Lost the lease on data source {DataSourceId} at term {Term}; stopping it.",
+                dataSourceId, lease.Term);
+
+            // Stopped WITHOUT draining: another node may already be consuming, so finishing
+            // in-flight work here risks processing the same messages twice.
+            await StopIfRunningAsync(dataSourceId, adapterId: null, cancellationToken, drain: false);
+            await ReleaseAsync(dataSourceId);
+        }
+    }
+
+    private async Task StopIfRunningAsync(int dataSourceId, string adapterId,
+        CancellationToken cancellationToken, bool drain = true)
+    {
+        if (!_running.ContainsKey(dataSourceId)) return;
+
+        adapterId ??= _adapters.Describe()
+            .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.AdapterId;
+
+        if (adapterId != null)
+            await _adapters.StopAsync(adapterId, dataSourceId.ToString(), drain, cancellationToken);
+
+        _running.Remove(dataSourceId);
+    }
+
+    private async Task ReleaseAsync(int dataSourceId)
+    {
+        if (!_leases.Remove(dataSourceId, out var lease)) return;
+        await lease.DisposeAsync();
     }
 
     /// <summary>
@@ -191,7 +285,9 @@ public class BusProviderSupervisor : BackgroundService
             row.LastHeartbeatOn = instance.LastHeartbeatOn?.UtcDateTime;
             row.LastException = instance.LastError;
             row.ConsecutiveFailures = instance.RestartCount;
-            row.OwnedByNode = Environment.MachineName;
+            row.OwnedByNode = _leases.TryGetValue(row.Id, out var lease)
+                ? $"{(_election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"
+                : null;
             changed = true;
         }
 
