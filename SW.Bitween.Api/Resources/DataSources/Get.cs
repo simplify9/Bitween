@@ -38,6 +38,10 @@ public class Get : IGetHandler<int, object>
             Kind = dataSource.Kind.ToString(),
             Inactive = dataSource.Inactive,
             DeduplicationWindowDays = dataSource.DeduplicationWindowDays,
+            SoftMemoryLimitMb = dataSource.SoftMemoryLimitMb,
+            CpuPercentLimit = dataSource.CpuPercentLimit,
+            CpuLimitSamples = dataSource.CpuLimitSamples,
+            HardMemoryLimitMb = dataSource.HardMemoryLimitMb,
 
             // Masked, always. This is the only endpoint that returns connection settings, so it is
             // the only place a broker password could leave the process.

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SW.Bitween.Model;
@@ -13,9 +14,11 @@ using SW.Bitween.PgSql;
 namespace SW.Bitween.PgSql.Migrations
 {
     [DbContext(typeof(BitweenDbContext))]
-    partial class BitweenDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260906132326_AdapterMemoryLimits")]
+    partial class AdapterMemoryLimits
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -296,14 +299,6 @@ namespace SW.Bitween.PgSql.Migrations
                     b.Property<int>("ConsecutiveFailures")
                         .HasColumnType("integer")
                         .HasColumnName("consecutive_failures");
-
-                    b.Property<int>("CpuLimitSamples")
-                        .HasColumnType("integer")
-                        .HasColumnName("cpu_limit_samples");
-
-                    b.Property<double>("CpuPercentLimit")
-                        .HasColumnType("double precision")
-                        .HasColumnName("cpu_percent_limit");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text")

@@ -11,6 +11,7 @@ import type {
   BusGatewayDetail,
   BusGatewayRow,
   DataSourceDetail,
+  DataSourceInspectResult,
   DataSourceRow,
   DataSourceTelemetry,
   DataSourceTestResult,
@@ -335,11 +336,17 @@ export interface ApiClient {
       secretProperties: string[];
       inactive: boolean;
       deduplicationWindowDays: number;
+      softMemoryLimitMb: number;
+      hardMemoryLimitMb: number;
+      cpuPercentLimit: number;
+      cpuLimitSamples: number;
     },
   ): Promise<void>;
   deleteDataSource(id: number): Promise<void>;
   testDataSource(id: number): Promise<DataSourceTestResult>;
   getDataSourceTelemetry(id: number): Promise<DataSourceTelemetry>;
+  /** Relays a read-only command (Discover, GetStats) to the adapter actually serving traffic. */
+  inspectDataSource(id: number, command: string): Promise<DataSourceInspectResult>;
   /** The subscription is either an existing id or defined inline; the endpoint commits both as one. */
   addBusRoute(id: number, input: AddBusRouteInput): Promise<void>;
   updateBusRoute(

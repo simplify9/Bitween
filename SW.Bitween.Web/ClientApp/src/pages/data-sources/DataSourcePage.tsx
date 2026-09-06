@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plug, Plus, Trash2, X } from "lucide-react";
-import { api, ApiRequestError, SECRET_SENTINEL, type DataSourceDetail, type DataSourceTestResult } from "../../api";
+import { Check, Gauge, Plug, Plus, Telescope, Trash2, X } from "lucide-react";
+import {
+  api,
+  ApiRequestError,
+  SECRET_SENTINEL,
+  type DataSourceDetail,
+  type DataSourceInspectResult,
+  type DataSourceTestResult,
+} from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basics";
@@ -19,6 +26,10 @@ interface Draft {
   name: string;
   inactive: boolean;
   deduplicationWindowDays: number;
+  softMemoryLimitMb: number;
+  hardMemoryLimitMb: number;
+  cpuPercentLimit: number;
+  cpuLimitSamples: number;
   properties: Record<string, string>;
 }
 
@@ -26,6 +37,10 @@ const draftOf = (d: DataSourceDetail): Draft => ({
   name: d.name,
   inactive: d.inactive,
   deduplicationWindowDays: d.deduplicationWindowDays,
+  softMemoryLimitMb: d.softMemoryLimitMb,
+  hardMemoryLimitMb: d.hardMemoryLimitMb,
+  cpuPercentLimit: d.cpuPercentLimit,
+  cpuLimitSamples: d.cpuLimitSamples,
   properties: { ...d.properties },
 });
 
@@ -54,6 +69,7 @@ export function DataSourcePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DataSourceTestResult | null>(null);
   const [newKey, setNewKey] = useState("");
+  const [inspect, setInspect] = useState<DataSourceInspectResult | null>(null);
   const [removing, setRemoving] = useState(false);
 
   // Re-seed whenever the server's copy changes: saving re-masks the secrets, so the form has to
@@ -72,6 +88,10 @@ export function DataSourcePage() {
         secretProperties: source.data!.secretProperties,
         inactive: d.inactive,
         deduplicationWindowDays: d.deduplicationWindowDays,
+        softMemoryLimitMb: d.softMemoryLimitMb,
+        hardMemoryLimitMb: d.hardMemoryLimitMb,
+        cpuPercentLimit: d.cpuPercentLimit,
+        cpuLimitSamples: d.cpuLimitSamples,
       }),
     onSuccess: async () => {
       setError(null);
@@ -88,6 +108,20 @@ export function DataSourcePage() {
         succeeded: false,
         error: e instanceof ApiRequestError ? e.message : "The test could not be run.",
         stages: [],
+      }),
+  });
+
+  // Discover and GetStats go to the adapter actually serving traffic, not to a throwaway instance
+  // the way Test does — they are questions about the live connection.
+  const ask = useMutation({
+    mutationFn: (command: string) => api.inspectDataSource(dataSourceId, command),
+    onSuccess: setInspect,
+    onError: (e) =>
+      setInspect({
+        ran: false,
+        command: null,
+        result: null,
+        error: e instanceof ApiRequestError ? e.message : "The command could not be run.",
       }),
   });
 
@@ -108,6 +142,10 @@ export function DataSourcePage() {
     return <FormError>This data source no longer exists.</FormError>;
 
   const d = source.data;
+
+  // Only ever used to illustrate what a percentage means. This is the BROWSER's core count, not
+  // the node's, so it is a rough translation rather than a claim about the server.
+  const cores = navigator.hardwareConcurrency || 8;
   const provider = providerOf(d.adapterId);
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(d));
 
@@ -155,6 +193,12 @@ export function DataSourcePage() {
                 <Plug className="size-4" /> {test.isPending ? "Testing…" : "Test connection"}
               </Button>
             </Can>
+            <Button onClick={() => ask.mutate("Discover")} disabled={ask.isPending}>
+              <Telescope className="size-4" /> Discover
+            </Button>
+            <Button onClick={() => ask.mutate("GetStats")} disabled={ask.isPending}>
+              <Gauge className="size-4" /> Stats
+            </Button>
             <Can permission="data-sources.delete">
               <Button onClick={() => setRemoving(true)}>
                 <Trash2 className="size-4" /> Delete
@@ -199,6 +243,37 @@ export function DataSourcePage() {
 
       {/* ——— what it is doing right now ——— */}
       <LiveConnection dataSourceId={dataSourceId} />
+
+      {/* ——— what the live adapter says about the broker ——— */}
+      {inspect && (
+        <section className="mb-4 rounded-xl border border-ink-200 bg-white p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink-900">
+              {inspect.command === "GetStats" ? "Adapter statistics" : "What is on the broker"}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setInspect(null)}
+              className="ml-auto text-[12px] text-ink-500 hover:text-ink-800"
+            >
+              dismiss
+            </button>
+          </div>
+
+          {inspect.ran ? (
+            <pre className="overflow-x-auto rounded-lg bg-ink-50 p-3 font-mono text-[12px] text-ink-800">
+              {inspect.result}
+            </pre>
+          ) : (
+            <p className="text-sm text-ink-600">{inspect.error}</p>
+          )}
+
+          <p className="mt-2 text-[12px] text-ink-500">
+            Asked of the connection that is actually serving traffic, not a throwaway one — and
+            read-only: nothing is consumed, acknowledged or published.
+          </p>
+        </section>
+      )}
 
       {/* ——— the test's answer ——— */}
       {result && (
@@ -277,6 +352,137 @@ export function DataSourcePage() {
               }
             />
           </Field>
+
+          <div className="border-t border-ink-100 pt-4">
+            <h3 className="mb-1 text-sm font-medium text-ink-800">Memory ceilings</h3>
+            <p className="mb-3 text-[12px] text-ink-500">
+              An adapter is a separate process holding this broker's connection. Without a ceiling
+              it is bounded by nothing but the host, so one runaway payload takes every other
+              integration on the node down with it. Leave both at 0 to use the host's own defaults.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <div className="w-48">
+                <Field
+                  label="Soft limit (MB)"
+                  htmlFor="ds-soft"
+                  hint="Crossing it recycles the adapter between messages, so nothing in flight is lost."
+                >
+                  <TextInput
+                    id="ds-soft"
+                    type="number"
+                    min={0}
+                    value={draft.softMemoryLimitMb}
+                    disabled={!canEdit}
+                    onChange={(e) =>
+                      setDraft({ ...draft, softMemoryLimitMb: Number(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="w-48">
+                <Field
+                  label="Hard limit (MB)"
+                  htmlFor="ds-hard"
+                  hint="The runtime's own ceiling: an allocation past it fails inside the adapter."
+                >
+                  <TextInput
+                    id="ds-hard"
+                    type="number"
+                    min={0}
+                    value={draft.hardMemoryLimitMb}
+                    disabled={!canEdit}
+                    onChange={(e) =>
+                      setDraft({ ...draft, hardMemoryLimitMb: Number(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {draft.softMemoryLimitMb > 0 &&
+              draft.hardMemoryLimitMb > 0 &&
+              draft.softMemoryLimitMb > draft.hardMemoryLimitMb && (
+                <p className="mt-2 text-[12px] text-danger-700">
+                  A soft limit above the hard one can never be reached — the runtime fails the
+                  allocation first, so the recycle never happens.
+                </p>
+              )}
+
+            <p className="mt-2 text-[12px] text-ink-500">
+              Applied when the adapter process launches, so changing these restarts it. Nothing in
+              flight is lost: messages are only acknowledged once Bitween has persisted them.
+            </p>
+          </div>
+
+          <div className="border-t border-ink-100 pt-4">
+            <h3 className="mb-1 text-sm font-medium text-ink-800">CPU ceiling</h3>
+            <p className="mb-3 text-[12px] text-ink-500">
+              A share of the <strong>whole node</strong>, not of one core — one core pegged flat out
+              on a sixteen-core node reads about 6%, so &ldquo;50%&rdquo; would allow eight cores
+              rather than half of one. It trips only after several consecutive heartbeats above the
+              line, because an adapter draining a backlog is <em>supposed</em> to work hard.
+              Leave at 0 for the host default.
+            </p>
+
+            <div className="flex flex-wrap gap-4">
+              <div className="w-48">
+                <Field
+                  label="CPU limit (% of node)"
+                  htmlFor="ds-cpu"
+                  hint={
+                    draft.cpuPercentLimit > 0
+                      ? `For scale: ${(draft.cpuPercentLimit / 100 * cores).toFixed(1)} core(s) on a `
+                        + `${cores}-core machine — this browser's core count, not the node's.`
+                      : "Off — the host default applies."
+                  }
+                >
+                  <TextInput
+                    id="ds-cpu"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={draft.cpuPercentLimit}
+                    disabled={!canEdit}
+                    onChange={(e) =>
+                      setDraft({ ...draft, cpuPercentLimit: Number(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="w-48">
+                <Field
+                  label="Consecutive heartbeats"
+                  htmlFor="ds-cpu-samples"
+                  hint="How long it must stay above the line. Higher lets a bigger burst of real work pass."
+                >
+                  <TextInput
+                    id="ds-cpu-samples"
+                    type="number"
+                    min={0}
+                    value={draft.cpuLimitSamples}
+                    disabled={!canEdit}
+                    onChange={(e) =>
+                      setDraft({ ...draft, cpuLimitSamples: Number(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {draft.cpuPercentLimit > 100 && (
+              <p className="mt-2 text-[12px] text-danger-700">
+                Above 100% can never be reached — the figure is a share of the whole node, so 100%
+                is every core at once.
+              </p>
+            )}
+
+            <p className="mt-2 text-[12px] text-ink-500">
+              Crossing it asks the adapter to drain rather than killing it, so in-flight messages go
+              back to the broker instead of being lost.
+            </p>
+          </div>
 
           <div className="border-t border-ink-100 pt-4">
             <h3 className="mb-1 text-sm font-medium text-ink-800">Connection settings</h3>

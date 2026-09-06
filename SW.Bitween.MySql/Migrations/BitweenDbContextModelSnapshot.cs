@@ -252,6 +252,12 @@ namespace SW.Bitween.MySql.Migrations
                     b.Property<int>("ConsecutiveFailures")
                         .HasColumnType("int");
 
+                    b.Property<int>("CpuLimitSamples")
+                        .HasColumnType("int");
+
+                    b.Property<double>("CpuPercentLimit")
+                        .HasColumnType("double");
+
                     b.Property<string>("CreatedBy")
                         .HasColumnType("longtext");
 
@@ -259,6 +265,9 @@ namespace SW.Bitween.MySql.Migrations
                         .HasColumnType("datetime(6)");
 
                     b.Property<int>("DeduplicationWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HardMemoryLimitMb")
                         .HasColumnType("int");
 
                     b.Property<bool>("Inactive")
@@ -299,6 +308,9 @@ namespace SW.Bitween.MySql.Migrations
 
                     b.Property<string>("SecretProperties")
                         .HasColumnType("longtext");
+
+                    b.Property<int>("SoftMemoryLimitMb")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

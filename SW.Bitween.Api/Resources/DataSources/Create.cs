@@ -23,6 +23,9 @@ public class Create : ICommandHandler<DataSourceCreate, object>
     {
         await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Create);
 
+        EnsureCeilingsAreUsable(model.SoftMemoryLimitMb, model.HardMemoryLimitMb,
+            model.CpuPercentLimit, model.CpuLimitSamples);
+
         var nameTaken = await _dbContext.Set<DataSource>()
             .AnyAsync(d => d.Name == model.Name);
         if (nameTaken)
@@ -40,12 +43,45 @@ public class Create : ICommandHandler<DataSourceCreate, object>
             Properties = properties,
             SecretProperties = Secrets.Declare(properties, model.SecretProperties),
             Inactive = model.Inactive,
-            DeduplicationWindowDays = model.DeduplicationWindowDays
+            DeduplicationWindowDays = model.DeduplicationWindowDays,
+            SoftMemoryLimitMb = model.SoftMemoryLimitMb,
+            HardMemoryLimitMb = model.HardMemoryLimitMb,
+            CpuPercentLimit = model.CpuPercentLimit,
+            CpuLimitSamples = model.CpuLimitSamples
         };
 
         _dbContext.Add(entity);
         await _dbContext.SaveChangesAsync();
         return entity.Id;
+    }
+
+    /// <summary>
+    /// Enforced here rather than only in the validator, because the validator runs in the HTTP
+    /// pipeline and nothing else does: a caller reaching the handler another way — the supervisor's
+    /// own tests, a future internal caller — would otherwise save a combination that can never
+    /// work. A soft ceiling above the hard one is unreachable: the runtime fails the allocation
+    /// first, so the graceful recycle it was configured for never happens.
+    /// </summary>
+    internal static void EnsureCeilingsAreUsable(int softMb, int hardMb,
+        double cpuPercent = 0, int cpuSamples = 0)
+    {
+        if (softMb < 0 || hardMb < 0)
+            throw new SWException("A memory ceiling cannot be negative. Use 0 for the host default.");
+
+        if (cpuPercent < 0 || cpuSamples < 0)
+            throw new SWException("A CPU ceiling cannot be negative. Use 0 for the host default.");
+
+        // Above 100 is not a ceiling, because the figure is a share of the whole node — nothing can
+        // ever exceed it, so the limit would silently never fire.
+        if (cpuPercent > 100)
+            throw new SWException(
+                $"A CPU ceiling of {cpuPercent}% can never be reached: the figure is a share of the "
+                + "whole node, so 100% is every core at once.");
+
+        if (softMb > 0 && hardMb > 0 && softMb > hardMb)
+            throw new SWException(
+                $"The soft memory limit ({softMb} MB) has to be at or below the hard limit "
+                + $"({hardMb} MB), or it can never be reached.");
     }
 
     internal static DataSourceKind ParseKind(string kind) =>
@@ -62,6 +98,18 @@ public class Create : ICommandHandler<DataSourceCreate, object>
 
             // Zero is meaningful — it turns deduplication off — so only a negative is rejected.
             RuleFor(i => i.DeduplicationWindowDays).GreaterThanOrEqualTo(0);
+
+            // Zero means "leave the host default alone" for both.
+            RuleFor(i => i.SoftMemoryLimitMb).GreaterThanOrEqualTo(0);
+            RuleFor(i => i.HardMemoryLimitMb).GreaterThanOrEqualTo(0);
+
+            // A soft ceiling above the hard one can never be reached: the runtime fails the
+            // allocation first, so the recycle it was meant to trigger never happens.
+            RuleFor(i => i.SoftMemoryLimitMb)
+                .LessThanOrEqualTo(i => i.HardMemoryLimitMb)
+                .When(i => i.SoftMemoryLimitMb > 0 && i.HardMemoryLimitMb > 0)
+                .WithMessage("The soft memory limit has to be at or below the hard limit, "
+                           + "or it can never be reached.");
         }
     }
 }

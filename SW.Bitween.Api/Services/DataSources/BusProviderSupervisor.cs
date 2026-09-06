@@ -147,7 +147,14 @@ public class BusProviderSupervisor : BackgroundService
                     // The instance key IS the data source id, which is how the sink knows which
                     // gateway an inbound message belongs to.
                     InstanceKey = dataSource.Id.ToString(),
-                    StartupValues = startupValues
+                    StartupValues = startupValues,
+
+                    // Zero leaves the host's own default in place; the spec only overrides when
+                    // an operator has actually chosen a ceiling for this connection.
+                    SoftMemoryLimitBytes = Megabytes(dataSource.SoftMemoryLimitMb),
+                    HardMemoryLimitBytes = Megabytes(dataSource.HardMemoryLimitMb),
+                    CpuPercentLimit = dataSource.CpuPercentLimit,
+                    CpuLimitSamples = dataSource.CpuLimitSamples
                 }, cancellationToken);
 
                 _running[dataSource.Id] = fingerprint;
@@ -265,8 +272,18 @@ public class BusProviderSupervisor : BackgroundService
         return values;
     }
 
+    private static long Megabytes(int megabytes) =>
+        megabytes > 0 ? (long)megabytes * 1024 * 1024 : 0;
+
+    /// <summary>
+    /// What the adapter was started WITH. The memory ceilings belong in here as much as the
+    /// connection settings do: they are applied to the process at launch, so raising one has no
+    /// effect until the adapter restarts — and the fingerprint is what decides that it should.
+    /// </summary>
     private static string Fingerprint(DataSource dataSource, Dictionary<string, string> startupValues) =>
         dataSource.AdapterId + "|" +
+        dataSource.SoftMemoryLimitMb + "|" + dataSource.HardMemoryLimitMb + "|" +
+        dataSource.CpuPercentLimit + "|" + dataSource.CpuLimitSamples + "|" +
         string.Join(";", startupValues.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));
 
     /// <summary>

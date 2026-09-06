@@ -31,6 +31,28 @@ public class DataSourceCreate : IName
     public bool Inactive { get; set; }
 
     /// <summary>
+    /// Soft ceiling in MB for the adapter process. Crossing it recycles the adapter between
+    /// messages rather than killing it. Zero leaves the host default.
+    /// </summary>
+    public int SoftMemoryLimitMb { get; set; }
+
+    /// <summary>
+    /// Hard ceiling in MB, enforced by the runtime as the adapter's GC heap hard limit, so an
+    /// allocation past it fails inside the adapter rather than taking the node with it. Zero
+    /// leaves the host default.
+    /// </summary>
+    public int HardMemoryLimitMb { get; set; }
+
+    /// <summary>
+    /// Sustained CPU ceiling as a percentage of the whole node. Zero leaves the host default.
+    /// One pegged core on a sixteen-core node is about 6%, not 100% — see the entity's remarks.
+    /// </summary>
+    public double CpuPercentLimit { get; set; }
+
+    /// <summary>Consecutive heartbeats above the CPU ceiling before it trips. Zero = host default.</summary>
+    public int CpuLimitSamples { get; set; }
+
+    /// <summary>
     /// How long a message's dedupe key is remembered. It has to exceed the widest redelivery window
     /// this broker can produce. Zero turns deduplication off.
     /// </summary>
@@ -143,4 +165,26 @@ public class DataSourceTelemetry
 
     /// <summary>What the adapter says it can do — the commands the UI could offer against it.</summary>
     public List<string> Commands { get; set; } = new();
+}
+
+/// <summary>Which read-only command to relay to the running adapter. Defaults to Discover.</summary>
+public class DataSourceInspectRequest
+{
+    public string Command { get; set; }
+}
+
+public class DataSourceInspectResult
+{
+    /// <summary>False when this node is not the one holding the connection, or the command failed.</summary>
+    public bool Ran { get; set; }
+
+    public string Command { get; set; }
+
+    /// <summary>
+    /// The adapter's answer, as JSON text. Untyped for the same reason its telemetry is: Bitween
+    /// does not model any broker's topology, and a provider must be free to describe its own.
+    /// </summary>
+    public string Result { get; set; }
+
+    public string Error { get; set; }
 }

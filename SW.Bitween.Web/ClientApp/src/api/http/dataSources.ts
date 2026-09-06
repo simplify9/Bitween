@@ -1,6 +1,7 @@
 import type { ApiClient } from "../client";
 import type {
   DataSourceDetail,
+  DataSourceInspectResult,
   DataSourceRow,
   DataSourceTelemetry,
   DataSourceTestResult,
@@ -20,6 +21,10 @@ interface RawDataSource {
   kind: string;
   inactive: boolean | null;
   deduplicationWindowDays: number;
+  softMemoryLimitMb?: number | null;
+  hardMemoryLimitMb?: number | null;
+  cpuPercentLimit?: number | null;
+  cpuLimitSamples?: number | null;
   gatewayCount: number;
   lastKnownState: string | null;
   lastHeartbeatOn: string | null;
@@ -50,6 +55,10 @@ const toRow = (raw: RawDataSource): DataSourceRow => ({
   kind: raw.kind,
   inactive: raw.inactive ?? false,
   deduplicationWindowDays: raw.deduplicationWindowDays,
+  softMemoryLimitMb: raw.softMemoryLimitMb ?? 0,
+  hardMemoryLimitMb: raw.hardMemoryLimitMb ?? 0,
+  cpuPercentLimit: raw.cpuPercentLimit ?? 0,
+  cpuLimitSamples: raw.cpuLimitSamples ?? 0,
   gatewayCount: raw.gatewayCount,
   lastKnownState: raw.lastKnownState,
   lastHeartbeatOn: raw.lastHeartbeatOn,
@@ -109,6 +118,10 @@ export const dataSourceMethods = {
       secretProperties: input.secretProperties,
       inactive: false,
       deduplicationWindowDays: 30,
+      softMemoryLimitMb: 0,
+      hardMemoryLimitMb: 0,
+      cpuPercentLimit: 0,
+      cpuLimitSamples: 0,
     });
     return { id };
   },
@@ -123,6 +136,10 @@ export const dataSourceMethods = {
       secretProperties: string[];
       inactive: boolean;
       deduplicationWindowDays: number;
+      softMemoryLimitMb: number;
+      hardMemoryLimitMb: number;
+      cpuPercentLimit: number;
+      cpuLimitSamples: number;
     },
   ): Promise<void> {
     await post(`/datasources/${id}`, changes);
@@ -130,6 +147,10 @@ export const dataSourceMethods = {
 
   async deleteDataSource(id: number): Promise<void> {
     await request(`/datasources/${id}`, { method: "DELETE" });
+  },
+
+  async inspectDataSource(id: number, command: string): Promise<DataSourceInspectResult> {
+    return post<DataSourceInspectResult>(`/datasources/${id}/inspect`, { command });
   },
 
   /** Live, from the heartbeat. Scoped to the node that answers — see the backend handler. */

@@ -7,7 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 using SW.Bitween.Domain;
 using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using SW.Bitween.IntegrationTests.Fixtures;
+using SW.Bitween.Services.Cluster;
+using SW.Bitween.Services.DataSources;
+using SW.Serverless.Resident;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
 using Xunit;
@@ -308,6 +313,191 @@ public class DataSourceApiTests
         Assert.Null(internalAgain.Endpoint);
     }
 
+    // ---------------------------------------------------------------- memory ceilings
+
+    /// <summary>
+    /// The ceilings have to reach the adapter's process, not just the database.
+    ///
+    /// They are applied at launch — a GC heap hard limit on the child process — so the supervisor
+    /// has to fold them into the fingerprint it compares each pass. Otherwise raising a limit
+    /// saves cleanly, changes nothing, and the adapter keeps running under the old one with
+    /// nothing to say it did not take.
+    /// </summary>
+    [Fact]
+    public async Task Changing_a_memory_ceiling_restarts_the_adapter()
+    {
+        var dataSourceId = await CreateAsync(
+            new Dictionary<string, string>(_fixture.ExternalRabbitProperties));
+        await CreateGatewayAsync(dataSourceId, Unique("mem"));
+
+        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+
+        // Disposed with the test: the election holds the exclusive queue that IS the lock, so
+        // leaking one leaves this data source owned by a node that no longer exists — and every
+        // later reconcile quietly declines to start it.
+        using var election = Node();
+        var supervisor = Supervisor(host, election);
+
+        try
+        {
+            await supervisor.ReconcileAsync();
+
+            var before = host.Describe()
+                .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.ProcessId;
+            Assert.NotNull(before);
+
+            var row = await GetAsync(dataSourceId);
+            row.HardMemoryLimitMb = 512;
+            await UpdateAsync(dataSourceId, row);
+
+            await supervisor.ReconcileAsync();
+
+            var after = host.Describe()
+                .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.ProcessId;
+            Assert.NotNull(after);
+            Assert.NotEqual(before, after);
+        }
+        finally
+        {
+            try { await supervisor.StopAsync(default); } catch { }
+            try { await host.StopAsync(BusAdapters.RabbitMq, dataSourceId.ToString(), drain: false); }
+            catch { }
+            supervisor.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A soft ceiling above the hard one can never fire: the runtime fails the allocation before
+    /// the supervisor ever sees the soft breach, so the graceful recycle it was configured for
+    /// silently never happens.
+    /// </summary>
+    [Fact]
+    public async Task A_soft_ceiling_above_the_hard_one_is_refused()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>());
+
+        var row = await GetAsync(dataSourceId);
+        row.SoftMemoryLimitMb = 900;
+        row.HardMemoryLimitMb = 256;
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => UpdateAsync(dataSourceId, row));
+        Assert.Contains("hard limit", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Zero_means_leave_the_host_default_alone()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>());
+        var row = await GetAsync(dataSourceId);
+
+        Assert.Equal(0, row.SoftMemoryLimitMb);
+        Assert.Equal(0, row.HardMemoryLimitMb);
+    }
+
+    /// <summary>
+    /// The CPU ceiling has to reach the adapter's process the same way the memory ones do, which
+    /// means the supervisor has to fold it into the fingerprint. Otherwise it saves cleanly,
+    /// changes nothing, and the adapter runs on under the old rule with nothing to say so.
+    /// </summary>
+    [Fact]
+    public async Task Changing_the_cpu_ceiling_restarts_the_adapter()
+    {
+        var dataSourceId = await CreateAsync(
+            new Dictionary<string, string>(_fixture.ExternalRabbitProperties));
+        await CreateGatewayAsync(dataSourceId, Unique("cpu"));
+
+        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+
+        // Disposed with the test: the election holds the exclusive queue that IS the lock, so
+        // leaking one leaves this data source owned by a node that no longer exists — and every
+        // later reconcile quietly declines to start it.
+        using var election = Node();
+        var supervisor = Supervisor(host, election);
+
+        try
+        {
+            await supervisor.ReconcileAsync();
+
+            var before = host.Describe()
+                .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.ProcessId;
+            Assert.NotNull(before);
+
+            var row = await GetAsync(dataSourceId);
+            row.CpuPercentLimit = 40;
+            row.CpuLimitSamples = 5;
+            await UpdateAsync(dataSourceId, row);
+
+            await supervisor.ReconcileAsync();
+
+            var after = host.Describe()
+                .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.ProcessId;
+            Assert.NotNull(after);
+            Assert.NotEqual(before, after);
+        }
+        finally
+        {
+            try { await supervisor.StopAsync(default); } catch { }
+            try { await host.StopAsync(BusAdapters.RabbitMq, dataSourceId.ToString(), drain: false); }
+            catch { }
+            supervisor.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The CPU figure is a share of the whole node, so anything above 100 can never be reached —
+    /// the ceiling would sit there looking configured and never fire once.
+    /// </summary>
+    [Fact]
+    public async Task A_cpu_ceiling_above_one_hundred_percent_is_refused()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>());
+
+        var row = await GetAsync(dataSourceId);
+        row.CpuPercentLimit = 250;
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => UpdateAsync(dataSourceId, row));
+        Assert.Contains("never be reached", error.Message);
+    }
+
+    // ---------------------------------------------------------------- inspect
+
+    /// <summary>
+    /// Discover and GetStats are relayed; Publish is not.
+    ///
+    /// The adapter exposes Publish too, and it writes to the customer's broker. This endpoint is
+    /// guarded by View, so a passthrough would let a read-level grant publish by naming it in a
+    /// request body.
+    /// </summary>
+    [Fact]
+    public async Task Only_read_only_commands_are_relayed()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>());
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => InspectAsync(dataSourceId, "Publish"));
+        Assert.Contains("Publish", error.Message);
+
+        // The allowed ones get through to the "is it running here" answer rather than being
+        // rejected out of hand.
+        var discover = await InspectAsync(dataSourceId, "Discover");
+        Assert.False(discover.Ran);
+        Assert.Contains("not running", discover.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A data source no node is running answers plainly rather than erroring. A broker connection
+    /// is exclusive, so "not here" is the normal answer on every node but one.
+    /// </summary>
+    [Fact]
+    public async Task Inspecting_a_connection_this_node_does_not_hold_says_so()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>());
+
+        var result = await InspectAsync(dataSourceId, "GetStats");
+
+        Assert.False(result.Ran);
+        Assert.NotNull(result.Error);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}"[..20];
@@ -350,7 +540,11 @@ public class DataSourceApiTests
             Properties = row.Properties,
             SecretProperties = row.SecretProperties,
             Inactive = row.Inactive,
-            DeduplicationWindowDays = row.DeduplicationWindowDays
+            DeduplicationWindowDays = row.DeduplicationWindowDays,
+            SoftMemoryLimitMb = row.SoftMemoryLimitMb,
+            HardMemoryLimitMb = row.HardMemoryLimitMb,
+            CpuPercentLimit = row.CpuPercentLimit,
+            CpuLimitSamples = row.CpuLimitSamples
         });
     }
 
@@ -377,6 +571,25 @@ public class DataSourceApiTests
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var stored = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == id);
         return stored.Properties.TryGetValue(name, out var value) ? value : null;
+    }
+
+    private RabbitMqLeaderElection Node() => new(
+        _fixture.App.Services.GetRequiredService<IConfiguration>(),
+        _fixture.App.Services,
+        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger<RabbitMqLeaderElection>());
+
+    private BusProviderSupervisor Supervisor(IResidentAdapterHost host, ILeaderElection election) => new(
+        _fixture.App.Services, host, election,
+        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger<BusProviderSupervisor>());
+
+    private async Task<DataSourceInspectResult> InspectAsync(int id, string command)
+    {
+        await using var scope = _fixture.CreateScope();
+        scope.Superuser();
+        var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Inspect>(scope.ServiceProvider);
+        return (DataSourceInspectResult)await handler.Handle(id, new DataSourceInspectRequest { Command = command });
     }
 
     private async Task<int> CreateDocumentAsync()

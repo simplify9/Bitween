@@ -763,6 +763,19 @@ export interface DataSource {
    */
   deduplicationWindowDays: number;
 
+  /** Soft ceiling in MB — crossing it recycles the adapter between messages. 0 = host default. */
+  softMemoryLimitMb: number;
+  /** Hard ceiling in MB — becomes the adapter's GC heap hard limit. 0 = host default. */
+  hardMemoryLimitMb: number;
+
+  /**
+   * Sustained CPU ceiling as a share of the WHOLE node, not of one core. One pegged core on a
+   * sixteen-core node is about 6%. 0 = host default.
+   */
+  cpuPercentLimit: number;
+  /** Consecutive heartbeats above the ceiling before it trips. 0 = host default. */
+  cpuLimitSamples: number;
+
   // Health, written back by the supervisor from the adapter's heartbeat.
   lastKnownState: string | null;
   lastHeartbeatOn: string | null;
@@ -814,6 +827,15 @@ export interface DataSourceTelemetry {
   lastHeartbeatOn: string | null;
 
   commands: string[];
+}
+
+/** What a read-only command relayed to the running adapter came back with. */
+export interface DataSourceInspectResult {
+  ran: boolean;
+  command: string | null;
+  /** The adapter's own JSON, as text — Bitween does not model any broker's topology. */
+  result: string | null;
+  error: string | null;
 }
 
 export interface DataSourceTestStage {

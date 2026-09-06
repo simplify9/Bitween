@@ -22,6 +22,9 @@ public class Update : ICommandHandler<int, DataSourceUpdate, object>
     {
         await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Edit);
 
+        Create.EnsureCeilingsAreUsable(model.SoftMemoryLimitMb, model.HardMemoryLimitMb,
+            model.CpuPercentLimit, model.CpuLimitSamples);
+
         var entity = await _dbContext.Set<DataSource>().FirstOrDefaultAsync(d => d.Id == key);
         if (entity == null)
             throw new SWNotFoundException($"DataSource with Id {key} not found");
@@ -42,6 +45,10 @@ public class Update : ICommandHandler<int, DataSourceUpdate, object>
         entity.SecretProperties = Secrets.Declare(properties, model.SecretProperties);
         entity.Inactive = model.Inactive;
         entity.DeduplicationWindowDays = model.DeduplicationWindowDays;
+        entity.SoftMemoryLimitMb = model.SoftMemoryLimitMb;
+        entity.HardMemoryLimitMb = model.HardMemoryLimitMb;
+        entity.CpuPercentLimit = model.CpuPercentLimit;
+        entity.CpuLimitSamples = model.CpuLimitSamples;
 
         await _dbContext.SaveChangesAsync();
 
@@ -57,6 +64,13 @@ public class Update : ICommandHandler<int, DataSourceUpdate, object>
             RuleFor(i => i.Name).NotEmpty().MaximumLength(200);
             RuleFor(i => i.AdapterId).NotEmpty().MaximumLength(200);
             RuleFor(i => i.DeduplicationWindowDays).GreaterThanOrEqualTo(0);
+            RuleFor(i => i.SoftMemoryLimitMb).GreaterThanOrEqualTo(0);
+            RuleFor(i => i.HardMemoryLimitMb).GreaterThanOrEqualTo(0);
+            RuleFor(i => i.SoftMemoryLimitMb)
+                .LessThanOrEqualTo(i => i.HardMemoryLimitMb)
+                .When(i => i.SoftMemoryLimitMb > 0 && i.HardMemoryLimitMb > 0)
+                .WithMessage("The soft memory limit has to be at or below the hard limit, "
+                           + "or it can never be reached.");
         }
     }
 }

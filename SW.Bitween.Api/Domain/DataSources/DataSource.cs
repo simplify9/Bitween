@@ -55,6 +55,43 @@ public class DataSource : BaseEntity, IAudited
     /// </summary>
     public int DeduplicationWindowDays { get; set; } = 30;
 
+    /// <summary>
+    /// A soft ceiling in megabytes. Crossing it is a signal, not a kill: the host reports it and
+    /// the adapter is recycled between messages, so nothing in flight is lost. Zero leaves the
+    /// host's own default in place.
+    /// </summary>
+    public int SoftMemoryLimitMb { get; set; }
+
+    /// <summary>
+    /// A hard ceiling in megabytes, enforced by the runtime rather than by the supervisor's
+    /// goodwill — it becomes the adapter process's GC heap hard limit, so an allocation past it
+    /// fails inside the adapter instead of taking the node down with it. Zero leaves the host's
+    /// own default in place.
+    ///
+    /// This matters because an adapter is a separate process holding a broker connection: without
+    /// a ceiling, one customer's runaway payload is bounded by nothing but the host, and every
+    /// other integration on the node goes down with it.
+    /// </summary>
+    public int HardMemoryLimitMb { get; set; }
+
+    /// <summary>
+    /// Sustained CPU ceiling for the adapter process, as a percentage of the WHOLE node — the same
+    /// figure the heartbeat reports. Worth being exact about, because the intuitive reading is
+    /// wrong in an expensive direction: one core pegged flat out on a sixteen-core node reads about
+    /// 6%, so a ceiling set at "50%, surely that's half a core" would in fact allow eight.
+    ///
+    /// Deliberately sustained rather than instantaneous — an adapter draining a backlog is supposed
+    /// to work hard, and recycling it for that would be a bug wearing a limit's clothes. Zero
+    /// leaves the host default in place.
+    /// </summary>
+    public double CpuPercentLimit { get; set; }
+
+    /// <summary>
+    /// How many consecutive heartbeats above <see cref="CpuPercentLimit"/> before it trips. Zero
+    /// uses the host default. Longer means a bigger burst of legitimate work passes underneath it.
+    /// </summary>
+    public int CpuLimitSamples { get; set; }
+
     // ---------------------------------------------------------------- health
 
     /// <summary>Last state the adapter reported on its heartbeat: Connected, Idle, Disconnected...</summary>
