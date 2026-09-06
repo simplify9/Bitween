@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,12 +19,18 @@ namespace SW.Bitween.Resources.Audit;
 public class Search(BitweenDbContext dbContext, RequestContext requestContext)
     : IQueryHandler<SearchAuditModel, object>
 {
+    /// <summary>Rows per page ceiling — each row carries its changes as JSON.</summary>
+    const int MaxLimit = 200;
+
     public async Task<object> Handle(SearchAuditModel request)
     {
         await requestContext.EnsurePermission(dbContext, Model.Permissions.Audit.View);
 
-        request.Limit ??= 20;
-        request.Offset ??= 0;
+        // Both arrive from the query string. A negative Skip is a database error rather than an
+        // empty page, and this table's rows carry a JSON blob each, so an unbounded Take is the
+        // one page size worth refusing.
+        request.Limit = Math.Clamp(request.Limit ?? 20, 1, MaxLimit);
+        request.Offset = Math.Max(request.Offset ?? 0, 0);
 
         var query = dbContext.Set<AuditEntry>().AsNoTracking();
 
@@ -48,8 +55,12 @@ public class Search(BitweenDbContext dbContext, RequestContext requestContext)
         var totalCount = await query.CountAsync();
 
         var rows = await query
-            // Sequence breaks the tie within one save, where every row shares a timestamp.
-            .OrderByDescending(e => e.OccurredOn).ThenByDescending(e => e.Sequence)
+            // Sequence breaks the tie within one save, where every row shares a timestamp; Id
+            // breaks it between two saves that landed in the same tick, without which paging
+            // could show one row twice and skip another.
+            .OrderByDescending(e => e.OccurredOn)
+            .ThenByDescending(e => e.Sequence)
+            .ThenByDescending(e => e.Id)
             .Skip(request.Offset.Value).Take(request.Limit.Value)
             .ToListAsync();
 

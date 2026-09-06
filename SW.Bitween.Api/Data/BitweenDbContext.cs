@@ -475,6 +475,15 @@ namespace SW.Bitween
         ];
 
         /// <summary>
+        /// Refused, because it would save without auditing. Only <see cref="SaveChangesAsync"/>
+        /// captures the trail, and an audit table with a silent hole in it is worse than none —
+        /// nobody would know which changes it had missed. Nothing in Bitween calls this today;
+        /// this makes sure a future caller finds out immediately rather than quietly.
+        /// </summary>
+        public override int SaveChanges() => throw new NotSupportedException(
+            "Use SaveChangesAsync — the synchronous path would skip the audit trail.");
+
+        /// <summary>
         /// Saves, and records what was saved. The audit rows are written inside the same transaction
         /// as the change they describe, so the trail can never disagree with the data — a save that
         /// rolls back takes its audit rows with it.

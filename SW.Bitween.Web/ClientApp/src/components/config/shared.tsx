@@ -877,17 +877,16 @@ export function UsedByCell({ items }: { items: SubscriptionInfo[] }) {
   );
 }
 
-/** How one recorded change reads in a sentence: `Name: "a" → "b"`. */
-function describeChange(c: AuditChange): string {
-  const show = (v: unknown) =>
-    v === null || v === undefined ? "empty" : typeof v === "string" ? `"${v}"` : JSON.stringify(v);
-  return `${c.property}: ${show(c.old)} \u2192 ${show(c.new)}`;
-}
+/** How one value reads in the panel: quoted if text, "empty" if there is nothing. */
+const showValue = (v: unknown) =>
+  v === null || v === undefined ? "empty" : typeof v === "string" ? `"${v}"` : JSON.stringify(v);
 
 /**
- * The property names, shortened. A created row is recorded as a full snapshot rather than a
- * diff, so its list runs to every column the entity has — readable as a hover, useless as a
- * cell. The full list stays one hover away rather than being dropped.
+ * The property names, with the before/after values behind a popover.
+ *
+ * A created row is recorded as a full snapshot rather than a diff, so its list runs to every
+ * column the entity has — unreadable as a cell. The values used to live in a `title`, which
+ * only a mouse can reach; this is a real control, so it works from the keyboard and on touch.
  */
 export function ChangedCell({ changes }: { changes: AuditChange[] }) {
   if (changes.length === 0) return <span className="text-ink-400">—</span>;
@@ -896,10 +895,30 @@ export function ChangedCell({ changes }: { changes: AuditChange[] }) {
   const rest = changes.length - shown.length;
 
   return (
-    <span className="block text-[13px] text-ink-600" title={changes.map(describeChange).join("\n")}>
-      {shown.join(", ")}
-      {rest > 0 && <span className="text-ink-400"> +{rest} more</span>}
-    </span>
+    <Popover
+      label={`Show what changed: ${changes.map((c) => c.property).join(", ")}`}
+      width="w-96"
+      button={
+        <span className="block text-left text-[13px] text-ink-600">
+          {shown.join(", ")}
+          {rest > 0 && <span className="text-ink-400"> +{rest} more</span>}
+        </span>
+      }
+    >
+      <dl className="space-y-2">
+        {changes.map((c) => (
+          <div key={c.property}>
+            <dt className="text-[12px] font-medium text-ink-800">{c.property}</dt>
+            <dd className="mt-0.5 font-mono text-[11px] break-all text-ink-600">
+              <span className="text-ink-400">{showValue(c.old)}</span>
+              <span aria-hidden> → </span>
+              <span className="sr-only"> changed to </span>
+              {showValue(c.new)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Popover>
   );
 }
 
@@ -943,7 +962,7 @@ export function TrailTable({ entries }: { entries: TrailEntry[] }) {
         },
         {
           header: "Changed",
-          headerTitle: "The fields this change touched. Hover to see the values.",
+          headerTitle: "The fields this change touched. Open one to see the values.",
           wrap: true,
           cell: (e) => <ChangedCell changes={e.changes} />,
         },

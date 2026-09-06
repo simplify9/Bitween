@@ -67,9 +67,15 @@ const readQuery = (sp: URLSearchParams): AuditQuery => ({
   correlationId: sp.get("correlationId") ?? undefined,
   from: sp.get("from") ?? undefined,
   to: sp.get("to") ?? undefined,
-  offset: sp.get("offset") ? Number(sp.get("offset")) : 0,
+  offset: readOffset(sp.get("offset")),
   limit: PAGE_SIZE,
 });
+
+/** `Number("bad")` is NaN, which would go out on the wire as `offset=NaN`. */
+function readOffset(raw: string | null): number {
+  const n = Number(raw);
+  return raw && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
 
 const FILTER_KEYS = ["entityName", "entityKey", "userId", "correlationId", "from", "to"];
 
@@ -253,7 +259,7 @@ export function AuditPage() {
             },
             {
               header: "Changed",
-              headerTitle: "The fields this change touched. Hover to see the values.",
+              headerTitle: "The fields this change touched. Open one to see the values.",
               wrap: true,
               cell: (r) => <ChangedCell changes={r.changes} />,
             },

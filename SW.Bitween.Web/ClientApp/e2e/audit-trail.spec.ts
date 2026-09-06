@@ -95,6 +95,13 @@ test.describe("audit trail", () => {
     // so it has to catch up on its own. It used to need a manual refresh.
     await expect(panel.getByRole("row").filter({ hasText: "Modified" })).toBeVisible();
 
+    // The before/after values are reachable without a mouse — they used to be in a title,
+    // which keyboard and touch users can't get at.
+    await panel.getByRole("button", { name: /Show what changed/ }).first().click();
+    await expect(page.getByText(`"${name}"`, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(`"${renamed}"`, { exact: false }).first()).toBeVisible();
+    await page.keyboard.press("Escape");
+
     const afterRename = await audit(page, `entityName=Partner&entityKey=${id}`);
     const modified = afterRename.result.find((r) => r.state === "Modified");
     expect(modified?.changes.Name).toEqual({ old: name, new: renamed });
@@ -229,6 +236,31 @@ test.describe("audit trail", () => {
     // Settings has no per-row page, so its card covers the whole area.
     await page.goto("settings");
     await expect(historyPanel(page)).toBeVisible();
+  });
+
+  test("a custom role's page carries its history", async ({ page }) => {
+    // Built-in roles are deliberately excluded — their grants are computed rather than stored,
+    // so nothing ever edits one — which makes a custom role the case worth covering.
+    const role = await createRole(page, {
+      name: `PW Audit Role ${Date.now()}`,
+      permissions: [{ area: "Partners", action: "View" }],
+    });
+
+    await page.goto("team/roles");
+    await page.getByRole("link", { name: new RegExp(role) }).click();
+    await expect(historyPanel(page)).toBeVisible({ timeout: 15000 });
+    await expect(historyPanel(page).getByRole("row").filter({ hasText: "Added" })).toBeVisible();
+
+    await deleteRole(page, role);
+  });
+
+  test("a junk offset in the URL doesn't break the page", async ({ page }) => {
+    // Number("bad") is NaN, which used to go out on the wire as offset=NaN.
+    for (const offset of ["bad", "-5"]) {
+      await page.goto(`audit?offset=${offset}`);
+      await expect(page.getByRole("heading", { name: "Audit trail" })).toBeVisible();
+      await expect(page.getByText(/Showing 1[–-]/)).toBeVisible();
+    }
   });
 
   test("a member drawer shows that member's history", async ({ page }) => {
