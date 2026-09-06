@@ -7,7 +7,22 @@ import { ApiRequestError } from "../types";
 export const API_BASE = "/api";
 
 /** The Jwt is kept in localStorage; the refresh token is an HttpOnly cookie JS never sees. */
-const TOKEN_KEY = "access_token";
+export const TOKEN_KEY = "access_token";
+
+/**
+ * Told when a request proves the session is over — the Jwt was refused and no
+ * refresh cookie was left to replace it.
+ *
+ * A callback rather than a hook because this is plain module code that cannot
+ * reach React state. `SessionProvider` registers itself on mount; with nothing
+ * registered, the `UNAUTHENTICATED` error below is all that happens, which is
+ * what used to leave a dead session rendering the entire app until somebody
+ * pressed refresh.
+ */
+let sessionEndedListener: (() => void) | null = null;
+export const onSessionEnded = (listener: (() => void) | null): void => {
+  sessionEndedListener = listener;
+};
 
 export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
 export const setToken = (jwt: string): void => localStorage.setItem(TOKEN_KEY, jwt);
@@ -88,6 +103,8 @@ export interface RequestOptions {
   body?: unknown;
   /** Internal: prevents the 401 → refresh → retry loop from recursing. */
   _retried?: boolean;
+  /** Lets a caller cancel the request — only `logout` needs this, and says why. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -111,12 +128,16 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: sendJson ? JSON.stringify(opts.body ?? {}) : undefined,
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
 
   if (res.status === 401 && !opts._retried) {
     const refreshed = await silentRefresh();
     if (refreshed) return request<T>(path, { ...opts, _retried: true });
     clearToken();
+    // Tell the app, not only the caller. Every page with a read in flight is about
+    // to render its own small error, and a page's error state cannot end a session.
+    sessionEndedListener?.();
     throw new ApiRequestError("UNAUTHENTICATED", "Your session has ended. Please sign in again.");
   }
 

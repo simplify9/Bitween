@@ -129,7 +129,7 @@ export function RoleEditor() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.roles.all });
-      navigate("/team/roles");
+      navigate("/team/roles", { replace: true });
     },
   });
 
@@ -334,7 +334,7 @@ export function RoleEditor() {
               <FormError>{save.error?.message}</FormError>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button onClick={() => navigate("/team/roles")}>Cancel</Button>
+              <Button onClick={() => navigate("/team/roles", { replace: true })}>Cancel</Button>
               <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>
                 {isNew ? "Create role" : "Save changes"}
               </Button>
@@ -356,7 +356,7 @@ export function RoleEditor() {
           onConfirm={async () => {
             await api.deleteRole(id!);
             void queryClient.invalidateQueries({ queryKey: keys.roles.all });
-            navigate("/team/roles");
+            navigate("/team/roles", { replace: true });
           }}
           onClose={() => setConfirmingDelete(false)}
         />

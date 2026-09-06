@@ -208,7 +208,7 @@ export function PartnerPage() {
           onConfirm={async () => {
             await api.deletePartner(partnerId);
             void queryClient.invalidateQueries({ queryKey: keys.partners.all });
-            navigate("/partners");
+            navigate("/partners", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

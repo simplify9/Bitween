@@ -354,7 +354,7 @@ export function NotifierPage() {
           onConfirm={async () => {
             await api.deleteNotifier(notifierId);
             void queryClient.invalidateQueries({ queryKey: keys.notifiers.all });
-            navigate("/notifiers");
+            navigate("/notifiers", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

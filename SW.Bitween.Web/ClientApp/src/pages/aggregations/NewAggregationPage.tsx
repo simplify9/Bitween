@@ -128,7 +128,7 @@ export function NewAggregationPage() {
       }),
     onSuccess: (created) => {
       void queryClient.invalidateQueries();
-      navigate(`/subscriptions/${created.id}`);
+      navigate(`/subscriptions/${created.id}`, { replace: true });
     },
   });
 
@@ -342,7 +342,7 @@ export function NewAggregationPage() {
               {missing.at(-1)}.
             </p>
           )}
-          <Button onClick={() => navigate("/aggregations")}>Cancel</Button>
+          <Button onClick={() => navigate("/aggregations", { replace: true })}>Cancel</Button>
           <Button
             variant="primary"
             busy={create.isPending}

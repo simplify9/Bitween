@@ -97,7 +97,7 @@ const MappingEditorToolbar: React.FC<MappingEditorToolbarProps> = ({
     <div className="flex items-center gap-3 px-4 py-2.5 border-b border-ink-200 bg-white flex-shrink-0 shadow-sm">
       {/* Back */}
       <button
-        onClick={() => navigate(`/subscriptions/${subscriptionId}`)}
+        onClick={() => navigate(`/subscriptions/${subscriptionId}`, { replace: true })}
         className="flex items-center gap-1.5 text-xs text-ink-500 hover:text-ink-800 border border-ink-200 rounded px-2 py-1 transition mr-1"
       >
         <ArrowLeft size={13} /> Back

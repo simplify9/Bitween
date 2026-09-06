@@ -146,7 +146,7 @@ export function WorkGroupPage() {
           onConfirm={async () => {
             await api.deleteWorkGroup(groupId);
             void queryClient.invalidateQueries({ queryKey: keys.workGroups.all });
-            navigate("/work-groups");
+            navigate("/work-groups", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />
