@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "react-router";
 import { NotWiredError } from "./api/types";
-import { applyQueryDefaults } from "./api/queryKeys";
+import { applyQueryDefaults, keys } from "./api/queryKeys";
 import { SessionProvider } from "./auth/SessionContext";
 import { router } from "./router";
 import "./index.css";
@@ -16,7 +16,17 @@ if (base !== "/" && !window.location.pathname.startsWith(base.replace(/\/$/, "")
   window.location.replace(base);
 }
 
+// Any successful mutation may have written an audit row, so the trail is refreshed here rather
+// than by each of the app's save handlers remembering to. Without it a History card goes on
+// showing the state from before the save made on the very same page, until a manual reload.
+const mutationCache = new MutationCache({
+  onSuccess: () => {
+    void queryClient.invalidateQueries({ queryKey: keys.audit.all });
+  },
+});
+
 const queryClient = new QueryClient({
+  mutationCache,
   defaultOptions: {
     queries: {
       // A floor, not the policy: per-entity windows are registered by applyQueryDefaults below and

@@ -28,18 +28,6 @@ namespace SW.Bitween.Model
         public ICollection<KeyAndValue> PromotedProperties { get; set; }
     }
 
-    public class SearchDocumentTrailModel
-    {
-        public int? Limit { get; set; }
-        public int? Offset { get; set; }
-        public int DocumentId { get; set; }
-    }
-
-    public class DocumentTrailModel : TrailBaseModel
-    {
-        public int DocumentId { get; set; }
-    }
-
     public class DocumentUpdate : DocumentCreate
     {
         public int Id { get; set; }

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Trash2 } from "lucide-react";
 import { api } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import {
@@ -121,6 +122,8 @@ export function WorkGroupPage() {
           <Panel title="Used by" description="Subscriptions assigned to this work group.">
             <SetupList items={g.subscriptions} />
           </Panel>
+
+          <HistoryCard entityName="WorkGroup" entityKey={id} />
         </div>
       </div>
 

@@ -82,7 +82,6 @@ namespace SW.Bitween.Resources.Documents
 
             PromotedPropertyValidation.Check(model.PromotedProperties, model.DocumentFormat);
 
-            var trail = new DocumentTrail(DocumentTrailCode.Updated, entity);
             // An absent list means none, the same as it does for retry policy groups.
             // Left implicit it threw ArgumentNullException — a 500 for a request the
             // API had simply never decided the meaning of.
@@ -99,8 +98,6 @@ namespace SW.Bitween.Resources.Documents
             model.Id = key;
             _dbContext.Entry(entity).SetProperties(model);
 
-            trail.SetAfter(entity);
-            _dbContext.Add(trail);
             await _dbContext.SaveChangesAsync();
             await _BitweenCache.BroadcastRevoke();
             await _broadcast.RefreshConsumers();

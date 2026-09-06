@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Search } from "lucide-react";
 import { api, type NotificationEntry, type Notifier } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { Checkbox, Field, TextInput } from "../../components/ui/forms";
 import { EditableTitle, Panel, UnsavedBar } from "../../components/ui/Panel";
@@ -328,6 +329,8 @@ export function NotifierPage() {
           >
             <NotificationsList items={n.recentNotifications} />
           </Panel>
+
+          <HistoryCard entityName="Notifier" entityKey={id} />
         </div>
       </div>
 

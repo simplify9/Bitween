@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { EditableTitle, Panel, UnsavedBar } from "../../components/ui/Panel";
@@ -183,6 +184,8 @@ export function PartnerPage() {
               <ExchangesList items={p.recentExchanges} hide={["partner"]} />
             </Panel>
           </Can>
+
+          <HistoryCard entityName="Partner" entityKey={id} />
         </div>
       </div>
 

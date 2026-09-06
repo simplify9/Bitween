@@ -33,18 +33,6 @@ namespace SW.Bitween.Model
         public ICollection<KeyAndValue> MapperProperties { get; set; }
     }
 
-    public class SubscriptionTrailModel : TrailBaseModel
-    {
-        public int SubscriptionId { get; set; }
-    }
-
-    public class SearchSubscriptionTrailModel
-    {
-        public int? Limit { get; set; }
-        public int? Offset { get; set; }
-        public int SubscriptionId { get; set; }
-    }
-
     // One execution of a scheduled subscription, out of the scheduler's own history.
     // Only Receiving and Aggregation subscriptions run on a schedule, so only they
     // have runs; everything else returns an empty list.

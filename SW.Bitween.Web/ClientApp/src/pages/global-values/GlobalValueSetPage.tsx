@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api, referencesGlobal } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { KeyValueEditor, toRecord, toRows, type KvRow } from "../../components/ui/KeyValueEditor";
@@ -163,6 +164,8 @@ export function GlobalValueSetPage() {
               ]}
             />
           </Panel>
+
+          <HistoryCard entityName="GlobalAdapterValuesSet" entityKey={id} />
         </div>
       </div>
 

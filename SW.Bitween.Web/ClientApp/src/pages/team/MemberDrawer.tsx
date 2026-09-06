@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, KeyRound, LockOpen, Trash2, UserRoundCheck, UserRoundX, X } from "lucide-react";
 import { api } from "../../api";
 import { Can } from "../../auth/guards";
 import { useSession } from "../../auth/SessionContext";
+import { HistoryList } from "../../components/config/HistoryCard";
 import { Avatar } from "../../components/ui/Avatar";
 import { CopyField } from "../../components/ui/CopyField";
 import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basics";
@@ -265,6 +267,20 @@ export function MemberDrawer({ userId, onClose }: { userId: string; onClose: () 
             </div>
           </Section>
         )}
+
+        <Can permission="audit.view">
+          <Section title="History">
+            <HistoryList entityName="Account" entityKey={userId} />
+            {/* The drawer answers "what happened to this member"; the more useful question
+                about a person is usually the other one, which the trail can also answer. */}
+            <Link
+              to={`/audit?userId=${userId}`}
+              className="mt-2 inline-block text-[13px] font-medium text-crimson-700 hover:underline"
+            >
+              What this member changed
+            </Link>
+          </Section>
+        </Can>
       </>
     );
   };

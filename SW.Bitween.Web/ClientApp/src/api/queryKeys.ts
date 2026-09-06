@@ -131,6 +131,13 @@ export const keys = {
     search: (params: string) => ["scheduled-retries", "search", params] as const,
   },
 
+  audit: {
+    all: ["audit"] as const,
+    search: (params: string) => ["audit", "search", params] as const,
+    entity: (entityName: string, entityKey: string | null) =>
+      ["audit", "entity", entityName, entityKey] as const,
+  },
+
   queueHealth: ["queue-health"] as const,
   dashboard: ["dashboard"] as const,
 
@@ -194,6 +201,9 @@ export function applyQueryDefaults(queryClient: QueryClient): void {
     // fires next — so the tables built on it have to refetch on mount like any other live view.
     // (The whole-list `cache` below is a different query and stays held for the session.)
     keys.subscriptions.rows,
+    // A history card sits on the same page as the form that writes to it, so it is never
+    // allowed to be a few minutes behind what the person just did.
+    keys.audit.all,
   ];
 
   for (const key of fixed) queryClient.setQueryDefaults(key, { staleTime: Infinity });

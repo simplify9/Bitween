@@ -11,6 +11,7 @@ import {
   type SubscriptionType,
   type QueueSeverity,
   type ScheduleHealth,
+  type AuditChange,
   type TrailEntry,
 } from "../../api";
 import { useSessionCan } from "../../auth/guards";
@@ -876,19 +877,75 @@ export function UsedByCell({ items }: { items: SubscriptionInfo[] }) {
   );
 }
 
-/** Audit trail for an entity, newest first. Shared by every hub page that has one. */
+/** How one recorded change reads in a sentence: `Name: "a" → "b"`. */
+function describeChange(c: AuditChange): string {
+  const show = (v: unknown) =>
+    v === null || v === undefined ? "empty" : typeof v === "string" ? `"${v}"` : JSON.stringify(v);
+  return `${c.property}: ${show(c.old)} \u2192 ${show(c.new)}`;
+}
+
+/**
+ * The property names, shortened. A created row is recorded as a full snapshot rather than a
+ * diff, so its list runs to every column the entity has — readable as a hover, useless as a
+ * cell. The full list stays one hover away rather than being dropped.
+ */
+export function ChangedCell({ changes }: { changes: AuditChange[] }) {
+  if (changes.length === 0) return <span className="text-ink-400">—</span>;
+
+  const shown = changes.slice(0, 3).map((c) => c.property);
+  const rest = changes.length - shown.length;
+
+  return (
+    <span className="block text-[13px] text-ink-600" title={changes.map(describeChange).join("\n")}>
+      {shown.join(", ")}
+      {rest > 0 && <span className="text-ink-400"> +{rest} more</span>}
+    </span>
+  );
+}
+
+const ACTION_STYLE: Record<TrailEntry["action"], string> = {
+  Added: "bg-emerald-50 text-emerald-700",
+  Modified: "bg-amber-50 text-amber-700",
+  Deleted: "bg-rose-50 text-rose-700",
+};
+
+const ACTION_TITLE: Record<TrailEntry["action"], string> = {
+  Added: "This row was created.",
+  Modified: "Some of this row's fields were changed.",
+  Deleted: "This row was deleted. The values shown are what it held.",
+};
+
+/**
+ * Audit trail for an entity, newest first. Shared by every hub page that has one.
+ *
+ * Every column is derived from the change tracker rather than written by hand at each
+ * call site, which is why deletions appear here at all — the trails this replaced only
+ * ever recorded creates and updates.
+ */
 export function TrailTable({ entries }: { entries: TrailEntry[] }) {
   return (
     <MiniTable
-      rows={[...entries].reverse().map((e, i) => ({ ...e, i }))}
-      rowKey={(e) => e.i}
+      rows={entries}
+      rowKey={(e) => e.id}
       empty="Nothing recorded yet."
       columns={[
         {
           header: "Action",
+          headerTitle: "Whether the row was created, changed or deleted.",
           cell: (e) => (
-            <span className="font-medium text-ink-800">{e.action}</span>
+            <span
+              title={ACTION_TITLE[e.action]}
+              className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${ACTION_STYLE[e.action]}`}
+            >
+              {e.action}
+            </span>
           ),
+        },
+        {
+          header: "Changed",
+          headerTitle: "The fields this change touched. Hover to see the values.",
+          wrap: true,
+          cell: (e) => <ChangedCell changes={e.changes} />,
         },
         {
           header: "By",
@@ -902,7 +959,9 @@ export function TrailTable({ entries }: { entries: TrailEntry[] }) {
                 {e.by}
               </Link>
             ) : (
-              <span className="block text-ink-600">{e.by}</span>
+              <span className="block text-ink-600" title="No signed-in user — a scheduled job or a bus consumer.">
+                {e.by}
+              </span>
             ),
         },
         {

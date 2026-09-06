@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SW.Bitween.MsSql;
 
@@ -11,9 +12,11 @@ using SW.Bitween.MsSql;
 namespace SW.Bitween.MsSql.Migrations
 {
     [DbContext(typeof(BitweenDbContext))]
-    partial class BitweenDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260906091530_AddAuditTrail")]
+    partial class AddAuditTrail
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -350,6 +353,39 @@ namespace SW.Bitween.MsSql.Migrations
                             Name = "Aggregation Document",
                             PromotedProperties = "{}"
                         });
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Code")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StateAfter")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StateBefore")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedOn");
+
+                    b.HasIndex("DocumentId");
+
+                    b.ToTable("DocumentTrail");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGateway", b =>
@@ -935,6 +971,39 @@ namespace SW.Bitween.MsSql.Migrations
                         .HasFilter("[Code] IS NOT NULL");
 
                     b.ToTable("SubscriptionCategory");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Code")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StateAfter")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StateBefore")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SubscriptionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedOn");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.ToTable("SubscriptionTrail");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.WorkGroup", b =>
@@ -1780,6 +1849,17 @@ namespace SW.Bitween.MsSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.Document", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGatewayPartner", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.Gateway.ApiGateway", "ApiGateway")
@@ -1962,6 +2042,17 @@ namespace SW.Bitween.MsSql.Migrations
                     b.Navigation("Schedules");
 
                     b.Navigation("WorkGroup");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.Subscription", "Subscription")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subscription");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Xchange", b =>
