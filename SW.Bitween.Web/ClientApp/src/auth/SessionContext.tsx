@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,17 +32,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
   const queryClient = useQueryClient();
+  /**
+   * Bumped whenever the session is authoritatively replaced or ended.
+   *
+   * `getSession()` cannot be cancelled, so a slow one can resolve *after* a
+   * sign-out and hand `setSession` the very session that was just discarded —
+   * signing the user back in. Each caller notes the generation it started under
+   * and drops its own result if that is no longer current.
+   */
+  const generation = useRef(0);
 
   useEffect(() => {
+    const startedAt = generation.current;
     api
       .getSession()
-      .then(setSession)
+      .then((next) => {
+        if (generation.current === startedAt) setSession(next);
+      })
       .finally(() => setInitializing(false));
   }, []);
 
   const adoptSession = useCallback(
     (next: Session) => {
       // a different identity invalidates everything previously fetched
+      generation.current += 1;
       queryClient.clear();
       setSession(next);
     },
@@ -64,11 +78,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [adoptSession]);
 
   const refresh = useCallback(async () => {
-    setSession(await api.getSession());
+    const startedAt = generation.current;
+    const next = await api.getSession();
+    if (generation.current === startedAt) setSession(next);
   }, []);
 
   /** Ends the session locally, then tells the server. Never the other way round. */
   const endSession = useCallback(() => {
+    generation.current += 1;
     setSession(null);
     queryClient.clear();
   }, [queryClient]);

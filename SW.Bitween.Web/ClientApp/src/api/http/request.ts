@@ -103,6 +103,8 @@ export interface RequestOptions {
   body?: unknown;
   /** Internal: prevents the 401 → refresh → retry loop from recursing. */
   _retried?: boolean;
+  /** Lets a caller cancel the request — only `logout` needs this, and says why. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -126,6 +128,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: sendJson ? JSON.stringify(opts.body ?? {}) : undefined,
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
 
   if (res.status === 401 && !opts._retried) {
