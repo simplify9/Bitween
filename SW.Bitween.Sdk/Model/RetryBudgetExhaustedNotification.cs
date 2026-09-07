@@ -13,27 +13,29 @@ namespace SW.Bitween.Model;
 public class RetryBudgetExhaustedNotification
 {
     /// <summary>The failure that found the budget empty.</summary>
-    public string XchangeId { get; set; }
+    public string XchangeId { get; set; } = null!;
 
     public int SubscriptionId { get; set; }
-    public string SubscriptionName { get; set; }
-    public string DocumentName { get; set; }
-    public string CorrelationId { get; set; }
+    public string SubscriptionName { get; set; } = null!;
+    public string DocumentName { get; set; } = null!;
+    public string CorrelationId { get; set; } = null!;
 
     /// <summary>Null when the subscription uses an inline policy rather than a named one.</summary>
-    public string PolicyName { get; set; }
+    /// <summary>Null when the subscription carries an inline policy rather than a named one.</summary>
+    public string? PolicyName { get; set; }
 
     /// <summary>The group whose budget is spent — the condition that has stopped being retried.</summary>
-    public string GroupName { get; set; }
+    public string GroupName { get; set; } = null!;
 
     /// <summary>The ceiling that was reached.</summary>
     public int MaxAttemptsTotal { get; set; }
 
     /// <summary>The policy's own words for why this failure was refused.</summary>
-    public string BlockedReason { get; set; }
+    public string BlockedReason { get; set; } = null!;
 
     /// <summary>The failure text of the exchange that hit the empty budget.</summary>
-    public string Exception { get; set; }
+    /// <summary>What the final attempt failed with.</summary>
+    public string? Exception { get; set; }
 
     public DateTime OccurredOn { get; set; }
 }

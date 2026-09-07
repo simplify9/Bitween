@@ -5,9 +5,13 @@ namespace SW.Bitween.Model;
 
 public class CreateAccountModel
 {
-    public string Name { get; set; }
-    public string Email { get; set; }
-    public string Password { get; set; }
+    /// <summary>Name and Email are required; the server rejects a create without them.</summary>
+    public string Name { get; set; } = null!;
+
+    public string Email { get; set; } = null!;
+
+    /// <summary>Null for an account that signs in with Microsoft rather than a password.</summary>
+    public string? Password { get; set; }
 
     /// <summary>
     /// Legacy coarse role. Nullable on purpose: when it was a plain int, a request that omitted it
@@ -21,7 +25,7 @@ public class CreateAccountModel
 
 public class UpdateAccountModel
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>
     /// Legacy coarse role. Nullable on purpose: when it was a plain int, a request that omitted it
@@ -44,19 +48,19 @@ public class SearchMembersModel
 public class AccountRoleSummary
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 }
 
 public class AccountModel
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
     public int Id { get; set; }
-    public string Email { get; set; }
+    public string Email { get; set; } = null!;
 
     /// <summary>
     /// Legacy coarse role, kept for older clients. Authorization reads <see cref="Roles"/>.
     /// </summary>
-    public string Role { get; set; }
+    public string? Role { get; set; }
 
     public bool Disabled { get; set; }
     public DateTime CreatedOn { get; set; }
@@ -78,9 +82,9 @@ public class UnlockAccountModel
 
 public class ChangePasswordModel
 {
-    public string NewPassword { get; set; }
+    public string NewPassword { get; set; } = null!;
 
-    public string OldPassword { get; set; }
+    public string OldPassword { get; set; } = null!;
 }
 
 /// <summary>Replaces the whole set of roles a member holds.</summary>
@@ -97,5 +101,5 @@ public class SetAccountDisabledModel
 /// <summary>An administrator setting someone else's password, standing in for a reset flow.</summary>
 public class SetAccountPasswordModel
 {
-    public string Password { get; set; }
+    public string Password { get; set; } = null!;
 }

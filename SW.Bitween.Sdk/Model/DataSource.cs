@@ -9,10 +9,12 @@ namespace SW.Bitween.Model;
 /// </summary>
 public class DataSourceCreate : IName
 {
-    public string Name { get; set; }
+    /// <summary>Required; the server rejects a create without it.</summary>
+    public string Name { get; set; } = null!;
 
     /// <summary>The adapter that speaks this protocol, e.g. <c>bitween.bus.rabbitmq</c>.</summary>
-    public string AdapterId { get; set; }
+    /// <summary>Required; the server rejects a create without it.</summary>
+    public string AdapterId { get; set; } = null!;
 
     public string Kind { get; set; } = "Broker";
 
@@ -72,13 +74,15 @@ public class DataSourceRow : DataSourceUpdate
 
     // ------------------------------------------------------------------ health
 
-    public string LastKnownState { get; set; }
+    /// <summary>Null until the supervisor has reported on it once.</summary>
+    public string? LastKnownState { get; set; }
     public DateTime? LastHeartbeatOn { get; set; }
-    public string LastException { get; set; }
+    public string? LastException { get; set; }
     public int ConsecutiveFailures { get; set; }
 
     /// <summary>Which node holds this connection, and at which fencing term.</summary>
-    public string OwnedByNode { get; set; }
+    /// <summary>Null when no node currently holds it.</summary>
+    public string? OwnedByNode { get; set; }
 }
 
 /// <summary>
@@ -109,9 +113,11 @@ public class DataSourceTestResult
 
 public class DataSourceTestStage
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
     public bool Succeeded { get; set; }
-    public string Detail { get; set; }
+
+    /// <summary>What the stage found, or why it failed; null when there is nothing to add.</summary>
+    public string? Detail { get; set; }
 }
 
 /// <summary>
@@ -132,12 +138,13 @@ public class DataSourceTelemetry
     public bool RunningHere { get; set; }
 
     /// <summary>Which node holds the connection, from the data source row — filled in even when it is not this one.</summary>
-    public string OwnedByNode { get; set; }
+    public string? OwnedByNode { get; set; }
 
     // ---------------------------------------------------------------- adapter-reported
 
     public bool Connected { get; set; }
-    public string State { get; set; }
+    /// <summary>Null until the adapter has reported a state.</summary>
+    public string? State { get; set; }
     public DateTime? LastMessageOn { get; set; }
     public long InFlight { get; set; }
 
@@ -174,7 +181,7 @@ public class DataSourceTelemetry
 /// <summary>Which read-only command to relay to the running adapter. Defaults to Discover.</summary>
 public class DataSourceInspectRequest
 {
-    public string Command { get; set; }
+    public string Command { get; set; } = null!;
 }
 
 public class DataSourceInspectResult
@@ -182,7 +189,7 @@ public class DataSourceInspectResult
     /// <summary>False when this node is not the one holding the connection, or the command failed.</summary>
     public bool Ran { get; set; }
 
-    public string Command { get; set; }
+    public string Command { get; set; } = null!;
 
     /// <summary>
     /// The adapter's answer, as JSON text. Untyped for the same reason its telemetry is: Bitween
@@ -204,10 +211,10 @@ public class DataSourceInspectResult
 /// </summary>
 public class DataSourceProviderDescriptor
 {
-    public string AdapterId { get; set; }
+    public string AdapterId { get; set; } = null!;
 
     /// <summary>What to call it in a menu. The adapter id when the adapter did not say.</summary>
-    public string Label { get; set; }
+    public string Label { get; set; } = null!;
 
     /// <summary>
     /// Which DataSourceKind this provider produces — Broker, Relational, Document, ObjectStore or
@@ -216,7 +223,8 @@ public class DataSourceProviderDescriptor
     /// </summary>
     public string Kind { get; set; } = "Broker";
 
-    public string Description { get; set; }
+    /// <summary>Null when the adapter declares none.</summary>
+    public string? Description { get; set; }
 
     public List<DataSourceProviderSetting> Settings { get; set; } = [];
 }
@@ -229,18 +237,21 @@ public class DataSourceProviderSetting
     public const string BooleanType = "boolean";
 
     /// <summary>The property name the adapter binds by — this is the data source property key.</summary>
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
     /// <summary>string, number or boolean. Coarse on purpose: it picks an input, nothing more.</summary>
     public string Type { get; set; } = StringType;
 
-    public string Hint { get; set; }
+    /// <summary>Null when the adapter declares none.</summary>
+    public string? Hint { get; set; }
 
     /// <summary>What a new data source starts with. Null means start it empty.</summary>
-    public string Default { get; set; }
+    /// <summary>Null when the adapter declares none.</summary>
+    public string? Default { get; set; }
 
     /// <summary>When set, the only legal values — the UI offers these instead of free text.</summary>
-    public string[] AllowedValues { get; set; }
+    /// <summary>Null when the setting is free text rather than a fixed choice.</summary>
+    public string[]? AllowedValues { get; set; }
 
     /// <summary>Masked in responses and never shown back once stored.</summary>
     public bool Secret { get; set; }

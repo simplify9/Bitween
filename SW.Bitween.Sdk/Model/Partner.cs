@@ -6,7 +6,8 @@ namespace SW.Bitween.Model
 
     public class PartnerCreate  : IName
     {
-        public string Name { get; set; }
+        /// <summary>Required; the server rejects a create without it.</summary>
+        public string Name { get; set; } = null!;
 
         /// <summary>
         /// Referenced from adapter fields as {{partner.KEY}}. Accepted at creation so a
@@ -14,7 +15,7 @@ namespace SW.Bitween.Model
         /// inside other flows, where a follow-up update that fails would leave a
         /// partner whose adapters resolve nothing.
         /// </summary>
-        public Dictionary<string, string> AdapterProperties { get; set; }
+        public Dictionary<string, string>? AdapterProperties { get; set; }
     }
     public class PartnerRow : PartnerUpdate
     {
@@ -26,12 +27,12 @@ namespace SW.Bitween.Model
         /// can be secrets. Names alone are enough to count them in a list and to offer
         /// them as {{partner.x}} reference tokens when configuring an adapter.
         /// </summary>
-        public ICollection<string> PropertyKeys { get; set; }
+        public ICollection<string> PropertyKeys { get; set; } = [];
     }
 
     public class PartnerUpdate : PartnerCreate
     {
-        public ICollection<KeyAndValue> ApiCredentials { get; set; }
-        public ICollection<SubscriptionSearch> Subscriptions { get; set; }
+        public ICollection<KeyAndValue> ApiCredentials { get; set; } = [];
+        public ICollection<SubscriptionSearch> Subscriptions { get; set; } = [];
     }
 }

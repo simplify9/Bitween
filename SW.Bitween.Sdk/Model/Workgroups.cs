@@ -9,15 +9,15 @@ public class ConsumerSettings
 
 public class WorkGroupOptions
 {
-    public ConsumerSettings RabbitMqOptions { get; set; }
+    public ConsumerSettings? RabbitMqOptions { get; set; }
 }
 
 public class WorkGroupModel
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public string BusMessageName { get; set; }
-    public WorkGroupOptions Options { get; set; }
+    public string Name { get; set; } = null!;
+    public string BusMessageName { get; set; } = null!;
+    public WorkGroupOptions? Options { get; set; }
     public double? ProcessorAckRate { get; set; }
     public double? ProcessorIncomingRate { get; set; }
     public long? ProcessorProcessingCount { get; set; }
@@ -39,16 +39,20 @@ public class WorkGroupModel
 
 public class CreateWorkGroupModel
 {
-    public string Name { get; set; }
-    public string BusMessageName { get; set; }
-    public WorkGroupOptions Options { get; set; }
+    /// <summary>Both required; the server rejects a create without them.</summary>
+    public string Name { get; set; } = null!;
+
+    public string BusMessageName { get; set; } = null!;
+
+    /// <summary>Optional; defaults apply when absent.</summary>
+    public WorkGroupOptions? Options { get; set; }
 }
 
 public class SearchWorkGroupModel
 {
     public int? Limit { get; set; }
     public int? Offset { get; set; }
-    public string Name { get; set; }
+    public string? Name { get; set; }
 }
 
 public class UpdateWorkGroupModel : CreateWorkGroupModel

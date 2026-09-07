@@ -5,9 +5,11 @@ namespace SW.Bitween.Model
 {
     public class GlobalAdapterValuesSetCreate : IName
     {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public Dictionary<string, string> Values { get; set; }
+        /// <summary>Both required; the server rejects a create without them.</summary>
+        public string Id { get; set; } = null!;
+
+        public string Name { get; set; } = null!;
+        public Dictionary<string, string> Values { get; set; } = new();
     }
 
     // Id is inherited from GlobalAdapterValuesSetCreate. Redeclaring it here shadowed the base

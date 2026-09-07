@@ -180,7 +180,8 @@ public class AuditTrailTests(BitweenFixture fixture)
 
     private class Diff
     {
-        public string Old { get; set; }
-        public string New { get; set; }
+        // Null is the point: a property that had no value before, or none after.
+        public string? Old { get; set; }
+        public string? New { get; set; }
     }
 }

@@ -7,12 +7,13 @@ namespace SW.Bitween.Model
 {
     public class AdapterSearchRequest
     {
-        public string Prefix { get; set; }
+        /// <summary>Optional filter; null lists every adapter.</summary>
+        public string? Prefix { get; set; }
     }
 
     public class AdapterRow
     {
-        public string Id { get; set; }
+        public string Id { get; set; } = null!;
     }
 
 }

@@ -5,15 +5,18 @@ namespace SW.Bitween.Model;
 public class SubscriptionCategoryModel
 {
     public int Id { get; set; }
-    public string Code { get; set; }
-    public string Description { get; set; }
+    public string Code { get; set; } = null!;
+    public string? Description { get; set; }
     public DateTime CreatedOn { get; set; }
 }
 
 public class CreateSubscriptionCategoryModel
 {
-    public string Code { get; set; }
-    public string Description { get; set; }
+    /// <summary>Required; the server rejects a create without it.</summary>
+    public string Code { get; set; } = null!;
+
+    /// <summary>Optional free text shown beside the code.</summary>
+    public string? Description { get; set; }
 }
 
 public class SearchSubscriptionCategoryModel

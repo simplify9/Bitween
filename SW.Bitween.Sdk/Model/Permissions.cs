@@ -149,21 +149,21 @@ public static class Permissions
 
 public class PermissionActionModel
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>What this specific grant allows, in end-user words.</summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 }
 
 public class PermissionAreaModel
 {
-    public string Id { get; set; }
-    public string Label { get; set; }
+    public string Id { get; set; } = null!;
+    public string Label { get; set; } = null!;
 
     /// <summary>Mirrors the app's navigation groups, so a role's grants map onto what its members see.</summary>
-    public string Group { get; set; }
+    public string Group { get; set; } = null!;
 
-    public string Description { get; set; }
+    public string? Description { get; set; }
     public List<PermissionActionModel> Actions { get; set; } = [];
 }
 
