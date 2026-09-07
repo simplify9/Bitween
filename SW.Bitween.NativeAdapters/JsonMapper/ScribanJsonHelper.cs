@@ -161,7 +161,7 @@ public static class ScribanJsonHelper
     {
         public SmartArray(IEnumerable<object?> items) : base(items) { }
 
-        public override bool TryGetValue(TemplateContext context, SourceSpan span, string member, out object? value)
+        public override bool TryGetValue(TemplateContext? context, SourceSpan span, string member, out object? value)
         {
             if (base.TryGetValue(context, span, member, out value))
                 return true;
