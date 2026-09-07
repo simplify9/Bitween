@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using SW.Bus;
@@ -439,9 +440,38 @@ namespace SW.Bitween.Web
             "base-uri 'self'; " +
             "object-src 'none'";
 
+        /// <summary>
+        /// Says so at startup when Microsoft sign-in points anywhere but <see cref="MsalRedirectPath"/>.
+        /// <para>
+        /// An upgrade cannot move a deployment onto the right redirect URI by itself. A stored setting
+        /// wins over configuration once its row exists (see SettingsService), so editing Helm or
+        /// appsettings has no effect, and the URI has to be registered on the Azure AD app by hand
+        /// regardless — rewriting the value here would only trade a hung popup for AADSTS50011.
+        /// A warning is all this can honestly do, and it beats leaving a sign-in that hangs with no
+        /// explanation as the only symptom.
+        /// </para>
+        /// </summary>
+        private static void WarnIfMsalRedirectUriIsStale(IApplicationBuilder app)
+        {
+            var options = app.ApplicationServices.GetRequiredService<BitweenOptions>();
+            if (string.IsNullOrWhiteSpace(options.MsalClientId)) return;
+
+            var redirectUri = options.MsalRedirectUri ?? "";
+            if (redirectUri.TrimEnd('/').EndsWith(MsalRedirectPath, StringComparison.OrdinalIgnoreCase)) return;
+
+            app.ApplicationServices.GetRequiredService<ILogger<Startup>>().LogWarning(
+                "Microsoft sign-in redirect URI is {RedirectUri}, which is not this instance's sign-in " +
+                "landing page {LandingPage}. The popup has to land there: every other page sends a " +
+                "Cross-Origin-Opener-Policy that severs it from the window that opened it, and MSAL then " +
+                "fails the sign-in with \"user_cancelled\". Register the landing page on the Azure AD app " +
+                "and set Bitween.MsalRedirectUri to match.",
+                redirectUri.Length == 0 ? "(not set)" : redirectUri, MsalRedirectPath);
+        }
+
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseSWConsoleLogger();
+            WarnIfMsalRedirectUriIsStale(app);
             app.UseForwardedHeaders();
             // Early, so everything downstream — static files, the SPA fallback, every API
             // response — is compressed on the way out.
