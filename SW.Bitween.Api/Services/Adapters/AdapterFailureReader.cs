@@ -90,7 +90,7 @@ public static class AdapterFailureReader
             // milliseconds; this waits for an error line rather than for the clock.
             for (var attempt = 0; attempt < 20; attempt++)
             {
-                if (instance.Diagnostics.Any(HasError)) break;
+                if (instance.Diagnostics.Any(l => l.IsError)) break;
                 await Task.Delay(50);
             }
 
@@ -103,8 +103,35 @@ public static class AdapterFailureReader
         }
     }
 
-    private static bool HasError(string line) =>
-        line != null && line.Contains(Constants.LogErrorIdentifier, StringComparison.Ordinal);
+    /// <summary>
+    /// The two questions this asks of a captured line, as extension members (C# 14) so the call
+    /// sites read as properties of the line rather than as helpers taking one.
+    /// </summary>
+    extension(string line)
+    {
+        /// <summary>Whether the SDK marked this line as an error.</summary>
+        private bool IsError =>
+            line != null && line.Contains(Constants.LogErrorIdentifier, StringComparison.Ordinal);
+
+        /// <summary>
+        /// The line without the "12:34:56.789 " the host stamps on each captured line. Useful in a
+        /// log tail, noise at the front of a sentence on a form.
+        /// </summary>
+        private string WithoutTimestamp
+        {
+            get
+            {
+                var space = line.IndexOf(' ');
+                if (space != 8 && space != 12) return line;
+
+                var head = line[..space];
+                return head.Count(c => c == ':') == 2
+                       && head.All(c => char.IsDigit(c) || c == ':' || c == '.')
+                    ? line[(space + 1)..]
+                    : line;
+            }
+        }
+    }
 
     /// <summary>
     /// Undoes the SDK's line encoding. It escapes newlines so one log entry stays one line on the
@@ -132,7 +159,7 @@ public static class AdapterFailureReader
         // line is where the diagnosis lives: "None of the specified endpoints were reachable" is
         // true of a wrong host, a wrong port and a firewall alike, while "Cannot determine the
         // frame size" says TLS was attempted against a plaintext port and nothing else.
-        var lead = string.Join(" ", parts.Take(2).Select(StripTimestamp));
+        var lead = string.Join(" ", parts.Take(2).Select(p => p.WithoutTimestamp));
 
         var cause = parts
             .Where(l => l.StartsWith("--->", StringComparison.Ordinal))
@@ -144,20 +171,5 @@ public static class AdapterFailureReader
         if (string.IsNullOrWhiteSpace(summary)) return null;
 
         return summary.Length > MaxLength ? summary[..MaxLength] + "…" : summary;
-    }
-
-    /// <summary>
-    /// Drops the "12:34:56.789 " the host stamps on each captured line. Useful in a log tail,
-    /// noise at the front of a sentence on a form.
-    /// </summary>
-    private static string StripTimestamp(string line)
-    {
-        var space = line.IndexOf(' ');
-        if (space != 8 && space != 12) return line;
-
-        var head = line[..space];
-        return head.Count(c => c == ':') == 2 && head.All(c => char.IsDigit(c) || c == ':' || c == '.')
-            ? line[(space + 1)..]
-            : line;
     }
 }
