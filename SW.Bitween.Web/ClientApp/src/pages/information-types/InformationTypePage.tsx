@@ -8,7 +8,8 @@ import { Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { CodeBadge, Panel, UnsavedBar } from "../../components/ui/Panel";
 import { MiniTable } from "../../components/ui/Table";
-import { ExchangesList, SetupList, TrailTable } from "../../components/config/shared";
+import { HistoryCard } from "../../components/config/HistoryCard";
+import { ExchangesList, SetupList } from "../../components/config/shared";
 import { BackLink } from "../../components/ui/BackLink";
 import { keys } from "../../api/queryKeys";
 import {
@@ -131,9 +132,7 @@ export function InformationTypePage() {
             </Panel>
           </Can>
 
-          <Panel title="History">
-            <TrailTable entries={t.trail} />
-          </Panel>
+          <HistoryCard entityName="Document" entityKey={id} />
         </div>
       </div>
 
@@ -159,7 +158,7 @@ export function InformationTypePage() {
           onConfirm={async () => {
             await api.deleteInformationType(typeId);
             void queryClient.invalidateQueries({ queryKey: keys.informationTypes.all });
-            navigate("/information-types");
+            navigate("/information-types", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

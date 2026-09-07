@@ -254,6 +254,72 @@ namespace SW.Bitween.PgSql.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.AuditEntry", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Changes")
+                        .HasColumnType("text")
+                        .HasColumnName("changes");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(36)")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<string>("EntityKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("entity_key");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("entity_name");
+
+                    b.Property<DateTime>("OccurredOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_on");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_entries");
+
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("ix_audit_entries_correlation_id");
+
+                    b.HasIndex("OccurredOn")
+                        .HasDatabaseName("ix_audit_entries_occurred_on");
+
+                    b.HasIndex("EntityName", "EntityKey", "OccurredOn")
+                        .HasDatabaseName("ix_audit_entries_entity_name_entity_key_occurred_on");
+
+                    b.ToTable("AuditEntries", "infolink");
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.Cluster.ClusterLease", b =>
                 {
                     b.Property<string>("Id")
@@ -499,48 +565,6 @@ namespace SW.Bitween.PgSql.Migrations
                             Name = "Aggregation Document",
                             PromotedProperties = "{}"
                         });
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text")
-                        .HasColumnName("id");
-
-                    b.Property<int>("Code")
-                        .HasColumnType("integer")
-                        .HasColumnName("code");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("text")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_on");
-
-                    b.Property<int>("DocumentId")
-                        .HasColumnType("integer")
-                        .HasColumnName("document_id");
-
-                    b.Property<string>("StateAfter")
-                        .HasColumnType("text")
-                        .HasColumnName("state_after");
-
-                    b.Property<string>("StateBefore")
-                        .HasColumnType("text")
-                        .HasColumnName("state_before");
-
-                    b.HasKey("Id")
-                        .HasName("pk_document_trail");
-
-                    b.HasIndex("CreatedOn")
-                        .HasDatabaseName("ix_document_trail_created_on");
-
-                    b.HasIndex("DocumentId")
-                        .HasDatabaseName("ix_document_trail_document_id");
-
-                    b.ToTable("document_trail", "infolink");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGateway", b =>
@@ -1283,49 +1307,6 @@ namespace SW.Bitween.PgSql.Migrations
                         .HasDatabaseName("ix_subscription_category_code");
 
                     b.ToTable("subscription_category", "infolink");
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("id");
-
-                    b.Property<int>("Code")
-                        .HasColumnType("integer")
-                        .HasColumnName("code");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("text")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_on");
-
-                    b.Property<string>("StateAfter")
-                        .HasColumnType("text")
-                        .HasColumnName("state_after");
-
-                    b.Property<string>("StateBefore")
-                        .HasColumnType("text")
-                        .HasColumnName("state_before");
-
-                    b.Property<int>("SubscriptionId")
-                        .HasColumnType("integer")
-                        .HasColumnName("subscription_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_subscription_trail");
-
-                    b.HasIndex("CreatedOn")
-                        .HasDatabaseName("ix_subscription_trail_created_on");
-
-                    b.HasIndex("SubscriptionId")
-                        .HasDatabaseName("ix_subscription_trail_subscription_id");
-
-                    b.ToTable("subscription_trail", "infolink");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.WorkGroup", b =>
@@ -2252,18 +2233,6 @@ namespace SW.Bitween.PgSql.Migrations
                         .HasConstraintName("fk_inbound_message_data_source_data_source_id");
                 });
 
-            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
-                {
-                    b.HasOne("SW.Bitween.Domain.Document", "Document")
-                        .WithMany()
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_document_trail_document_document_id");
-
-                    b.Navigation("Document");
-                });
-
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGatewayPartner", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.Gateway.ApiGateway", "ApiGateway")
@@ -2478,18 +2447,6 @@ namespace SW.Bitween.PgSql.Migrations
                     b.Navigation("Schedules");
 
                     b.Navigation("WorkGroup");
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
-                {
-                    b.HasOne("SW.Bitween.Domain.Subscription", "Subscription")
-                        .WithMany()
-                        .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_subscription_trail_subscription_subscription_id");
-
-                    b.Navigation("Subscription");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Xchange", b =>

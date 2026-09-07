@@ -6,6 +6,7 @@ import { NAV_GROUPS, homePath } from "./nav";
 import { LoginPage } from "./pages/auth/Login";
 import { NotFoundPage, PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { AuditPage } from "./pages/audit/AuditPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import MappingEditor from "./components/mapper/MappingEditor";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
@@ -426,6 +427,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permission="settings.view">
                 <SettingsPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "audit",
+            element: (
+              <RequirePermission permission="audit.view">
+                <AuditPage />
               </RequirePermission>
             ),
           },

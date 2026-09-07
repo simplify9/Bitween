@@ -105,7 +105,7 @@ export function NewScheduledJobPage() {
     onSuccess: (created) => {
       clear();
       void queryClient.invalidateQueries();
-      navigate(`/subscriptions/${created.id}`);
+      navigate(`/subscriptions/${created.id}`, { replace: true });
     },
   });
 
@@ -289,7 +289,7 @@ export function NewScheduledJobPage() {
               {missing.at(-1)}.
             </p>
           )}
-          <Button onClick={() => navigate("/scheduled-jobs")}>Cancel</Button>
+          <Button onClick={() => navigate("/scheduled-jobs", { replace: true })}>Cancel</Button>
           <Button
             variant="primary"
             busy={create.isPending}

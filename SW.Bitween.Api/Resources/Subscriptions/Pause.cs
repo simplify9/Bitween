@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using SW.Bitween.Domain;
@@ -27,20 +27,11 @@ namespace SW.Bitween.Resources.Subscriptions
             await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Operate);
 
             var entity = await _dbContext.FindAsync<Subscription>(key);
-            SubscriptionTrail trail;
             if (entity!.PausedOn == null)
-            {
-                trail = new SubscriptionTrail(SubscriptionTrialCode.Paused, entity);
                 entity.Pause();
-            }
             else
-            {
-                trail = new SubscriptionTrail(SubscriptionTrialCode.Resumed, entity);
                 entity.UnPause();
-            }
 
-            trail.SetAfter(entity);
-            _dbContext.Add(trail);
             await _dbContext.SaveChangesAsync();
             // The receiving path reads PausedOn off the cached copy, so without this a paused
             // integration keeps taking messages for the rest of the cache's ten minutes. Resuming

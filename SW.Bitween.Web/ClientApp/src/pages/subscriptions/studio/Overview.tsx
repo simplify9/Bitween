@@ -7,7 +7,8 @@ import { Badge, LoadingBlock } from "../../../components/ui/basics";
 import { SearchSelect } from "../../../components/ui/SearchSelect";
 import { MiniTable } from "../../../components/ui/Table";
 import { Panel } from "../../../components/ui/Panel";
-import { ExchangesList, HealthBadge, TrailTable } from "../../../components/config/shared";
+import { HistoryCard } from "../../../components/config/HistoryCard";
+import { ExchangesList, HealthBadge } from "../../../components/config/shared";
 import { WorkGroupDialog } from "../../../components/config/WorkGroupDialog";
 import { formatDate, formatDateTime, formatDurationMs, timeAgo, timeUntil } from "../../../lib/dates";
 import { ReceiveAttemptsPanel, type AttemptKind } from "./ReceiveAttemptsPanel";
@@ -329,11 +330,7 @@ export function Overview({
             </Panel>
           )}
 
-          {s.trail.length > 0 && (
-            <Panel title="History">
-              <TrailTable entries={s.trail} />
-            </Panel>
-          )}
+          <HistoryCard entityName="Subscription" entityKey={s.id} />
         </div>
 
         <div className="min-w-0 space-y-5">

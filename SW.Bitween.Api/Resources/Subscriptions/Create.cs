@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using SW.Bitween.Domain;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
@@ -66,8 +66,7 @@ namespace SW.Bitween.Resources.Subscriptions
                     throw new BitweenException();
             }
 
-            var trail = new SubscriptionTrail(SubscriptionTrialCode.Created, entity, true);
-            _dbContext.Add(trail);
+            _dbContext.Add(entity);
 
             // Same code the update handler applies, so a field can't work on one and not the other.
             await SubscriptionConfigurationApplier.Apply(_dbContext, entity, model);

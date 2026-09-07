@@ -1,6 +1,7 @@
 import type { ApiClient } from "../client";
 import { NotWiredError } from "../types";
 import { adapterMethods } from "./adapters";
+import { auditMethods } from "./audit";
 import { dashboardMethods } from "./dashboard";
 import { dataSourceMethods } from "./dataSources";
 import { documentMethods } from "./documents";
@@ -26,6 +27,7 @@ import { workGroupMethods } from "./workGroups";
  */
 const wired: Partial<ApiClient> = {
   ...sessionMethods,
+  ...auditMethods,
   ...partnerMethods,
   ...documentMethods,
   ...globalValuesMethods,

@@ -40,7 +40,7 @@ export function ExchangeNewPage() {
         informationTypeId: informationTypeId ? Number(informationTypeId) : undefined,
         data,
       }),
-    onSuccess: ({ id }) => navigate(`/exchanges?ids=${encodeURIComponent(id)}`),
+    onSuccess: ({ id }) => navigate(`/exchanges?ids=${encodeURIComponent(id)}`, { replace: true }),
     onError: (e) =>
       setError(e instanceof ApiRequestError ? e.message : "The exchange could not be created."),
   });
@@ -124,7 +124,7 @@ export function ExchangeNewPage() {
         <FormError>{error}</FormError>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => navigate("/exchanges")}>
+          <Button variant="ghost" onClick={() => navigate("/exchanges", { replace: true })}>
             Cancel
           </Button>
           <Button variant="primary" busy={create.isPending} onClick={submit}>

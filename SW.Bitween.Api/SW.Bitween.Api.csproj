@@ -38,7 +38,8 @@
          keep the version in step with it. -->
     <PackageReference Include="SimplyWorks.Bus" Version="8.1.18" />
     <PackageReference Include="SimplyWorks.Bus.RabbitMqExtensions" Version="8.1.18" />
-    <PackageReference Include="SimplyWorks.EfCoreExtensions" Version="8.1.2" />
+    <!-- 8.1.9 is the first version carrying AuditOptions, which AuditPolicy needs. -->
+    <PackageReference Include="SimplyWorks.EfCoreExtensions" Version="8.1.9" />
     <PackageReference Include="SimplyWorks.Scheduler.Sdk" Version="8.1.7" />
   </ItemGroup>
 

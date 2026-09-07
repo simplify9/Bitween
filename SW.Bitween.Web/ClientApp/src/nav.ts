@@ -12,6 +12,7 @@ import {
   Network,
   RefreshCw,
   RotateCcw,
+  ScrollText,
   Settings,
   SlidersHorizontal,
   Users,
@@ -95,6 +96,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Team", path: "/team", icon: Users, permissions: ["users.view", "roles.view"] },
       { label: "Settings", path: "/settings", icon: Settings, permissions: ["settings.view"] },
+      // Last in Administration: it reports on everything above it rather than configuring
+      // anything, and it is the one page whose value is that nobody can quietly change it.
+      { label: "Audit trail", path: "/audit", icon: ScrollText, permissions: ["audit.view"] },
     ],
   },
 ];

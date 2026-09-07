@@ -5,6 +5,7 @@ import { RotateCcw } from "lucide-react";
 import { api, resetAppConfig, type SettingRow } from "../../api";
 import { useSessionCan } from "../../auth/guards";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, LoadingBlock } from "../../components/ui/basics";
 import { Checkbox, TextInput } from "../../components/ui/forms";
 import { UnsavedBar } from "../../components/ui/Panel";
@@ -373,6 +374,12 @@ export function SettingsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Not per section: a setting has no page of its own, so the one useful question is
+          "who changed anything here", and that is the whole table rather than a slice of it. */}
+      <div className="mt-5">
+        <HistoryCard entityName="Setting" description="Recent changes to instance settings." />
       </div>
 
       {dirtyCount > 0 && (

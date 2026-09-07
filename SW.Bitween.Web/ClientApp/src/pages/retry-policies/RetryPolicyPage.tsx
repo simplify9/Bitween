@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlaskConical, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, type RetryGroup, type RetryMatcher, type RetryResultType } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, EmptyState, FormError, LoadingBlock } from "../../components/ui/basics";
 import { Field, Select, TextInput } from "../../components/ui/forms";
 import { ConfirmDialog, Dialog } from "../../components/ui/overlays";
@@ -464,6 +465,7 @@ export function RetryPolicyPage() {
       <div className="mt-5 space-y-5">
         <UsagePanel policyId={policyId} subscriptions={p.subscriptions} canEdit={canEdit} />
         <TestPanel groups={groups ?? []} />
+        <HistoryCard entityName="RetryPolicy" entityKey={policyId} />
       </div>
 
       {canEdit && dirty && (
@@ -497,7 +499,7 @@ export function RetryPolicyPage() {
           onConfirm={async () => {
             await api.deleteRetryPolicy(policyId);
             void queryClient.invalidateQueries({ queryKey: keys.retryPolicies.all });
-            navigate("/retry-policies");
+            navigate("/retry-policies", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

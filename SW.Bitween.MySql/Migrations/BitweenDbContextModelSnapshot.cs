@@ -212,6 +212,59 @@ namespace SW.Bitween.MySql.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.AuditEntry", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("Changes")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<string>("EntityKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("OccurredOn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("OccurredOn");
+
+                    b.HasIndex("EntityName", "EntityKey", "OccurredOn");
+
+                    b.ToTable("AuditEntries", (string)null);
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.Cluster.ClusterLease", b =>
                 {
                     b.Property<string>("Id")
@@ -426,39 +479,6 @@ namespace SW.Bitween.MySql.Migrations
                             Name = "Aggregation Document",
                             PromotedProperties = "{}"
                         });
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("DocumentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StateAfter")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("StateBefore")
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedOn");
-
-                    b.HasIndex("DocumentId");
-
-                    b.ToTable("DocumentTrail");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGateway", b =>
@@ -1056,39 +1076,6 @@ namespace SW.Bitween.MySql.Migrations
                         .IsUnique();
 
                     b.ToTable("SubscriptionCategory");
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
-                    b.Property<int>("Code")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("StateAfter")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("StateBefore")
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("SubscriptionId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedOn");
-
-                    b.HasIndex("SubscriptionId");
-
-                    b.ToTable("SubscriptionTrail");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.WorkGroup", b =>
@@ -1943,17 +1930,6 @@ namespace SW.Bitween.MySql.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("SW.Bitween.Domain.DocumentTrail", b =>
-                {
-                    b.HasOne("SW.Bitween.Domain.Document", "Document")
-                        .WithMany()
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-                });
-
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGatewayPartner", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.Gateway.ApiGateway", "ApiGateway")
@@ -2143,17 +2119,6 @@ namespace SW.Bitween.MySql.Migrations
                     b.Navigation("Schedules");
 
                     b.Navigation("WorkGroup");
-                });
-
-            modelBuilder.Entity("SW.Bitween.Domain.SubscriptionTrail", b =>
-                {
-                    b.HasOne("SW.Bitween.Domain.Subscription", "Subscription")
-                        .WithMany()
-                        .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Subscription");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Xchange", b =>

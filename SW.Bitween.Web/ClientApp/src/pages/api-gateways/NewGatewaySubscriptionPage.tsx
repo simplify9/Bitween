@@ -90,7 +90,7 @@ export function NewGatewaySubscriptionPage() {
     const query = new URLSearchParams(extra);
     if (partnerId) query.set("partnerId", partnerId);
     const qs = query.toString();
-    navigate(`/api-gateways/${gatewayId}/attach${qs ? `?${qs}` : ""}`);
+    navigate(`/api-gateways/${gatewayId}/attach${qs ? `?${qs}` : ""}`, { replace: true });
   };
 
   const create = useMutation({

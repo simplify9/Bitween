@@ -5,6 +5,7 @@ import type {
   AggregationTarget,
   ApiGateway,
   ApiGatewayAttachment,
+  AuditQuery,
   ApiGatewayDetail,
   ApiGatewayRow,
   BusGateway,
@@ -62,6 +63,7 @@ import type {
   User,
   WorkGroup,
   WorkGroupDetail,
+  TrailEntry,
   WorkGroupRow,
 } from "./types";
 
@@ -419,6 +421,10 @@ export interface ApiClient {
 
   // — exchanges —
   searchExchanges(query: ExchangeQuery): Promise<Paged<ExchangeRow>>;
+
+  // — audit trail —
+  /** Who changed what, and when. Filters narrow it; with none set it is the whole trail. */
+  searchAudit(query: AuditQuery): Promise<Paged<TrailEntry>>;
   /** Fetches a stage document's raw text content by its storage key (`ExchangeFileRef.key`). */
   getExchangeDocument(key: string): Promise<string>;
   /**

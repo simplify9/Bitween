@@ -812,7 +812,7 @@ export function BusGatewayPage() {
             await api.deleteBusGateway(gatewayId);
             void queryClient.invalidateQueries({ queryKey: keys.busGateways.all });
             void queryClient.invalidateQueries({ queryKey: keys.subscriptions.all });
-            navigate("/bus-gateways");
+            navigate("/bus-gateways", { replace: true });
           }}
           onClose={() => setDeletingGateway(false)}
         />

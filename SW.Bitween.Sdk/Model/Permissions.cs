@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace SW.Bitween.Model;
@@ -136,6 +136,15 @@ public static class Permissions
         public const string View = "settings.view";
         public const string Edit = "settings.edit";
     }
+
+    /// <summary>
+    /// Read-only by design. Nothing edits or deletes an audit entry — a trail that could be
+    /// rewritten by the people it records would not be worth keeping.
+    /// </summary>
+    public static class Audit
+    {
+        public const string View = "audit.view";
+    }
 }
 
 public class PermissionActionModel
@@ -270,7 +279,13 @@ public static class PermissionCatalog
 
         Area("settings", "Settings", "Administration", "Instance-wide configuration.",
             (View, "See instance settings."),
-            (Edit, "Change instance settings."))
+            (Edit, "Change instance settings.")),
+
+        // Administration, so the built-in Member and Viewer roles don't get it: the trail records
+        // account and role changes, which is exactly what someone covering their tracks would edit.
+        Area("audit", "Audit trail", "Administration",
+            "Who changed what, and when, across every configuration entity.",
+            (View, "Browse the audit trail."))
     ];
 
     /// <summary>Every valid permission key.</summary>

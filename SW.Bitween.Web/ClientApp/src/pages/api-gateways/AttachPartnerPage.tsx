@@ -64,7 +64,7 @@ export function AttachPartnerPage() {
     onSuccess: () => {
       clear();
       void queryClient.invalidateQueries();
-      navigate(`/api-gateways/${gatewayId}`);
+      navigate(`/api-gateways/${gatewayId}`, { replace: true });
     },
   });
 
@@ -119,11 +119,15 @@ export function AttachPartnerPage() {
             type="GatewayApiCall"
             value={draft.subscriptionId}
             onChange={(subscriptionId) => update({ subscriptionId })}
+            // Replaced rather than pushed: the detour comes straight back here with
+            // `?picked=`, so the whole round trip is one step and leaves behind one
+            // history entry instead of two spent forms.
             onDefineHere={() =>
               navigate(
                 `/api-gateways/${gatewayId}/attach/new-subscription${
                   draft.partnerId ? `?partnerId=${draft.partnerId}` : ""
                 }`,
+                { replace: true },
               )
             }
           />
@@ -138,7 +142,7 @@ export function AttachPartnerPage() {
               {missing.at(-1)}.
             </p>
           )}
-          <Button onClick={() => navigate(`/api-gateways/${gatewayId}`)}>Cancel</Button>
+          <Button onClick={() => navigate(`/api-gateways/${gatewayId}`, { replace: true })}>Cancel</Button>
           <Button
             variant="primary"
             busy={create.isPending}

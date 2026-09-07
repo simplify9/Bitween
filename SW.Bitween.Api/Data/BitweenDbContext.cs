@@ -60,21 +60,6 @@ namespace SW.Bitween
 
                 b.HasData(new Document(Document.AggregationDocumentId, "Aggregation Document"));
             });
-            modelBuilder.Entity<DocumentTrail>(b =>
-            {
-                b.HasKey(i => i.Id);
-                b.Property(p => p.Id).HasMaxLength(50);
-                b.HasIndex(i => i.CreatedOn);
-                b.HasOne(i => i.Document).WithMany().HasForeignKey(i => i.DocumentId);
-            });
-
-            modelBuilder.Entity<SubscriptionTrail>(b =>
-            {
-                b.HasKey(i => i.Id);
-                b.Property(p => p.Id).HasMaxLength(50);
-                b.HasIndex(i => i.CreatedOn);
-                b.HasOne(i => i.Subscription).WithMany().HasForeignKey(i => i.SubscriptionId);
-            });
             modelBuilder.Entity<RunFlagUpdater.RunningResult>(cr =>
             {
                 cr.HasNoKey().ToView(null);
@@ -501,6 +486,26 @@ namespace SW.Bitween
                 b.Property(p => p.Id).IsUnicode(false).HasMaxLength(200);
             });
 
+            // ——— Audit trail ———
+            // A table that only ever grows and is only ever appended to. The indexes answer the two
+            // questions asked of it: the history of one row, and everything one save changed.
+            modelBuilder.Entity<AuditEntry>(b =>
+            {
+                b.ToTable("AuditEntries");
+                b.HasKey(p => p.Id);
+                b.Property(p => p.Id).IsUnicode(false).HasMaxLength(32);
+                // 36, not 32: the library builds these with Guid.ToString(), which keeps the hyphens.
+                b.Property(p => p.CorrelationId).IsUnicode(false).HasMaxLength(36).IsRequired();
+                b.Property(p => p.UserId).IsUnicode(false).HasMaxLength(50);
+                b.Property(p => p.EntityName).HasMaxLength(200).IsRequired();
+                b.Property(p => p.EntityKey).HasMaxLength(200);
+                b.Property(p => p.State).IsUnicode(false).HasMaxLength(10).IsRequired();
+
+                b.HasIndex(p => new { p.EntityName, p.EntityKey, p.OccurredOn });
+                b.HasIndex(p => p.CorrelationId);
+                b.HasIndex(p => p.OccurredOn);
+            });
+
         }
 
         /// <summary>
@@ -520,11 +525,63 @@ namespace SW.Bitween
                 { CreatedOn = defaultCreatedOn.ToUniversalTime() }
         ];
 
+        /// <summary>
+        /// Refused, because it would save without auditing. Only <see cref="SaveChangesAsync"/>
+        /// captures the trail, and an audit table with a silent hole in it is worse than none —
+        /// nobody would know which changes it had missed. Nothing in Bitween calls this today;
+        /// this makes sure a future caller finds out immediately rather than quietly.
+        /// </summary>
+        public override int SaveChanges() => throw new NotSupportedException(
+            "Use SaveChangesAsync — the synchronous path would skip the audit trail.");
+
+        /// <summary>
+        /// Saves, and records what was saved. The audit rows are written inside the same transaction
+        /// as the change they describe, so the trail can never disagree with the data — a save that
+        /// rolls back takes its audit rows with it.
+        /// </summary>
+        /// <remarks>
+        /// The transaction is opened only when there is something to audit. Runtime traffic — every
+        /// xchange, result and receive attempt — is excluded by <see cref="AuditPolicy"/> and so
+        /// still saves in exactly one round trip, unchanged. When a caller has already opened a
+        /// transaction of its own, that one is used rather than nested.
+        /// </remarks>
         async public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            ChangeTracker.ApplyAuditValues(requestContext.GetNameIdentifier());
-            //using var transaction = await Database.BeginTransactionAsync();
-            var affectedRecords = await base.SaveChangesAsync(cancellationToken);
+            var userId = requestContext.GetNameIdentifier();
+            ChangeTracker.ApplyAuditValues(userId);
+
+            var pendingAudit = ChangeTracker.CapturePendingAuditDiffs(userId, AuditPolicy.Options);
+
+            var transaction = pendingAudit.Count > 0 && Database.CurrentTransaction is null
+                ? await Database.BeginTransactionAsync(cancellationToken)
+                : null;
+
+            int affectedRecords;
+            try
+            {
+                affectedRecords = await base.SaveChangesAsync(cancellationToken);
+
+                if (pendingAudit.Count > 0)
+                {
+                    // Finalized after the save because that is when a generated primary key exists;
+                    // an entry for a newly created row would otherwise record no key at all.
+                    foreach (var diff in pendingAudit.FinalizeAuditDiffJson())
+                        Add(new AuditEntry(diff));
+
+                    // base, deliberately: re-entering this override would audit the audit rows and
+                    // publish every domain event a second time.
+                    await base.SaveChangesAsync(cancellationToken);
+                }
+
+                if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            }
+            finally
+            {
+                if (transaction is not null) await transaction.DisposeAsync();
+            }
+
+            // Published after the commit. An event announcing a change that then rolled back would
+            // send every consumer after a row that never existed.
             //await ChangeTracker.PublishDomainEvents(publish);
             var entitiesWithEvents = ChangeTracker.Entries<IGeneratesDomainEvents>()
                 .Select(e => e.Entity)

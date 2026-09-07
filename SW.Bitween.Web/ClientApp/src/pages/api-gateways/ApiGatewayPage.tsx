@@ -5,6 +5,7 @@ import { Pause, Pencil, Play, Plus, Search, Trash2 } from "lucide-react";
 import { api, type ApiGatewayAttachment } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
 import { finishUrlName, toUrlName } from "../../lib/identifiers";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { Field, TextInput } from "../../components/ui/forms";
 import { ConfirmDialog } from "../../components/ui/overlays";
@@ -251,6 +252,8 @@ export function ApiGatewayPage() {
             />
           </div>
         </Panel>
+
+        <HistoryCard entityName="ApiGateway" entityKey={id} />
       </div>
 
       {canEdit && dirty && (
@@ -317,7 +320,7 @@ export function ApiGatewayPage() {
             await api.deleteApiGateway(gatewayId);
             void queryClient.invalidateQueries({ queryKey: keys.apiGateways.all });
             void queryClient.invalidateQueries({ queryKey: keys.subscriptions.all });
-            navigate("/api-gateways");
+            navigate("/api-gateways", { replace: true });
           }}
           onClose={() => setDeleting(false)}
         />

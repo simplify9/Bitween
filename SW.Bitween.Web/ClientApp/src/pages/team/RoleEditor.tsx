@@ -12,6 +12,7 @@ import {
   usePermissionCatalog,
 } from "../../api/permissions";
 import { useSession } from "../../auth/SessionContext";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { visibleGroups } from "../../nav";
 import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basics";
 import { Field, TextInput } from "../../components/ui/forms";
@@ -129,7 +130,7 @@ export function RoleEditor() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.roles.all });
-      navigate("/team/roles");
+      navigate("/team/roles", { replace: true });
     },
   });
 
@@ -307,6 +308,10 @@ export function RoleEditor() {
         <div className="space-y-4 lg:sticky lg:top-8 lg:self-start">
           <AccessPreview permissions={granted} total={allKeysIn(areas).length} />
 
+          {/* A role that doesn't exist yet has no history, and a system role's grants are
+              computed rather than stored, so nothing ever edits one. */}
+          {!isNew && !isSystem && <HistoryCard entityName="Role" entityKey={id} />}
+
           {!isNew && !isSystem && can("roles.delete") && (
             <div className="rounded-xl border border-danger-200 bg-white p-4">
               <h3 className="text-xs font-semibold tracking-wide text-danger-800 uppercase">
@@ -334,7 +339,7 @@ export function RoleEditor() {
               <FormError>{save.error?.message}</FormError>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button onClick={() => navigate("/team/roles")}>Cancel</Button>
+              <Button onClick={() => navigate("/team/roles", { replace: true })}>Cancel</Button>
               <Button variant="primary" busy={save.isPending} onClick={() => save.mutate()}>
                 {isNew ? "Create role" : "Save changes"}
               </Button>
@@ -356,7 +361,7 @@ export function RoleEditor() {
           onConfirm={async () => {
             await api.deleteRole(id!);
             void queryClient.invalidateQueries({ queryKey: keys.roles.all });
-            navigate("/team/roles");
+            navigate("/team/roles", { replace: true });
           }}
           onClose={() => setConfirmingDelete(false)}
         />

@@ -56,21 +56,6 @@ namespace SW.Bitween.PgSql
 
                 b.HasData(new Document(Document.AggregationDocumentId, "Aggregation Document"));
             });
-            modelBuilder.Entity<DocumentTrail>(b =>
-            {
-                b.HasKey(i => i.Id);
-                b.HasIndex(i => i.CreatedOn);
-                b.HasOne(i => i.Document).WithMany().HasForeignKey(i => i.DocumentId);
-            });
-
-            modelBuilder.Entity<SubscriptionTrail>(b =>
-            {
-                b.HasKey(i => i.Id);
-                b.Property(p => p.Id).HasMaxLength(50);
-                b.HasIndex(i => i.CreatedOn);
-                b.HasOne(i => i.Subscription).WithMany().HasForeignKey(i => i.SubscriptionId);
-            });
-
             modelBuilder.Entity<RunFlagUpdater.RunningResult>(cr =>
             {
                 cr.HasNoKey().ToView(null);
@@ -418,6 +403,26 @@ namespace SW.Bitween.PgSql
                 // Id is the catalog key, e.g. "Theme.PrimaryColor". Value is left unbounded:
                 // it carries anything from a hex color to a license key or a page of blurb.
                 b.Property(p => p.Id).IsUnicode(false).HasMaxLength(200);
+            });
+
+            // ——— Audit trail ———
+            // A table that only ever grows and is only ever appended to. The indexes answer the two
+            // questions asked of it: the history of one row, and everything one save changed.
+            modelBuilder.Entity<AuditEntry>(b =>
+            {
+                b.ToTable("AuditEntries");
+                b.HasKey(p => p.Id);
+                b.Property(p => p.Id).IsUnicode(false).HasMaxLength(32);
+                // 36, not 32: the library builds these with Guid.ToString(), which keeps the hyphens.
+                b.Property(p => p.CorrelationId).IsUnicode(false).HasMaxLength(36).IsRequired();
+                b.Property(p => p.UserId).IsUnicode(false).HasMaxLength(50);
+                b.Property(p => p.EntityName).HasMaxLength(200).IsRequired();
+                b.Property(p => p.EntityKey).HasMaxLength(200);
+                b.Property(p => p.State).IsUnicode(false).HasMaxLength(10).IsRequired();
+
+                b.HasIndex(p => new { p.EntityName, p.EntityKey, p.OccurredOn });
+                b.HasIndex(p => p.CorrelationId);
+                b.HasIndex(p => p.OccurredOn);
             });
 
             modelBuilder.Entity<RetryPolicy>(b =>

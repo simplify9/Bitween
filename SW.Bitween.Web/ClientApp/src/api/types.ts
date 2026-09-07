@@ -161,12 +161,44 @@ export interface SubscriptionInfo {
   partnerPropKeys: string[];
   globals: { setId: string; keys: string[] }[];
 }
+/** What happened to one property in one change. */
+export interface AuditChange {
+  property: string;
+  old: unknown;
+  new: unknown;
+}
+
+/**
+ * One recorded change. Replaces the old per-entity trail: the backend now records every
+ * configuration entity through the change tracker, including deletions, which the
+ * hand-written trails never captured.
+ */
 export interface TrailEntry {
+  id: string;
   on: string;
-  action: "Created" | "Updated";
+  action: "Added" | "Modified" | "Deleted";
   by: string;
   /** Absent for system-attributed entries with no real team member behind them. */
   byUserId?: string;
+  entityName: string;
+  entityKey: string;
+  /**
+   * Groups everything one save changed. A single edit often touches several rows — a
+   * gateway and its routes — and this is what shows them as the one change they were.
+   */
+  correlationId: string;
+  changes: AuditChange[];
+}
+
+export interface AuditQuery {
+  entityName?: string;
+  entityKey?: string;
+  userId?: string;
+  correlationId?: string;
+  from?: string;
+  to?: string;
+  offset: number;
+  limit: number;
 }
 
 export interface ApiCredentialRef {
@@ -221,7 +253,6 @@ export interface InformationTypeRow extends InformationType {
 export interface InformationTypeDetail extends InformationType {
   subscriptionSetups: SubscriptionSetupRef[];
   busGateways: { gatewayId: number; gatewayName: string }[];
-  trail: TrailEntry[];
   recentExchanges: ExchangeRef[];
 }
 
@@ -656,7 +687,6 @@ export interface SubscriptionDetail extends Subscription {
   busGatewayRoutes: { gatewayId: number; gatewayName: string; partnerId: number | null; partnerName: string | null }[];
   watchingNotifiers: { id: number; name: string }[];
   recentExchanges: ExchangeRef[];
-  trail: TrailEntry[];
 }
 
 export interface WorkGroupOptions {
