@@ -138,7 +138,7 @@ public static class SettingsCatalog
 
         new("Bitween.MsalRedirectUri", "Single sign-on (Microsoft)",
             "Azure AD redirect URI",
-            "The URL Azure AD sends users back to after signing in — must match the redirect URI registered on the Azure AD app. Required alongside the client ID and tenant ID.",
+            "The URL Azure AD sends users back to after signing in — must match the redirect URI registered on the Azure AD app. Point it at this app's /blank.html (for example https://your-host/blank.html), not the app root: the root boots the admin UI, which navigates away and loses the sign-in code before the popup can hand it over. Required alongside the client ID and tenant ID.",
             SettingKind.String, false,
             t => t.Bitween.MsalRedirectUri,
             (t, v) => t.Bitween.MsalRedirectUri = v),

@@ -413,6 +413,14 @@ namespace SW.Bitween.Web
         /// </summary>
         private const string ContentSecurityPolicyHeader = "Content-Security-Policy";
 
+        /// <summary>
+        /// Where the Microsoft sign-in popup lands — the page registered as the Azure AD
+        /// redirect URI. Deliberately not the app root: index.html boots the admin UI, which
+        /// finds no session and navigates to /login, dropping the "#code=..." fragment the
+        /// sign-in depends on.
+        /// </summary>
+        private const string MsalRedirectPath = "/blank.html";
+
         /// <summary>Mirrors the policy the legacy UI enforces at nginx, minus its nginx-only bits.</summary>
         private const string ContentSecurityPolicy =
             "default-src 'self'; " +
@@ -446,7 +454,23 @@ namespace SW.Bitween.Web
                 headers["X-Content-Type-Options"] = "nosniff";
                 headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
                 headers["X-Permitted-Cross-Domain-Policies"] = "none";
-                headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups";
+
+                // Cross-Origin-Opener-Policy, with the sign-in landing page carved out.
+                //
+                // "same-origin-allow-popups" is what lets this app keep its handle on a popup it
+                // opened, and MSAL needs that handle: it polls the popup's URL for the "#code=..."
+                // Azure AD appends (PopupClient.monitorPopupForHash).
+                //
+                // The landing page itself has to stay "unsafe-none". The popup arrives there
+                // directly from login.microsoftonline.com, which sends no COOP, and a document
+                // whose COOP does not match the one it is replacing forces a browsing context
+                // group switch — which severs the opener's handle. The symptom is deceptive:
+                // popup.closed reads true while the popup is plainly still on screen, so MSAL
+                // takes the poll's closed branch and fails the sign-in with "user_cancelled".
+                headers["Cross-Origin-Opener-Policy"] =
+                    string.Equals(context.Request.Path.Value, MsalRedirectPath, StringComparison.OrdinalIgnoreCase)
+                        ? "unsafe-none"
+                        : "same-origin-allow-popups";
 
                 // Content-Security-Policy for the admin UI.
                 //
