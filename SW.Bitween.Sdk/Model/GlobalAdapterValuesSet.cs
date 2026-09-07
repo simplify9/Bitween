@@ -10,9 +10,11 @@ namespace SW.Bitween.Model
         public Dictionary<string, string> Values { get; set; }
     }
 
+    // Id is inherited from GlobalAdapterValuesSetCreate. Redeclaring it here shadowed the base
+    // property (CS0108): a write through a base-typed reference set a different slot from the one
+    // a serializer read back.
     public class GlobalAdapterValuesSetRow : GlobalAdapterValuesSetUpdate
     {
-        public string Id { get; set; }
     }
 
     public class GlobalAdapterValuesSetUpdate : GlobalAdapterValuesSetCreate
