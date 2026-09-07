@@ -11,6 +11,7 @@ import {
   type SubscriptionType,
   type QueueSeverity,
   type ScheduleHealth,
+  type AuditChange,
   type TrailEntry,
 } from "../../api";
 import { useSessionCan } from "../../auth/guards";
@@ -876,19 +877,94 @@ export function UsedByCell({ items }: { items: SubscriptionInfo[] }) {
   );
 }
 
-/** Audit trail for an entity, newest first. Shared by every hub page that has one. */
+/** How one value reads in the panel: quoted if text, "empty" if there is nothing. */
+const showValue = (v: unknown) =>
+  v === null || v === undefined ? "empty" : typeof v === "string" ? `"${v}"` : JSON.stringify(v);
+
+/**
+ * The property names, with the before/after values behind a popover.
+ *
+ * A created row is recorded as a full snapshot rather than a diff, so its list runs to every
+ * column the entity has — unreadable as a cell. The values used to live in a `title`, which
+ * only a mouse can reach; this is a real control, so it works from the keyboard and on touch.
+ */
+export function ChangedCell({ changes }: { changes: AuditChange[] }) {
+  if (changes.length === 0) return <span className="text-ink-400">—</span>;
+
+  const shown = changes.slice(0, 3).map((c) => c.property);
+  const rest = changes.length - shown.length;
+
+  return (
+    <Popover
+      label={`Show what changed: ${changes.map((c) => c.property).join(", ")}`}
+      width="w-96"
+      button={
+        <span className="block text-left text-[13px] text-ink-600">
+          {shown.join(", ")}
+          {rest > 0 && <span className="text-ink-400"> +{rest} more</span>}
+        </span>
+      }
+    >
+      <dl className="space-y-2">
+        {changes.map((c) => (
+          <div key={c.property}>
+            <dt className="text-[12px] font-medium text-ink-800">{c.property}</dt>
+            <dd className="mt-0.5 font-mono text-[11px] break-all text-ink-600">
+              <span className="text-ink-400">{showValue(c.old)}</span>
+              <span aria-hidden> → </span>
+              <span className="sr-only"> changed to </span>
+              {showValue(c.new)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Popover>
+  );
+}
+
+const ACTION_STYLE: Record<TrailEntry["action"], string> = {
+  Added: "bg-emerald-50 text-emerald-700",
+  Modified: "bg-amber-50 text-amber-700",
+  Deleted: "bg-rose-50 text-rose-700",
+};
+
+const ACTION_TITLE: Record<TrailEntry["action"], string> = {
+  Added: "This row was created.",
+  Modified: "Some of this row's fields were changed.",
+  Deleted: "This row was deleted. The values shown are what it held.",
+};
+
+/**
+ * Audit trail for an entity, newest first. Shared by every hub page that has one.
+ *
+ * Every column is derived from the change tracker rather than written by hand at each
+ * call site, which is why deletions appear here at all — the trails this replaced only
+ * ever recorded creates and updates.
+ */
 export function TrailTable({ entries }: { entries: TrailEntry[] }) {
   return (
     <MiniTable
-      rows={[...entries].reverse().map((e, i) => ({ ...e, i }))}
-      rowKey={(e) => e.i}
+      rows={entries}
+      rowKey={(e) => e.id}
       empty="Nothing recorded yet."
       columns={[
         {
           header: "Action",
+          headerTitle: "Whether the row was created, changed or deleted.",
           cell: (e) => (
-            <span className="font-medium text-ink-800">{e.action}</span>
+            <span
+              title={ACTION_TITLE[e.action]}
+              className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${ACTION_STYLE[e.action]}`}
+            >
+              {e.action}
+            </span>
           ),
+        },
+        {
+          header: "Changed",
+          headerTitle: "The fields this change touched. Open one to see the values.",
+          wrap: true,
+          cell: (e) => <ChangedCell changes={e.changes} />,
         },
         {
           header: "By",
@@ -902,7 +978,9 @@ export function TrailTable({ entries }: { entries: TrailEntry[] }) {
                 {e.by}
               </Link>
             ) : (
-              <span className="block text-ink-600">{e.by}</span>
+              <span className="block text-ink-600" title="No signed-in user — a scheduled job or a bus consumer.">
+                {e.by}
+              </span>
             ),
         },
         {

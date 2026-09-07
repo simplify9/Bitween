@@ -12,6 +12,7 @@ import {
   usePermissionCatalog,
 } from "../../api/permissions";
 import { useSession } from "../../auth/SessionContext";
+import { HistoryCard } from "../../components/config/HistoryCard";
 import { visibleGroups } from "../../nav";
 import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basics";
 import { Field, TextInput } from "../../components/ui/forms";
@@ -306,6 +307,10 @@ export function RoleEditor() {
 
         <div className="space-y-4 lg:sticky lg:top-8 lg:self-start">
           <AccessPreview permissions={granted} total={allKeysIn(areas).length} />
+
+          {/* A role that doesn't exist yet has no history, and a system role's grants are
+              computed rather than stored, so nothing ever edits one. */}
+          {!isNew && !isSystem && <HistoryCard entityName="Role" entityKey={id} />}
 
           {!isNew && !isSystem && can("roles.delete") && (
             <div className="rounded-xl border border-danger-200 bg-white p-4">

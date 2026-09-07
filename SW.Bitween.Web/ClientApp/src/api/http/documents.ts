@@ -6,7 +6,6 @@ import type {
   InformationTypeRow,
   SubscriptionType,
   Paged,
-  TrailEntry,
 } from "../types";
 import { exchangeMethods } from "./exchanges";
 import { gatewayMethods } from "./gateways";
@@ -39,12 +38,6 @@ interface RawSubscriptionRef {
   name: string;
   type: number | string;
 }
-interface RawTrailEntry {
-  createdOn: string;
-  code: "Created" | "Updated";
-  createdBy: string;
-}
-
 const SUB_TYPE_BY_NUM: Record<number, SubscriptionType> = {
   1: "Internal",
   2: "ApiCall",
@@ -74,19 +67,6 @@ async function fetchSubscriptionsByDocument(documentId: number): Promise<RawSubs
   return res.result ?? [];
 }
 
-async function fetchTrail(documentId: number): Promise<TrailEntry[]> {
-  const [trail, accountNames] = await Promise.all([
-    get<SearchyResponse<RawTrailEntry>>(`/documents/trail?documentId=${documentId}&limit=8`),
-    get<Record<string, string>>("/accounts?lookup=true"),
-  ]);
-  return (trail.result ?? []).map((t) => ({
-    on: t.createdOn,
-    action: t.code,
-    by: accountNames[t.createdBy] ?? "System",
-    byUserId: accountNames[t.createdBy] ? t.createdBy : undefined,
-  }));
-}
-
 const toInformationType = (d: RawDocument): InformationType => ({
   id: d.id,
   code: d.code ?? undefined,
@@ -101,12 +81,11 @@ const toInformationType = (d: RawDocument): InformationType => ({
 });
 
 async function fetchDetail(id: number): Promise<InformationTypeDetail> {
-  const [d, subs, busGateways, recentExchanges, trail] = await Promise.all([
+  const [d, subs, busGateways, recentExchanges] = await Promise.all([
     get<RawDocument>(`/documents/${id}`),
     fetchSubscriptionsByDocument(id),
     gatewayMethods.listBusGateways(),
     exchangeMethods.searchExchanges({ informationTypeId: id, offset: 0, limit: 8 }),
-    fetchTrail(id),
   ]);
   return {
     ...toInformationType(d),
@@ -114,7 +93,6 @@ async function fetchDetail(id: number): Promise<InformationTypeDetail> {
     busGateways: busGateways
       .filter((g) => g.informationTypeId === id)
       .map((g) => ({ gatewayId: g.id, gatewayName: g.name })),
-    trail,
     recentExchanges: recentExchanges.result.map((x) => ({
       id: x.id,
       partnerName: x.partnerName ?? undefined,

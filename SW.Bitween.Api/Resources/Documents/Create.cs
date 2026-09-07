@@ -75,10 +75,6 @@ namespace SW.Bitween.Resources.Documents
             if (model.PromotedProperties != null)
                 entity.SetDictionaries(model.PromotedProperties.ToDictionary());
 
-            // After the entity is complete: the trail serialises it in the constructor
-            // when isNew, so anything set later would be missing from the created state.
-            var trail = new DocumentTrail(DocumentTrailCode.Created, entity, true);
-            _dbContext.Add(trail);
             _dbContext.Add(entity);
             await _dbContext.SaveChangesAsync();
             // Routing resolves an information type by name off the cache, so a new one is

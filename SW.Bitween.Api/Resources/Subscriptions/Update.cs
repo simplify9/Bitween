@@ -35,8 +35,6 @@ namespace SW.Bitween.Resources.Subscriptions
             // Capture before SetSchedules replaces the collection.
             var oldSchedules = entity.Schedules.ToList();
 
-            var trail = new SubscriptionTrail(SubscriptionTrialCode.Updated, entity);
-
             // Name and the runtime-state fields, which only an update may set.
             _dbContext.Entry(entity).SetProperties(model);
 
@@ -51,8 +49,6 @@ namespace SW.Bitween.Resources.Subscriptions
             // Everything a person configures, through the same code the create handler runs.
             await SubscriptionConfigurationApplier.Apply(_dbContext, entity, model);
 
-            trail.SetAfter(entity);
-            _dbContext.Add(trail);
             await _dbContext.SaveChangesAsync();
             await _BitweenCache.BroadcastRevoke();
 

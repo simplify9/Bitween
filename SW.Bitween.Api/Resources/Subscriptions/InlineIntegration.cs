@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using SW.Bitween.Domain;
@@ -105,8 +105,6 @@ namespace SW.Bitween.Resources.Subscriptions
             model.DocumentId = documentId;
 
             var entity = new Subscription(model.Name, documentId, type);
-            var trail = new SubscriptionTrail(SubscriptionTrialCode.Created, entity, true);
-            dbContext.Add(trail);
 
             // The same code an ordinary create runs, so a field cannot work through one door
             // and not the other.
