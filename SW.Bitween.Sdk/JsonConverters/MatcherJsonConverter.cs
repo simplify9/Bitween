@@ -7,8 +7,14 @@ namespace SW.Bitween.JsonConverters;
 
 public class MatcherJsonConverter : JsonConverter<Matcher>
 {
-    public override void WriteJson(JsonWriter writer, Matcher value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, Matcher? value, JsonSerializer serializer)
     {
+        if (value is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
         writer.WriteStartObject();
 
         switch (value)
@@ -58,7 +64,7 @@ public class MatcherJsonConverter : JsonConverter<Matcher>
         writer.WriteEndObject();
     }
 
-    public override Matcher ReadJson(JsonReader reader, Type objectType, Matcher existingValue,
+    public override Matcher? ReadJson(JsonReader reader, Type objectType, Matcher? existingValue,
         bool hasExistingValue, JsonSerializer serializer)
     {
         var jObject = serializer.Deserialize<JObject>(reader);
@@ -70,28 +76,28 @@ public class MatcherJsonConverter : JsonConverter<Matcher>
             case "contains":
                 return new ContainsMatcher
                 {
-                    Value = jObject.Property("value")?.Value?.ToString(),
+                    Value = Required(jObject, "value", "contains"),
                     CaseSensitive = jObject.Property("caseSensitive")?.Value?.ToObject<bool>() ?? false
                 };
 
             case "regex":
                 return new RegexMatcher
                 {
-                    Pattern = jObject.Property("pattern")?.Value?.ToString(),
+                    Pattern = Required(jObject, "pattern", "regex"),
                     Flags = jObject.Property("flags")?.Value?.ToString() ?? "i"
                 };
 
             case "exceptionType":
                 return new ExceptionTypeMatcher
                 {
-                    Value = jObject.Property("value")?.Value?.ToString(),
+                    Value = Required(jObject, "value", "exceptionType"),
                     IncludeInner = jObject.Property("includeInner")?.Value?.ToObject<bool>() ?? true
                 };
 
             case "jsonPath":
                 return new JsonPathMatcher
                 {
-                    Path = jObject.Property("path")?.Value?.ToString(),
+                    Path = Required(jObject, "path", "jsonPath"),
                     Op = Enum.Parse<JsonPathOp>(jObject.Property("op")?.Value?.ToString() ?? nameof(JsonPathOp.Eq)),
                     Value = jObject.Property("value")?.Value?.ToString()
                 };
@@ -100,4 +106,14 @@ public class MatcherJsonConverter : JsonConverter<Matcher>
                 throw new JsonSerializationException($"Unknown or missing Matcher discriminator 'type': '{type}'");
         }
     }
+
+    /// <summary>
+    /// A matcher missing the field it matches on cannot match anything, and silently building one
+    /// defers the failure to retry-evaluation time as a NullReferenceException with no clue in it.
+    /// Failing here names the field and the matcher type.
+    /// </summary>
+    private static string Required(JObject jObject, string field, string matcherType) =>
+        jObject.Property(field)?.Value?.ToString()
+        ?? throw new JsonSerializationException(
+            $"Matcher of type '{matcherType}' is missing its required '{field}'.");
 }

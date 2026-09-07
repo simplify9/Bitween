@@ -52,9 +52,9 @@ public class DynamicHttpProxy(IHttpClientFactory httpClientFactory) : Background
         _lruList.AddFirst(origin);
 
         // Prune if we went over capacity
-        while (_cache.Count > MaxCapacity)
+        while (_cache.Count > MaxCapacity && _lruList.Last is { } tail)
         {
-            var oldest = _lruList.Last.Value;
+            var oldest = tail.Value;
             _lruList.RemoveLast();
             _cache.TryRemove(oldest, out _);
         }

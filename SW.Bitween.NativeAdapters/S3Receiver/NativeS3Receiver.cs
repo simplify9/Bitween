@@ -11,6 +11,18 @@ public class NativeS3Receiver : INativeInfolinkReceiver, IDisposable
     private CloudFilesService? _cloudFiles;
     private AmazonS3Client? _s3Client;
 
+    /// <summary>
+    /// The clients, or an error that says what actually went wrong. Both fields are null until
+    /// Initialize() runs, because that is when the adapter's settings arrive — so they cannot be
+    /// readonly, and every use would otherwise carry a bare `!` that asserts something no caller
+    /// can see is true.
+    /// </summary>
+    private CloudFilesService CloudFiles => _cloudFiles
+        ?? throw new SWException("The S3 receiver was used before Initialize() ran.");
+
+    private AmazonS3Client S3Client => _s3Client
+        ?? throw new SWException("The S3 receiver was used before Initialize() ran.");
+
     public Task Initialize()
     {
         var options = new S3CloudFilesOptions
@@ -44,10 +56,10 @@ public class NativeS3Receiver : INativeInfolinkReceiver, IDisposable
 
     public async Task<IEnumerable<string>> ListFiles()
     {
-        var files = await _cloudFiles.ListAsync(_options.FolderName ?? string.Empty);
+        var files = await CloudFiles.ListAsync(_options.FolderName ?? string.Empty);
 
         return files
-            .Where(f => !f.Key.EndsWith("/"))
+            .Where(f => f.Key is { } key && !key.EndsWith("/"))
             .Select(f => f.Key)
             .Take(_options.BatchSize)
             .ToList();
@@ -55,7 +67,8 @@ public class NativeS3Receiver : INativeInfolinkReceiver, IDisposable
 
     public async Task<XchangeFile> GetFile(string fileId)
     {
-        await using var stream = await _cloudFiles.OpenReadAsync(fileId);
+        await using var stream = await CloudFiles.OpenReadAsync(fileId)
+            ?? throw new SWException($"'{fileId}' could not be opened for reading.");
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
         var bytes = memoryStream.ToArray();
@@ -82,10 +95,12 @@ public class NativeS3Receiver : INativeInfolinkReceiver, IDisposable
             // Server-side copy: S3 moves the object internally, so no bytes are
             // downloaded or re-uploaded through this process.
             var targetKey = $"{_options.DeleteMovesFileTo}/{relativePath}";
-            await _s3Client!.CopyObjectAsync(_options.BucketName, fileId, _options.BucketName, targetKey);
+            var bucket = _options.BucketName
+                ?? throw new SWException("The S3 receiver needs 'BucketName' to move a deleted file.");
+            await S3Client.CopyObjectAsync(bucket, fileId, bucket, targetKey);
         }
 
-        await _cloudFiles.DeleteAsync(fileId);
+        await CloudFiles.DeleteAsync(fileId);
     }
 
     public string Name => "NativeS3Receiver";

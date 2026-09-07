@@ -99,7 +99,9 @@ namespace SW.Bitween.Model
         public DateTime StartedOn { get; set; }
         public DateTime FinishedOn { get; set; }
         public ReceiveOutcome Outcome { get; set; }
-        public string ErrorMessage { get; set; }
+
+        /// <summary>Null unless the attempt failed.</summary>
+        public string? ErrorMessage { get; set; }
         public ICollection<ReceiveAttemptExchangeRef> Exchanges { get; set; }
     }
 

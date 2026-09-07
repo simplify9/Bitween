@@ -96,7 +96,9 @@ public class DataSourceTestRequest
 public class DataSourceTestResult
 {
     public bool Succeeded { get; set; }
-    public string Error { get; set; }
+
+    /// <summary>Null when it succeeded.</summary>
+    public string? Error { get; set; }
 
     /// <summary>Stage name to outcome, in the order the adapter attempted them.</summary>
     public List<DataSourceTestStage> Stages { get; set; } = new();
@@ -138,7 +140,9 @@ public class DataSourceTelemetry
     public string State { get; set; }
     public DateTime? LastMessageOn { get; set; }
     public long InFlight { get; set; }
-    public string LastError { get; set; }
+
+    /// <summary>Null while the connection is healthy.</summary>
+    public string? LastError { get; set; }
 
     /// <summary>
     /// Whatever the adapter chose to report: per-queue depth, messages received and acknowledged,
@@ -184,9 +188,10 @@ public class DataSourceInspectResult
     /// The adapter's answer, as JSON text. Untyped for the same reason its telemetry is: Bitween
     /// does not model any broker's topology, and a provider must be free to describe its own.
     /// </summary>
-    public string Result { get; set; }
+    public string? Result { get; set; }
 
-    public string Error { get; set; }
+    /// <summary>Null when the command succeeded.</summary>
+    public string? Error { get; set; }
 }
 
 /// <summary>

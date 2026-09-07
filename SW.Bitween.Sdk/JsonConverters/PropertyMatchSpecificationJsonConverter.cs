@@ -8,8 +8,14 @@ namespace SW.Bitween.JsonConverters;
 
 public class PropertyMatchSpecificationJsonConverter : JsonConverter<IPropertyMatchSpecification>
 {
-    public override void WriteJson(JsonWriter writer, IPropertyMatchSpecification value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, IPropertyMatchSpecification? value, JsonSerializer serializer)
     {
+        if (value is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
         writer.WriteStartObject();
         writer.WritePropertyName("type");
         writer.WriteValue(value.Name);
@@ -97,7 +103,7 @@ public class PropertyMatchSpecificationJsonConverter : JsonConverter<IPropertyMa
         throw new JsonSerializationException("Invalid Match Specification Format");
     }
 
-    static bool IsNullOrMissing(JToken token) => token is null || token.Type == JTokenType.Null;
+    static bool IsNullOrMissing(JToken? token) => token is null || token.Type == JTokenType.Null;
 
     IPropertyMatchSpecification EvaluateOneOf(JObject jObj)
     {
@@ -106,7 +112,7 @@ public class PropertyMatchSpecificationJsonConverter : JsonConverter<IPropertyMa
         if (jPath is JValue vPath && vPath.Type == JTokenType.String && vPath.Value is string path &&
             jValues is JArray jArr)
         {
-            var values = jArr.Children().Select(c => c.ToObject<string>()).Where(s => s is not null);
+            var values = jArr.Children().Select(c => c.ToObject<string>()).OfType<string>();
             return new OneOfSpec(path, values);
         }
 
@@ -120,7 +126,7 @@ public class PropertyMatchSpecificationJsonConverter : JsonConverter<IPropertyMa
         if (jPath is JValue vPath && vPath.Type == JTokenType.String && vPath.Value is string path &&
             jValues is JArray jArr)
         {
-            var values = jArr.Children().Select(c => c.ToObject<string>()).Where(s => s is not null);
+            var values = jArr.Children().Select(c => c.ToObject<string>()).OfType<string>();
             return new NotOneOfSpec(path, values);
         }
 
@@ -151,8 +157,8 @@ public class PropertyMatchSpecificationJsonConverter : JsonConverter<IPropertyMa
         throw new JsonSerializationException("Invalid Match Specification Format");
     }
 
-    public override IPropertyMatchSpecification ReadJson(JsonReader reader, Type objectType,
-        IPropertyMatchSpecification existingValue,
+    public override IPropertyMatchSpecification? ReadJson(JsonReader reader, Type objectType,
+        IPropertyMatchSpecification? existingValue,
         bool hasExistingValue, JsonSerializer serializer)
     {
         var json = serializer.Deserialize<JToken>(reader);
