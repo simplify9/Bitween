@@ -1137,7 +1137,7 @@ public class RetryPolicyTests(BitweenFixture fixture)
         // The page offers "start from what this currently sends", so the masked value is what comes
         // back — and there is no override row yet to restore it from. It has to be recovered from the
         // level the caller was shown it at, or the new override would send with no password at all.
-        await new SaveAlertOverride(db, ctx, Secrets(scope)).Handle(policyId, new RetryAlertOverrideSave
+        await new SaveAlertOverride(db, ctx).Handle(policyId, new RetryAlertOverrideSave
         {
             SubscriptionId = sub.Id,
             GroupId = groupId,

@@ -9,7 +9,6 @@ namespace SW.Bitween.Resources.Adapters;
 public class Metadata(
     ServerlessOptions serverlessOptions,
     ICloudFilesService cloudFilesService,
-    NativeAdapterDiscoveryService nativeAdapterDiscovery,
     BitweenDbContext dbContext,
     RequestContext requestContext
     ) : IGetHandler<string, object>

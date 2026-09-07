@@ -10,6 +10,8 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
 {
     public async Task<object> Handle(int key, CreateSubscriptionCategoryModel request)
     {
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Edit);
+
         var category = await dbContext.Set<SubscriptionCategory>().FindAsync(key);
         if (category is null)
             throw new SWValidationException("CATEGORY_NOT_FOUND", $"Category with id {key} was not found");

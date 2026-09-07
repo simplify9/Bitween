@@ -19,8 +19,7 @@ namespace SW.Bitween;
 public class XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
     FilterService filterService,
     ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
-    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
-    NativeAdapterDiscoveryService nativeAdapterDiscovery, IAdapterInvoker adapterInvoker) :
+    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache, IAdapterInvoker adapterInvoker) :
     // IConsume<ApiXchangeCreatedEvent>,
     // IConsume<InternalXchangeCreatedEvent>,
     // IConsume<AggregateXchangeCreatedEvent>,

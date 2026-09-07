@@ -12,6 +12,8 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext)
 {
     public async Task<object> Handle(int key, DeleteSubscriptionCategoryModel _)
     {
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Delete);
+
         var category = await dbContext.Set<SubscriptionCategory>().FindAsync(key);
         if (category is null)
             throw new SWValidationException("CATEGORY_NOT_FOUND", $"Category with id {key} was not found");

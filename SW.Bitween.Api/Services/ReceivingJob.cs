@@ -18,7 +18,6 @@ public record ReceivingJobParams(int SubscriptionId, string? CronExpression);
 public class ReceivingJob(
     BitweenDbContext dbContext,
     RunFlagUpdater runFlagUpdater,
-    NativeAdapterDiscoveryService nativeAdapterDiscovery,
     IAdapterInvoker adapterInvoker,
     XchangeService xchangeService,
     ILogger<ReceivingJob> logger) : IScheduledJob<ReceivingJobParams>

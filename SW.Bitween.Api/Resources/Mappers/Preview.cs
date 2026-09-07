@@ -29,6 +29,8 @@ public class Preview(RequestContext requestContext, BitweenDbContext dbContext)
 {
     public async Task<MapperPreviewResponse> Handle(MapperPreviewRequest request)
     {
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Edit);
+
         var partner = request.PartnerId.HasValue
             ? await dbContext.FindAsync<Partner>(request.PartnerId.Value)
             : null;

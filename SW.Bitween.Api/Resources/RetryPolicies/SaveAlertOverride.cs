@@ -14,8 +14,7 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// specific level of the hierarchy.
 /// </summary>
 [HandlerName("savealertoverride")]
-public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext requestContext,
-    AdapterSecretProperties secrets) : ICommandHandler<int, RetryAlertOverrideSave, object>
+public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext requestContext) : ICommandHandler<int, RetryAlertOverrideSave, object>
 {
     public async Task<object> Handle(int key, RetryAlertOverrideSave request)
     {
