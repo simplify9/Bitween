@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using SW.Serverless.Sdk;
 using SW.Serverless.Sdk.Resident;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,7 @@ namespace SW.Bitween.Adapters.Bus.RabbitMq;
 /// A host rejection becomes BasicNack(requeue: true), so a Bitween outage does not lose the
 /// customer's messages — it just stops draining their queue, which is the correct failure.
 /// </summary>
+[AdapterKind("bus")]
 public class RabbitBusHandler : IResidentAdapter
 {
     private readonly RabbitOptions _options;

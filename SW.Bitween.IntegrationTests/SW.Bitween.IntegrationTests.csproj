@@ -31,7 +31,7 @@
     <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
 
     <!-- Serverless runtime -->
-    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.16" />
+    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.19" />
 
     <!-- Bus (for IPublish + AddBus registration) -->
     <PackageReference Include="SimplyWorks.Bus" Version="8.1.18" />

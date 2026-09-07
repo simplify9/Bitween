@@ -5,6 +5,7 @@ using Amazon.SQS.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
+using SW.Serverless.Sdk;
 using SW.Serverless.Sdk.Resident;
 using System;
 using System.Collections.Generic;
@@ -36,6 +37,7 @@ namespace SW.Bitween.Adapters.Bus.Sqs;
 /// envelope they arrive in. The SP-API request/response calls themselves are ordinary HTTPS and
 /// belong in a mapper or handler, not here.
 /// </summary>
+[AdapterKind("bus")]
 public class SqsBusHandler : IResidentAdapter
 {
     private readonly SqsOptions _options;

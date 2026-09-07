@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.16" />
+    <PackageReference Include="SimplyWorks.Serverless" Version="8.1.19" />
   </ItemGroup>
 
   <ItemGroup>
