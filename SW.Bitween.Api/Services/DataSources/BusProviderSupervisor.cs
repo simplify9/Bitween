@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
+using SW.Bitween.Services.Adapters;
 using SW.Bitween.Services.Cluster;
 using SW.Serverless.Resident;
 using System;
@@ -166,6 +167,11 @@ public class BusProviderSupervisor : BackgroundService
                 // One unreachable broker must not stop the others from starting.
                 _logger.LogError(ex, "Could not start adapter {AdapterId} for data source {Name}.",
                     dataSource.AdapterId, dataSource.Name);
+
+                // And the operator who configured it learns why here rather than from the node's
+                // log. A start that throws leaves no instance to describe, so nothing else in this
+                // class would ever record it.
+                await RecordStartFailureAsync(dbContext, dataSource, ex, cancellationToken);
             }
         }
 
@@ -287,6 +293,37 @@ public class BusProviderSupervisor : BackgroundService
         string.Join(";", startupValues.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));
 
     /// <summary>
+    /// Writes why a start failed onto the data source itself.
+    ///
+    /// A throw from StartExclusiveAsync leaves nothing running to describe, so the health
+    /// write-back below never sees it — which is how a data source ends up showing no connection
+    /// and no reason at the same time. The message is the one the operator would otherwise have
+    /// had to find in this node's log.
+    /// </summary>
+    private async Task RecordStartFailureAsync(BitweenDbContext dbContext, DataSource dataSource,
+        Exception exception, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var row = await dbContext.Set<DataSource>()
+                .FirstOrDefaultAsync(d => d.Id == dataSource.Id, cancellationToken);
+            if (row == null) return;
+
+            row.LastKnownState = "Failed";
+            row.LastException = AdapterFailureReader.Explain(exception.Message,
+                _adapters.Get(dataSource.AdapterId, dataSource.Id.ToString())?.Diagnostics);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Recording why something failed must not become a second thing that fails.
+            _logger.LogWarning(ex, "Could not record the start failure for data source {Name}.",
+                dataSource.Name);
+        }
+    }
+
+    /// <summary>
     /// Health from the heartbeat, written back so the UI and the notifiers can see a broker that
     /// has gone away without anyone tailing logs.
     /// </summary>
@@ -308,7 +345,14 @@ public class BusProviderSupervisor : BackgroundService
 
             row.LastKnownState = instance.ReportedState ?? instance.State.ToString();
             row.LastHeartbeatOn = instance.LastHeartbeatOn?.UtcDateTime;
-            row.LastException = instance.LastError;
+
+            // LastError is what a LIVE adapter says about itself, so it is null for exactly the
+            // failure an operator most needs explained: one that died on startup and never got as
+            // far as reporting anything. The process printed why before it exited, so fall back to
+            // that — otherwise the screen shows "Quarantined" with no reason anywhere near it.
+            row.LastException = instance.LastError
+                                ?? AdapterFailureReader.Summarise(
+                                    _adapters.Get(row.AdapterId, row.Id.ToString())?.Diagnostics);
             row.ConsecutiveFailures = instance.RestartCount;
             row.OwnedByNode = _leases.TryGetValue(row.Id, out var lease)
                 ? $"{(_election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"

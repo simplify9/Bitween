@@ -8,6 +8,7 @@ using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
+using SW.Bitween.Services.Adapters;
 using SW.Serverless.Resident;
 
 namespace SW.Bitween.Resources.DataSources;
@@ -74,9 +75,11 @@ public class Test : ICommandHandler<int, DataSourceTestRequest, object>
         // and must not be disturbed by someone pressing Test.
         var instanceKey = $"test-{key}-{Guid.NewGuid():N}"[..24];
 
+        ResidentAdapterInstance instance = null;
+
         try
         {
-            var instance = await _adapters.StartExclusiveAsync(new AdapterSpec
+            instance = await _adapters.StartExclusiveAsync(new AdapterSpec
             {
                 AdapterId = dataSource.AdapterId,
                 InstanceKey = instanceKey,
@@ -90,7 +93,13 @@ public class Test : ICommandHandler<int, DataSourceTestRequest, object>
         {
             // A broker that cannot be reached throws on start, before any stage runs. That is a
             // result, not a server error: the operator asked whether it works, and it does not.
-            return Failed(ex.Message);
+            //
+            // What Bitween observes in that case is only "Adapter stream closed" — true, and no
+            // use at all. The adapter printed the actual reason before it died, so that is what
+            // this answers with; without it, the one control meant to save reading a log is the
+            // control that sends you to read one.
+            return Failed(AdapterFailureReader.Explain(ex.Message,
+                await AdapterFailureReader.SettledOutputAsync(instance)));
         }
         finally
         {
