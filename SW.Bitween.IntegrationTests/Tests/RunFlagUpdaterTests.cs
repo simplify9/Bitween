@@ -11,14 +11,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 // provider, so it needs a real round trip to prove the statement and its parameter
 // binding are correct. There was no coverage here before.
 [Collection("Bitween")]
-public class RunFlagUpdaterTests
+public class RunFlagUpdaterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public RunFlagUpdaterTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Run_flag_claims_once_then_blocks_until_idle()

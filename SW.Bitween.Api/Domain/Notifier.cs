@@ -5,21 +5,14 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Domain;
 
-public class Notifier:BaseEntity
+public class Notifier(string name) : BaseEntity
 {
-
-    public Notifier(string name)
-    {
-        Name = name;
-        Inactive = false;
-    }
-
-    public string Name { get; set; }
+    public string Name { get; set; } = name;
     public bool RunOnSuccessfulResult { get;  set; }
     public bool RunOnBadResult { get;  set; }
     public bool RunOnFailedResult { get; set; }
     public string HandlerId { get; set; }
-    public bool Inactive { get; set; }
+    public bool Inactive { get; set; } = false;
     public IReadOnlyDictionary<string, string> HandlerProperties { get; private set; }
 
     public int[] RunOnSubscriptions { get; set; }

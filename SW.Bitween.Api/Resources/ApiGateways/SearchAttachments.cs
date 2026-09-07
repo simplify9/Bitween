@@ -13,16 +13,11 @@ namespace SW.Bitween.Resources.ApiGateways
     /// attach-partner picker's exclude list), this is only for the gateway page's own table.
     /// </summary>
     [HandlerName("attachments")]
-    public class SearchAttachments : IQueryHandler<SearchApiGatewayAttachmentsModel, object>
+public class SearchAttachments(BitweenDbContext dbContext, RequestContext requestContext)
+        : IQueryHandler<SearchApiGatewayAttachmentsModel, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public SearchAttachments(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(SearchApiGatewayAttachmentsModel request)
         {

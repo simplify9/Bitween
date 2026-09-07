@@ -6,16 +6,11 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Accounts;
 
 [HandlerName("unlock")]
-public class Unlock : ICommandHandler<int, UnlockAccountModel, object>
+public class Unlock(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, UnlockAccountModel, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Unlock(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, UnlockAccountModel request)
     {

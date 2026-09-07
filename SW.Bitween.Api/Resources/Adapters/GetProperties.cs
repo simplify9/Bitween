@@ -9,21 +9,13 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Adapters
 {
     [HandlerName("properties")]
-    public class GetProperties : IGetHandler<string,object>
+    public class GetProperties(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
+        BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<string,object>
     {
-        private readonly IServerlessService serverless;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public GetProperties(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
-            BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.serverless = serverless;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly IServerlessService serverless = serverless;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         async public Task<object> Handle(string key)
         {

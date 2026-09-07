@@ -18,18 +18,12 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// the subscription's side reaches those too.
 /// </remarks>
 [HandlerName("retryusage")]
-public class RetryUsage : ICommandHandler<int, RetryPolicyUsageRequest, object>
+public class RetryUsage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
+    : ICommandHandler<int, RetryPolicyUsageRequest, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly RetryUsageReport _report;
-
-    public RetryUsage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _report = report;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly RetryUsageReport _report = report;
 
     public async Task<object> Handle(int key, RetryPolicyUsageRequest request)
     {

@@ -24,15 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// at the handler instead, with a cache that records the call.
 /// </remarks>
 [Collection("Bitween")]
-public class CacheRevocationTests
+public class CacheRevocationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public CacheRevocationTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

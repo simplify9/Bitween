@@ -24,18 +24,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// never lands in storage, and a real new value still does.
 /// </remarks>
 [Collection("Bitween")]
-public class SubscriptionSecretTests
+public class SubscriptionSecretTests(BitweenFixture fixture)
 {
     private const string Sentinel = "__private__";
     private const string RealPassword = "s3cr3t-smtp-password";
 
-    private readonly BitweenFixture _fixture;
-
-    public SubscriptionSecretTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

@@ -169,28 +169,18 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
         _connectionGate.Dispose();
     }
 
-    private sealed class RabbitMqLease : IResourceLease
+    private sealed class RabbitMqLease(string resource, string queue, long term, IModel channel,
+        IServiceProvider serviceProvider, string nodeName) : IResourceLease
     {
-        private readonly IModel _channel;
-        private readonly IServiceProvider _serviceProvider;
-        private readonly string _nodeName;
+        private readonly IModel _channel = channel;
+        private readonly IServiceProvider _serviceProvider = serviceProvider;
+        private readonly string _nodeName = nodeName;
         private bool _released;
 
-        private readonly string _queue;
+        private readonly string _queue = queue;
 
-        public RabbitMqLease(string resource, string queue, long term, IModel channel,
-            IServiceProvider serviceProvider, string nodeName)
-        {
-            Resource = resource;
-            _queue = queue;
-            Term = term;
-            _channel = channel;
-            _serviceProvider = serviceProvider;
-            _nodeName = nodeName;
-        }
-
-        public string Resource { get; }
-        public long Term { get; }
+        public string Resource { get; } = resource;
+        public long Term { get; } = term;
 
         // The channel closing IS the loss of ownership — the broker has already released the queue.
         public bool IsHeld => !_released && _channel.IsOpen;

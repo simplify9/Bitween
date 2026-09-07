@@ -24,15 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// permanently one attempt below the threshold.
 /// </remarks>
 [Collection("Bitween")]
-public class LoginTests
+public class LoginTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public LoginTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private const string GoodPassword = "Correct-Horse-9!";
 
     /// <summary>

@@ -13,26 +13,17 @@ namespace SW.Bitween.Resources.Accounts
 {
     [HandlerName("login")]
     [Unprotect]
-    public class Login : ICommandHandler<UserLogin, object>
+    public class Login(JwtTokenParameters jwtTokenParameters, BitweenDbContext dbContext,
+        BitweenOptions BitweenSettings, IHttpContextAccessor httpContextAccessor, ILogger<Login> logger) : ICommandHandler<UserLogin, object>
     {
         private const int MaxFailedLoginAttempts = 5;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
-        private readonly BitweenDbContext _dbContext;
-        private readonly BitweenOptions _BitweenSettings;
-        private readonly JwtTokenParameters _jwtTokenParameters;
-        private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly ILogger<Login> _logger;
-
-        public Login(JwtTokenParameters jwtTokenParameters, BitweenDbContext dbContext,
-            BitweenOptions BitweenSettings, IHttpContextAccessor httpContextAccessor, ILogger<Login> logger)
-        {
-            _jwtTokenParameters = jwtTokenParameters;
-            _dbContext = dbContext;
-            _BitweenSettings = BitweenSettings;
-            _httpContextAccessor = httpContextAccessor;
-            _logger = logger;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly BitweenOptions _BitweenSettings = BitweenSettings;
+        private readonly JwtTokenParameters _jwtTokenParameters = jwtTokenParameters;
+        private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+        private readonly ILogger<Login> _logger = logger;
 
         public async Task<object> Handle(UserLogin request)
         {

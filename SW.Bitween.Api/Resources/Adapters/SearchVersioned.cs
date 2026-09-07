@@ -8,27 +8,16 @@ using SW.Bitween.Model;
 namespace SW.Bitween.Resources.Adapters
 {
     [HandlerName("Versioned")]
-    public class SearchVersioned : IQueryHandler<AdapterSearchRequest,object>
+    public class SearchVersioned(ServerlessOptions serverlessOptions, ICloudFilesService cloudFilesService,
+        NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
+        RequestContext requestContext, SW.Serverless.AdapterInstaller adapterInstaller) : IQueryHandler<AdapterSearchRequest,object>
     {
-        private readonly ServerlessOptions _serverlessOptions;
-        private readonly ICloudFilesService _cloudFilesService;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly SW.Serverless.AdapterInstaller _adapterInstaller;
-
-        public SearchVersioned(ServerlessOptions serverlessOptions, ICloudFilesService cloudFilesService,
-            NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
-            RequestContext requestContext, SW.Serverless.AdapterInstaller adapterInstaller)
-        {
-            _adapterInstaller = adapterInstaller;
-            _serverlessOptions = serverlessOptions;
-            _cloudFilesService = cloudFilesService;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
+        private readonly ServerlessOptions _serverlessOptions = serverlessOptions;
+        private readonly ICloudFilesService _cloudFilesService = cloudFilesService;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly SW.Serverless.AdapterInstaller _adapterInstaller = adapterInstaller;
 
         public async Task<object> Handle(AdapterSearchRequest request)
         {

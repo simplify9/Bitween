@@ -28,18 +28,12 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// </para>
 /// </remarks>
 [HandlerName("usage")]
-public class Usage : ICommandHandler<int, RetryPolicyUsageRequest, object>
+public class Usage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
+    : ICommandHandler<int, RetryPolicyUsageRequest, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly RetryUsageReport _report;
-
-    public Usage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _report = report;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly RetryUsageReport _report = report;
 
     public async Task<object> Handle(int key, RetryPolicyUsageRequest request)
     {

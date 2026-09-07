@@ -10,21 +10,13 @@ using SW.Bitween.Resources.Subscriptions;
 namespace SW.Bitween.Resources.ApiGateways
 {
     [HandlerName(nameof(AddPartner))]
-    public class AddPartner : ICommandHandler<int, ApiGatewayPartnerCreate, object>
+    public class AddPartner(BitweenDbContext dbContext, RequestContext requestContext,
+        AdapterRequirements adapterRequirements, IInfolinkCache cache) : ICommandHandler<int, ApiGatewayPartnerCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly AdapterRequirements _adapterRequirements;
-        private readonly IInfolinkCache _cache;
-
-        public AddPartner(BitweenDbContext dbContext, RequestContext requestContext,
-            AdapterRequirements adapterRequirements, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _adapterRequirements = adapterRequirements;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly AdapterRequirements _adapterRequirements = adapterRequirements;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int gatewayId, ApiGatewayPartnerCreate model)
         {

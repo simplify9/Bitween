@@ -37,11 +37,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// waiting on a timer and hoping.
 /// </summary>
 [Collection("Bitween")]
-public class BusProviderSupervisorTests
+public class BusProviderSupervisorTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public BusProviderSupervisorTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     /// <summary>
     /// The whole point, end to end: a row in the database becomes a live broker connection, and a

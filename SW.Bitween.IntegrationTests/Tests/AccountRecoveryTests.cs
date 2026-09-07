@@ -22,15 +22,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// resets a locked-out user's password and stops there has not let them back in.
 /// </remarks>
 [Collection("Bitween")]
-public class AccountRecoveryTests
+public class AccountRecoveryTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public AccountRecoveryTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private const string OldPassword = "Old-Password-1!";
     private const string NewPassword = "Brand-New-Password-2!";
 

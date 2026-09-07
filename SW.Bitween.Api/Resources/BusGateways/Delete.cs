@@ -5,18 +5,12 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.BusGateways
 {
-    public class Delete : IDeleteHandler<int, object>
+public class Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : IDeleteHandler<int, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int key)
         {

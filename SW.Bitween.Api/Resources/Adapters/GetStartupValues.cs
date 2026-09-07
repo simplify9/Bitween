@@ -9,23 +9,13 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Adapters
 {
     [HandlerName(nameof(GetStartupValues))]
-    public class GetStartupValues : IGetHandler<string, IDictionary<string, StartupValue>>
+    public class GetStartupValues(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
+        BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<string, IDictionary<string, StartupValue>>
     {
-        private readonly IServerlessService serverless;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public GetStartupValues(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
-            BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.serverless = serverless;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
-
-
+        private readonly IServerlessService serverless = serverless;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         public async Task<IDictionary<string, StartupValue>> Handle(string key)
         {

@@ -21,15 +21,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// existing while silently alerting on nothing.
 /// </remarks>
 [Collection("Bitween")]
-public class NotifierTests
+public class NotifierTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public NotifierTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

@@ -22,16 +22,14 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// tests answer is what an operator actually gets when they pick one from the dropdown.
 /// </summary>
 [Collection("Bitween")]
-public class ResidentAsPipelineAdapterTests
+public class ResidentAsPipelineAdapterTests(BitweenFixture fixture)
 {
     // The catalog lists by key prefix — infolink6.{handlers|mappers|receivers|validators} — so an
     // adapter has to be installed under one of those to be selectable at all.
     private const string ResidentHandlerId = "infolink6.handlers.residenttest";
     private const string ClassicHandlerId = "infolink6.handlers.classictest";
 
-    private readonly BitweenFixture _fixture;
-
-    public ResidentAsPipelineAdapterTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     private async Task InstallAsync()
     {

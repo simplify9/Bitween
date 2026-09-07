@@ -157,10 +157,8 @@ public static class ScribanJsonHelper
     /// so templates can write either <c>data[0].field</c> or <c>data.field</c>
     /// when the source JSON value is a single-element (or first-item) array.
     /// </summary>
-    private sealed class SmartArray : ScriptArray
+    private sealed class SmartArray(IEnumerable<object?> items) : ScriptArray(items)
     {
-        public SmartArray(IEnumerable<object?> items) : base(items) { }
-
         public override bool TryGetValue(TemplateContext? context, SourceSpan span, string member, out object? value)
         {
             if (base.TryGetValue(context, span, member, out value))

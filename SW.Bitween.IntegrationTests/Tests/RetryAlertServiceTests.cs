@@ -26,20 +26,15 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// can actually be delivered.
 /// </remarks>
 [Collection("Bitween")]
-public class RetryAlertServiceTests
+public class RetryAlertServiceTests(BitweenFixture fixture)
 {
     // MailHog answers instantly or not at all, so the default 100 seconds only ever means "the run
     // hangs instead of failing".
     private static readonly TimeSpan MailHogTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly BitweenFixture _fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     private string MessagesApi => $"{_fixture.MailHogApi}/api/v2/messages";
-
-    public RetryAlertServiceTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     // Deleting is only exposed on MailHog's v1 API — the v2 route 404s and would silently leave
     // messages behind, making the assertions depend on leftovers from the previous run.

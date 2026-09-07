@@ -24,15 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// selected when it shouldn't be runs real traffic through the wrong pipeline.
 /// </remarks>
 [Collection("Bitween")]
-public class GatewayRoutingTests
+public class GatewayRoutingTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public GatewayRoutingTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

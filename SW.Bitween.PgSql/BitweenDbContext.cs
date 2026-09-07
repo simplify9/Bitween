@@ -17,7 +17,9 @@ using SW.Scheduler.PgSql;
 
 namespace SW.Bitween.PgSql
 {
-    public class BitweenDbContext : Bitween.BitweenDbContext
+public class BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish)
+        : Bitween.BitweenDbContext(
+        options, requestContext, publish)
     {
         public const string Schema = "infolink";
 
@@ -25,13 +27,6 @@ namespace SW.Bitween.PgSql
         {
             TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
-
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish) : base(
-            options, requestContext, publish)
-        {
-            //this.requestContext = requestContext;
-            //this.publish = publish;
-        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

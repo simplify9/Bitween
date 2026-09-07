@@ -22,19 +22,14 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// success for a change that can never take effect.
 /// </remarks>
 [Collection("Bitween")]
-public class SettingsTests : IAsyncLifetime
+public class SettingsTests(BitweenFixture fixture) : IAsyncLifetime
 {
     private const string SecretKey = "Bitween.RebexLicenseKey";
     private const string EditableKey = "Bitween.JwtExpiryMinutes";
     private const string EnvironmentOwnedKey = "Bitween.DocumentPrefix";
 
-    private readonly BitweenFixture _fixture;
+    private readonly BitweenFixture _fixture = fixture;
     private readonly Dictionary<string, string> _originals = new();
-
-    public SettingsTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     /// <summary>
     /// Applying a setting mutates a process-wide options singleton that every test in this

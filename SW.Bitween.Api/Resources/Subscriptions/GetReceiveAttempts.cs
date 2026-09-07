@@ -14,16 +14,11 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// history instead.
 /// </summary>
 [HandlerName("receiveattempts")]
-public class GetReceiveAttempts : IQueryHandler<SearchReceiveAttemptsModel, object>
+public class GetReceiveAttempts(BitweenDbContext dbContext, RequestContext requestContext)
+    : IQueryHandler<SearchReceiveAttemptsModel, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public GetReceiveAttempts(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(SearchReceiveAttemptsModel request)
     {

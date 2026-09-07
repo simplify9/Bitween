@@ -8,16 +8,10 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Roles;
 
-public class Search : ISearchyHandler
+public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Search(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
     {

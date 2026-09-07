@@ -26,11 +26,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// where a consumer quietly loses data instead of failing loudly.
 /// </summary>
 [Collection("Bitween")]
-public class RabbitBusAdapterTests
+public class RabbitBusAdapterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public RabbitBusAdapterTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     /// <summary>
     /// Two identical messages are two messages.
@@ -222,22 +220,14 @@ public class RabbitBusAdapterTests
             new AdapterLease(host, BusAdapters.RabbitMq, dataSourceId.ToString(), instance));
     }
 
-    private sealed class AdapterLease : IAsyncDisposable
+    private sealed class AdapterLease(IResidentAdapterHost host, string adapterId, string instanceKey,
+        ResidentAdapterInstance instance) : IAsyncDisposable
     {
-        private readonly IResidentAdapterHost _host;
-        private readonly string _adapterId;
-        private readonly string _instanceKey;
+        private readonly IResidentAdapterHost _host = host;
+        private readonly string _adapterId = adapterId;
+        private readonly string _instanceKey = instanceKey;
 
-        public AdapterLease(IResidentAdapterHost host, string adapterId, string instanceKey,
-            ResidentAdapterInstance instance)
-        {
-            _host = host;
-            _adapterId = adapterId;
-            _instanceKey = instanceKey;
-            Instance = instance;
-        }
-
-        public ResidentAdapterInstance Instance { get; }
+        public ResidentAdapterInstance Instance { get; } = instance;
 
         public ValueTask DisposeAsync() =>
             new(_host.StopAsync(_adapterId, _instanceKey, drain: false));

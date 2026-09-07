@@ -8,18 +8,12 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Xchanges
 {
     [Unprotect]
-    public class Get : IGetHandler<string,object>
+public class Get(BitweenDbContext dbContext, RequestContext requestContext, XchangeService xchangeService)
+        : IGetHandler<string,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-        private readonly XchangeService xchangeService;
-
-        public Get(BitweenDbContext dbContext, RequestContext requestContext, XchangeService xchangeService)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-            this.xchangeService = xchangeService;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
+        private readonly XchangeService xchangeService = xchangeService;
 
         async public Task<object> Handle(string key)//, bool lookup = false)
         {

@@ -33,29 +33,21 @@ namespace SW.Bitween.Services.DataSources;
 /// a node paused long enough for its queue to be released and reclaimed would otherwise carry on
 /// consuming. Losing a lease stops its adapter immediately.
 /// </summary>
-public class BusProviderSupervisor : BackgroundService
+public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAdapterHost adapters,
+    ILeaderElection election, ILogger<BusProviderSupervisor> logger) : BackgroundService
 {
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromSeconds(30);
 
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IResidentAdapterHost _adapters;
-    private readonly ILeaderElection _election;
-    private readonly ILogger<BusProviderSupervisor> _logger;
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly IResidentAdapterHost _adapters = adapters;
+    private readonly ILeaderElection _election = election;
+    private readonly ILogger<BusProviderSupervisor> _logger = logger;
 
     // What we last started, and the configuration fingerprint it was started with.
     private readonly Dictionary<int, string> _running = new();
 
     // What this node currently owns. Nothing runs without an entry here.
     private readonly Dictionary<int, IResourceLease> _leases = new();
-
-    public BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAdapterHost adapters,
-        ILeaderElection election, ILogger<BusProviderSupervisor> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _adapters = adapters;
-        _election = election;
-        _logger = logger;
-    }
 
     private static string ResourceOf(DataSource dataSource) => $"datasource.{dataSource.Id}";
 

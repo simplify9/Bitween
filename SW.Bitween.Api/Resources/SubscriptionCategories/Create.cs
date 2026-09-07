@@ -6,16 +6,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.SubscriptionCategories;
 
-public class Create : ICommandHandler<CreateSubscriptionCategoryModel,object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<CreateSubscriptionCategoryModel,object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Create(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(CreateSubscriptionCategoryModel request)
     {

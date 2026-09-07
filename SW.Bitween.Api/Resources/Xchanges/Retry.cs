@@ -7,16 +7,11 @@ using SW.Bitween.Domain;
 namespace SW.Bitween.Resources.Xchanges
 {
     [HandlerName("retry")]
-    public class Retry : ICommandHandler<string, XchangeRetry,object>
+public class Retry(BitweenDbContext dbContext, XchangeService xchangeService)
+        : ICommandHandler<string, XchangeRetry,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly XchangeService xchangeService;
-
-        public Retry(BitweenDbContext dbContext, XchangeService xchangeService)
-        {
-            this.dbContext = dbContext;
-            this.xchangeService = xchangeService;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly XchangeService xchangeService = xchangeService;
 
         public async Task<object> Handle(string key, XchangeRetry xchangeRetry)
         {

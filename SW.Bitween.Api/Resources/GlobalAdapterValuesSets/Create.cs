@@ -7,18 +7,12 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.GlobalAdapterValuesSets
 {
-    public class Create : ICommandHandler<GlobalAdapterValuesSetCreate, object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<GlobalAdapterValuesSetCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(GlobalAdapterValuesSetCreate request)
         {

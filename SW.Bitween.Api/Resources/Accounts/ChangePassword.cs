@@ -9,16 +9,11 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Accounts;
 
 [HandlerName("changePassword")]
-public class ChangePassword : ICommandHandler<ChangePasswordModel, object>
+public class ChangePassword(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<ChangePasswordModel, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public ChangePassword(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(ChangePasswordModel request)
     {

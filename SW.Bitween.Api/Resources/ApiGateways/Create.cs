@@ -5,16 +5,11 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.ApiGateways
 {
-    public class Create : ICommandHandler<ApiGatewayCreate, object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<ApiGatewayCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(ApiGatewayCreate model)
         {

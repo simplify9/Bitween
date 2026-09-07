@@ -9,16 +9,10 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Documents
 {
     [HandlerName("properties")]
-    public class GetProperties : IGetHandler<int,object>
+    public class GetProperties(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public GetProperties(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         async public Task<object> Handle(int key)
         {

@@ -6,25 +6,15 @@ using SW.Bitween.Model;
 
 namespace SW.Bitween.Resources.Adapters
 {
-    public class Search : IQueryHandler<AdapterSearchRequest,object>
+    public class Search(ServerlessOptions serverlessOptions, ICloudFilesService cloudFilesService,
+        NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
+        RequestContext requestContext) : IQueryHandler<AdapterSearchRequest,object>
     {
-        private readonly ServerlessOptions _serverlessOptions;
-        private readonly ICloudFilesService _cloudFilesService;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Search(ServerlessOptions serverlessOptions, ICloudFilesService cloudFilesService,
-            NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
-            RequestContext requestContext)
-        {
-            _serverlessOptions = serverlessOptions;
-            _cloudFilesService = cloudFilesService;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
+        private readonly ServerlessOptions _serverlessOptions = serverlessOptions;
+        private readonly ICloudFilesService _cloudFilesService = cloudFilesService;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(AdapterSearchRequest request)
         {

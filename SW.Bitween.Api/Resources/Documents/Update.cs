@@ -9,22 +9,13 @@ using System.Text.RegularExpressions;
 
 namespace SW.Bitween.Resources.Documents
 {
-    public class Update : ICommandHandler<int, DocumentUpdate, object>
+    public class Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext,
+        IBroadcast broadcast) : ICommandHandler<int, DocumentUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-        private readonly IBroadcast _broadcast;
-
-
-        public Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext,
-            IBroadcast broadcast)
-        {
-            this._dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-            _broadcast = broadcast;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly IInfolinkCache _BitweenCache = BitweenCache;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IBroadcast _broadcast = broadcast;
 
         public async Task<object> Handle(int key, DocumentUpdate model)
         {

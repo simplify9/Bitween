@@ -34,11 +34,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// queue you own, which is the reason this provider exists at all.
 /// </summary>
 [Collection("Bitween")]
-public class SqsBusGatewayTests
+public class SqsBusGatewayTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public SqsBusGatewayTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     // ---------------------------------------------------------------- ingress
 

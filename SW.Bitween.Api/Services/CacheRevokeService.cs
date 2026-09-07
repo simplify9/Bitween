@@ -4,18 +4,12 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween;
 
-public class CacheRevokeService : IListen<RevokeCacheMessage>
+public class CacheRevokeService(IInfolinkCache BitweenCache, SettingsService settings,
+    BitweenDbContext dbContext) : IListen<RevokeCacheMessage>
 {
-    private readonly IInfolinkCache _BitweenCache;
-    private readonly SettingsService _settings;
-    private readonly BitweenDbContext _dbContext;
-
-    public CacheRevokeService(IInfolinkCache BitweenCache, SettingsService settings, BitweenDbContext dbContext)
-    {
-        _BitweenCache = BitweenCache;
-        _settings = settings;
-        _dbContext = dbContext;
-    }
+    private readonly IInfolinkCache _BitweenCache = BitweenCache;
+    private readonly SettingsService _settings = settings;
+    private readonly BitweenDbContext _dbContext = dbContext;
 
     public async Task Process(RevokeCacheMessage message)
     {

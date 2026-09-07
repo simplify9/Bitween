@@ -24,11 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// two disagreeing again.
 /// </summary>
 [Collection("Bitween")]
-public class DataSourceProviderCatalogTests
+public class DataSourceProviderCatalogTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public DataSourceProviderCatalogTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     /// <summary>
     /// The adapters the fixture installed describe themselves. Nothing in Bitween names these

@@ -20,14 +20,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// on the subscription the whole time; these tests pin down that it is now used.
 /// </remarks>
 [Collection("Bitween")]
-public class PartnerTokenTests
+public class PartnerTokenTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public PartnerTokenTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Subscription_own_partner_fills_handler_tokens()

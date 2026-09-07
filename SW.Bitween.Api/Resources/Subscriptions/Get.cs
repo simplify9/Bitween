@@ -11,22 +11,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace SW.Bitween.Resources.Subscriptions
 {
-    public class Get : IGetHandler<int, object>
+    public class Get(BitweenDbContext dbContext, NativeAdapterDiscoveryService nativeAdapterDiscovery,
+        IServiceProvider serviceProvider, RequestContext requestContext) : IGetHandler<int, object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+        private readonly IServiceProvider _serviceProvider = serviceProvider;
 
         private const string PrivateSentinel = "__private__";
-
-        public Get(BitweenDbContext dbContext, NativeAdapterDiscoveryService nativeAdapterDiscovery, IServiceProvider serviceProvider, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            _serviceProvider = serviceProvider;
-        }
 
         public async Task<object> Handle(int key)
         {

@@ -4,9 +4,9 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.NativeAdapters.RebexPop3Receiver;
 
-public class NativeRebexPop3Receiver : INativeInfolinkReceiver, IRequiresRebexLicense
+public class NativeRebexPop3Receiver(string? licenseKey = null) : INativeInfolinkReceiver, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey;
+    private readonly string? _licenseKey = licenseKey;
 
     private RebexPop3ReceiverInput _options = new();
     private Pop3 _pop3 = new();
@@ -15,11 +15,6 @@ public class NativeRebexPop3Receiver : INativeInfolinkReceiver, IRequiresRebexLi
     // Not user-configurable; exposed internally only so tests can point at a local fake server.
     internal int Port { get; set; } = 995;
     internal bool UseSsl { get; set; } = true;
-
-    public NativeRebexPop3Receiver(string? licenseKey = null)
-    {
-        _licenseKey = licenseKey;
-    }
 
     public async Task Initialize()
     {

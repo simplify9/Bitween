@@ -50,18 +50,12 @@ using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween.Web
 {
-    public class Startup
+    public class Startup(IConfiguration configuration, IWebHostEnvironment environment)
     {
         private static readonly string ApiXchangeCreatedEventQueueName = "XchangeService.ApiXchangeCreatedEvent";
 
-        public Startup(IConfiguration configuration, IWebHostEnvironment environment)
-        {
-            Configuration = configuration;
-            Environment = environment;
-        }
-
-        private IConfiguration Configuration { get; }
-        private IWebHostEnvironment Environment { get; }
+        private IConfiguration Configuration { get; } = configuration;
+        private IWebHostEnvironment Environment { get; } = environment;
 
         public void ConfigureServices(IServiceCollection services)
         {

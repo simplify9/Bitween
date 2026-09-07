@@ -31,7 +31,8 @@ namespace SW.Bitween.Services.DataSources;
 ///   copy of the contract — they target net8.0 while the host is on net10.0 — and a type loaded in
 ///   a metadata context is never reference-equal to the one the host compiled against anyway.
 /// </summary>
-public class DataSourceProviderCatalog
+public class DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesService cloudFiles,
+    ServerlessOptions options, IMemoryCache cache, ILogger<DataSourceProviderCatalog> logger)
 {
     /// <summary>
     /// Where Bitween's own providers live. A third-party adapter is found by the Kind stamped on
@@ -46,21 +47,11 @@ public class DataSourceProviderCatalog
     /// <summary>What the installer stamps on an adapter that connects to something.</summary>
     private static readonly string[] ProviderKinds = ["bus", "datasource"];
 
-    private readonly AdapterInstaller _installer;
-    private readonly ICloudFilesService _cloudFiles;
-    private readonly ServerlessOptions _options;
-    private readonly IMemoryCache _cache;
-    private readonly ILogger<DataSourceProviderCatalog> _logger;
-
-    public DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesService cloudFiles,
-        ServerlessOptions options, IMemoryCache cache, ILogger<DataSourceProviderCatalog> logger)
-    {
-        _installer = installer;
-        _cloudFiles = cloudFiles;
-        _options = options;
-        _cache = cache;
-        _logger = logger;
-    }
+    private readonly AdapterInstaller _installer = installer;
+    private readonly ICloudFilesService _cloudFiles = cloudFiles;
+    private readonly ServerlessOptions _options = options;
+    private readonly IMemoryCache _cache = cache;
+    private readonly ILogger<DataSourceProviderCatalog> _logger = logger;
 
     /// <summary>
     /// Every data source provider this deployment can offer, described, optionally narrowed to one

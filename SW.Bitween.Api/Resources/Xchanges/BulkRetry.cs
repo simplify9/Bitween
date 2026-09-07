@@ -9,17 +9,11 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Xchanges
 {
     [HandlerName("bulkretry")]
-    public class BulkRetry : ICommandHandler<XchangeBulkRetry, object>
+public class BulkRetry(BitweenDbContext dbContext, XchangeService xchangeService)
+        : ICommandHandler<XchangeBulkRetry, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly XchangeService _xchangeService;
-
-
-        public BulkRetry(BitweenDbContext dbContext, XchangeService xchangeService)
-        {
-            _dbContext = dbContext;
-            _xchangeService = xchangeService;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly XchangeService _xchangeService = xchangeService;
 
         public async Task<object> Handle(XchangeBulkRetry request)
         {

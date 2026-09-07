@@ -12,14 +12,9 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class ReceivingTests
+public class ReceivingTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public ReceivingTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Receiving_job_creates_one_xchange_per_received_file()

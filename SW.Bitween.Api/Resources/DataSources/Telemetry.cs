@@ -22,19 +22,12 @@ namespace SW.Bitween.Resources.DataSources;
 /// given adapter; every other node answers RunningHere=false rather than inventing an outage.
 /// </summary>
 [HandlerName("telemetry")]
-public class Telemetry : IGetHandler<int, object>
+public class Telemetry(BitweenDbContext dbContext, RequestContext requestContext,
+    IResidentAdapterHost adapters = null) : IGetHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly IResidentAdapterHost _adapters;
-
-    public Telemetry(BitweenDbContext dbContext, RequestContext requestContext,
-        IResidentAdapterHost adapters = null)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _adapters = adapters;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly IResidentAdapterHost _adapters = adapters;
 
     public async Task<object> Handle(int key)
     {

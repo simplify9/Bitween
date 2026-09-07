@@ -22,7 +22,8 @@ namespace SW.Bitween.Resources.DataSources;
 /// Both are read-only: neither consumes, acknowledges or publishes anything.
 /// </summary>
 [HandlerName("inspect")]
-public class Inspect : ICommandHandler<int, DataSourceInspectRequest, object>
+public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
+    IResidentAdapterHost adapters = null) : ICommandHandler<int, DataSourceInspectRequest, object>
 {
     /// <summary>
     /// The commands this endpoint will relay. An allow-list rather than a passthrough: the
@@ -31,17 +32,9 @@ public class Inspect : ICommandHandler<int, DataSourceInspectRequest, object>
     /// </summary>
     private static readonly string[] Allowed = ["Discover", "GetStats"];
 
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly IResidentAdapterHost _adapters;
-
-    public Inspect(BitweenDbContext dbContext, RequestContext requestContext,
-        IResidentAdapterHost adapters = null)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _adapters = adapters;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly IResidentAdapterHost _adapters = adapters;
 
     public async Task<object> Handle(int key, DataSourceInspectRequest request)
     {

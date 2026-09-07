@@ -14,14 +14,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// can be persisted and retrieved from the real PostgreSQL container.
 /// </summary>
 [Collection("Bitween")]
-public class EntityTests
+public class EntityTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public EntityTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Can_create_and_read_document()

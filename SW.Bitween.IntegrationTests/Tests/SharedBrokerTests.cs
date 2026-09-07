@@ -36,13 +36,11 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// as if they are not there.
 /// </summary>
 [Collection("Bitween")]
-public class SharedBrokerTests
+public class SharedBrokerTests(BitweenFixture fixture)
 {
     private const string EchoHandler = "sw.bitween.samplehandler";
 
-    private readonly BitweenFixture _fixture;
-
-    public SharedBrokerTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     /// <summary>
     /// The multiplexing claim, stated as a number: three gateways, one process.

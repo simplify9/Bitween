@@ -25,10 +25,10 @@ namespace SW.Bitween.Adapters.Bus.RabbitMq;
 /// customer's messages — it just stops draining their queue, which is the correct failure.
 /// </summary>
 [AdapterKind("bus")]
-public class RabbitBusHandler : IResidentAdapter
+public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBusHandler> logger) : IResidentAdapter
 {
-    private readonly RabbitOptions _options;
-    private readonly ILogger<RabbitBusHandler> _logger;
+    private readonly RabbitOptions _options = options.Value;
+    private readonly ILogger<RabbitBusHandler> _logger = logger;
 
     private IAdapterContext _context;
     private IConnection _connection;
@@ -49,12 +49,6 @@ public class RabbitBusHandler : IResidentAdapter
     private DateTimeOffset? _lastMessageOn;
     private string _lastError;
     private volatile string _state = "Starting";
-
-    public RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBusHandler> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
 
     // ---------------------------------------------------------------- lifecycle
 

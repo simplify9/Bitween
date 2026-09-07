@@ -12,20 +12,13 @@ using SW.Bitween.Resources.RetryPolicies;
 
 namespace SW.Bitween.Resources.Subscriptions
 {
-    public class Update : ICommandHandler<int, SubscriptionUpdate, object>
+    public class Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache,
+        RequestContext requestContext, SubscriptionSchedulerService subScheduler) : ICommandHandler<int, SubscriptionUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext, SubscriptionSchedulerService subScheduler)
-        {
-            this._dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-            _subScheduler = subScheduler;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly IInfolinkCache _BitweenCache = BitweenCache;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly SubscriptionSchedulerService _subScheduler = subScheduler;
 
         public async Task<object> Handle(int key, SubscriptionUpdate model)
         {

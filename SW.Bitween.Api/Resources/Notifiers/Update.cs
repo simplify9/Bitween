@@ -7,18 +7,12 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Notifiers
 {
-    public class Update : ICommandHandler<int, NotifierUpdate,object>
+public class Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, NotifierUpdate,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int key, NotifierUpdate request)
         {

@@ -5,16 +5,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Roles;
 
-public class Update : ICommandHandler<int, RoleUpdate, object>
+public class Update(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, RoleUpdate, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Update(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, RoleUpdate model)
     {

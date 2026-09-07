@@ -21,18 +21,12 @@ namespace SW.Bitween.Services.DataSources;
 /// processed as a fresh message. Forgetting late merely costs rows.
 /// </summary>
 [ScheduleConfig(AllowConcurrentExecution = false, MisfireInstructions = MisfireInstructions.Skip)]
-public class InboundMessagePruneJob : IScheduledJob
+public class InboundMessagePruneJob(BitweenDbContext dbContext, ILogger<InboundMessagePruneJob> logger) : IScheduledJob
 {
     private const int BatchSize = 5_000;
 
-    private readonly BitweenDbContext _dbContext;
-    private readonly ILogger<InboundMessagePruneJob> _logger;
-
-    public InboundMessagePruneJob(BitweenDbContext dbContext, ILogger<InboundMessagePruneJob> logger)
-    {
-        _dbContext = dbContext;
-        _logger = logger;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly ILogger<InboundMessagePruneJob> _logger = logger;
 
     public async Task Execute()
     {

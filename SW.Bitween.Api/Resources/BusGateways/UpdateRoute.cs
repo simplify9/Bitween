@@ -7,18 +7,12 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.BusGateways
 {
     [HandlerName(nameof(UpdateRoute))]
-    public class UpdateRoute : ICommandHandler<int, BusGatewayRouteUpdate, object>
+public class UpdateRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, BusGatewayRouteUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public UpdateRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int gatewayId, BusGatewayRouteUpdate model)
         {

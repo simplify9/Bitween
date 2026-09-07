@@ -8,16 +8,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.DataSources;
 
-public class Create : ICommandHandler<DataSourceCreate, object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<DataSourceCreate, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Create(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(DataSourceCreate model)
     {

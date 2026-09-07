@@ -12,14 +12,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// These tests confirm the AMQP channel is open and messages are accepted.
 /// </summary>
 [Collection("Bitween")]
-public class BusTests
+public class BusTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public BusTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task IPublish_is_resolvable_from_di()

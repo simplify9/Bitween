@@ -7,18 +7,12 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.BusGateways
 {
     [HandlerName(nameof(RemoveRoute))]
-    public class RemoveRoute : ICommandHandler<int, RemoveRouteRequest, object>
+public class RemoveRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, RemoveRouteRequest, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public RemoveRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int gatewayId, RemoveRouteRequest request)
         {

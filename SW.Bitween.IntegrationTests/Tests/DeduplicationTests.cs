@@ -26,11 +26,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// these tests are about recognising them without either losing a message or looping on one.
 /// </summary>
 [Collection("Bitween")]
-public class DeduplicationTests
+public class DeduplicationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public DeduplicationTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task A_redelivered_message_does_not_produce_a_second_Xchange()

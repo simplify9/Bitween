@@ -14,23 +14,14 @@ using Newtonsoft.Json;
 namespace SW.Bitween.Resources.Xchanges
 {
     [Unprotect]
-    public class Update : ICommandHandler<string, object,object>
+    public class Update(RequestContext requestContext, XchangeService xchangeService, BitweenDbContext dbContext,
+        BitweenOptions BitweenSettings, IInfolinkCache cache) : ICommandHandler<string, object,object>
     {
-        private readonly RequestContext _requestContext;
-        private readonly XchangeService _xchangeService;
-        private readonly BitweenDbContext _dbContext;
-        private readonly BitweenOptions _BitweenSettings;
-        private readonly IInfolinkCache _cache;
-
-        public Update(RequestContext requestContext, XchangeService xchangeService, BitweenDbContext dbContext,
-            BitweenOptions BitweenSettings, IInfolinkCache cache)
-        {
-            _requestContext = requestContext;
-            _xchangeService = xchangeService;
-            _dbContext = dbContext;
-            _BitweenSettings = BitweenSettings;
-            _cache = cache;
-        }
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly XchangeService _xchangeService = xchangeService;
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly BitweenOptions _BitweenSettings = BitweenSettings;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(string documentIdOrName, dynamic request)
         {

@@ -25,15 +25,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// only asserted "it threw" would still pass if the message went back to being useless.
 /// </remarks>
 [Collection("Bitween")]
-public class SubscriptionLifecycleTests
+public class SubscriptionLifecycleTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public SubscriptionLifecycleTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

@@ -5,16 +5,11 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.Partners
 {
-    public class Create : ICommandHandler<PartnerCreate,object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<PartnerCreate,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this._dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(PartnerCreate model)
         {

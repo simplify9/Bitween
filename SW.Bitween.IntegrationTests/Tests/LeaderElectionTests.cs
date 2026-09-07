@@ -24,11 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// broker, which is exactly the situation a real cluster is in.
 /// </summary>
 [Collection("Bitween")]
-public class LeaderElectionTests
+public class LeaderElectionTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public LeaderElectionTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Only_one_node_can_hold_a_resource()

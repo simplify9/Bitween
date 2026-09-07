@@ -7,16 +7,11 @@ using System.Linq;
 namespace SW.Bitween.Resources.ApiGateways
 {
     [HandlerName(nameof(RemovePartner))]
-    public class RemovePartner : ICommandHandler<int, RemovePartnerRequest, object>
+public class RemovePartner(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<int, RemovePartnerRequest, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public RemovePartner(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(int gatewayId, RemovePartnerRequest request)
         {

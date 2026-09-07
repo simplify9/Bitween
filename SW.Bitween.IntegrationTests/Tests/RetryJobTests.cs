@@ -13,14 +13,9 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class RetryJobTests
+public class RetryJobTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public RetryJobTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

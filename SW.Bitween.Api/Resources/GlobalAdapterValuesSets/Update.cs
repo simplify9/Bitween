@@ -6,18 +6,12 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.GlobalAdapterValuesSets
 {
-    public class Update : ICommandHandler<string, GlobalAdapterValuesSetUpdate, object>
+public class Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<string, GlobalAdapterValuesSetUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(string key, GlobalAdapterValuesSetUpdate request)
         {

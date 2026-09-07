@@ -6,22 +6,14 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween
 {
-    public class BusService : IConsume
+    public class BusService(XchangeService xchangeService, BitweenDbContext dbContext,
+        RequestContext requestContext) : IConsume
     {
         private const string MessageTypeNameToDocumentId = "MessageTypeNameToDocumentId";
 
-        private readonly XchangeService _xchangeService;
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-
-        public BusService(XchangeService xchangeService, BitweenDbContext dbContext,
-            RequestContext requestContext)
-        {
-            _xchangeService = xchangeService;
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly XchangeService _xchangeService = xchangeService;
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<IEnumerable<string>> GetMessageTypeNames()
         {

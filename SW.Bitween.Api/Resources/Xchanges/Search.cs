@@ -12,7 +12,8 @@ using SW.Bitween.Model;
 
 namespace SW.Bitween.Resources.Xchanges
 {
-    public class Search : ISearchyHandler
+    public class Search(BitweenDbContext dbContext, XchangeService xchangeService,
+        RequestContext requestContext) : ISearchyHandler
     {
         /// <summary>
         /// Largest exact total the exchange search reports. Beyond it the response carries
@@ -21,16 +22,9 @@ namespace SW.Bitween.Resources.Xchanges
         /// </summary>
         internal const int CountCap = 10_000;
 
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-        private readonly XchangeService xchangeService;
-
-        public Search(BitweenDbContext dbContext, XchangeService xchangeService, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-            this.xchangeService = xchangeService;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
+        private readonly XchangeService xchangeService = xchangeService;
 
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {

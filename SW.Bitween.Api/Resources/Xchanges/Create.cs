@@ -8,16 +8,10 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Xchanges
 {
-    public class Create: ICommandHandler<CreateXchange,object>
+    public class Create(XchangeService xchangeService, BitweenDbContext dbc) : ICommandHandler<CreateXchange,object>
     {
-        private readonly XchangeService _xchangeService;
-        private readonly BitweenDbContext _dbc;
-        
-        public Create(XchangeService xchangeService, BitweenDbContext dbc)
-        {
-            _xchangeService = xchangeService;
-            _dbc = dbc;
-        }
+        private readonly XchangeService _xchangeService = xchangeService;
+        private readonly BitweenDbContext _dbc = dbc;
 
         public async Task<object> Handle(CreateXchange request)
         {

@@ -11,25 +11,14 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Dashboard;
 
 [HandlerName("XChangesAndSubscriptionsInfo")]
-public class XChangesAndSubscriptionsInfo : IQueryHandler<object>
+public class XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeService xchangeService,
+    RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
-    private readonly DateTime _dataDateLimit;
-    private readonly XchangeService _xchangeService;
-
-    // private readonly IMemoryCache _memoryCache;
-    // private const string CACHE_KEY = "XChangesAndSubscriptionsInfoCache";
-
-    public XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeService xchangeService, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _xchangeService = xchangeService;
-        //_memoryCache = memoryCache;
-        _dataDateLimit = DateTime.UtcNow.AddMonths(-3);
-    }
+    private readonly DateTime _dataDateLimit = DateTime.UtcNow.AddMonths(-3);
+    private readonly XchangeService _xchangeService = xchangeService;
 
     public async Task<object> Handle()
     {

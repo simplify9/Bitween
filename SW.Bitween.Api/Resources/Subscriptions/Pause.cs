@@ -8,19 +8,12 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Subscriptions
 {
     [HandlerName("pause")]
-    public class Pause : ICommandHandler<int, SubscriptionPause,object>
+public class Pause(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, SubscriptionPause,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-
-        public Pause(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int key, SubscriptionPause request)
         {

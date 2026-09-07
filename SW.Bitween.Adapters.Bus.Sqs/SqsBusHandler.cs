@@ -38,10 +38,10 @@ namespace SW.Bitween.Adapters.Bus.Sqs;
 /// belong in a mapper or handler, not here.
 /// </summary>
 [AdapterKind("bus")]
-public class SqsBusHandler : IResidentAdapter
+public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> logger) : IResidentAdapter
 {
-    private readonly SqsOptions _options;
-    private readonly ILogger<SqsBusHandler> _logger;
+    private readonly SqsOptions _options = options.Value;
+    private readonly ILogger<SqsBusHandler> _logger = logger;
 
     private IAmazonSQS _sqs;
     private IAdapterContext _context;
@@ -53,12 +53,6 @@ public class SqsBusHandler : IResidentAdapter
     private DateTimeOffset? _lastMessageOn;
     private string _lastError;
     private volatile string _state = "Starting";
-
-    public SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
 
     // ---------------------------------------------------------------- lifecycle
 

@@ -29,11 +29,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// gateway can be wrong: pointed at nothing, or pointed at a queue another gateway already reads.
 /// </summary>
 [Collection("Bitween")]
-public class DataSourceApiTests
+public class DataSourceApiTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public DataSourceApiTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     // ---------------------------------------------------------------- secrets
 

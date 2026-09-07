@@ -14,10 +14,11 @@ using SW.Bitween.JsonConverters;
 
 namespace SW.Bitween
 {
-    public class BitweenDbContext : DbContext
+    public class BitweenDbContext(DbContextOptions options, RequestContext requestContext,
+        IPublish publish) : DbContext(options)
     {
-        private readonly RequestContext requestContext;
-        private readonly IPublish publish;
+        private readonly RequestContext requestContext = requestContext;
+        private readonly IPublish publish = publish;
 
         // Parsed as Unspecified kind, so the .ToUniversalTime() calls at every use site below used
         // to convert using whatever timezone the current machine happened to be in — deterministic
@@ -30,14 +31,6 @@ namespace SW.Bitween
             "$SWHASH$V1$10000$VQCi48eitH4Ml5juvBMOFZrMdQwBbhuIQVXe6RR7qJdDF2bJ";
 
         public const string ConnectionString = "BitweenDb";
-
-
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish) :
-            base(options)
-        {
-            this.requestContext = requestContext;
-            this.publish = publish;
-        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

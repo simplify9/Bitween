@@ -10,17 +10,11 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.Partners
 {
-    public class Update : ICommandHandler<int, PartnerUpdate,object>
+public class Update(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<int, PartnerUpdate,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-
-        public Update(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(int key, PartnerUpdate model)
         {

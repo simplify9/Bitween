@@ -23,15 +23,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// error at any point.
 /// </remarks>
 [Collection("Bitween")]
-public class BusGatewayRouteTests
+public class BusGatewayRouteTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public BusGatewayRouteTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

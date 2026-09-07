@@ -16,14 +16,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// reaches the table.
 /// </summary>
 [Collection("Bitween")]
-public class AuditTrailTests
+public class AuditTrailTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public AuditTrailTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Creating_a_partner_writes_an_audit_entry()

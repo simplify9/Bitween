@@ -4,16 +4,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.NativeAdapters.RebexFtpReceiver;
 
-public class NativeRebexFtpReceiver : INativeInfolinkReceiver, IRequiresRebexLicense
+public class NativeRebexFtpReceiver(string? licenseKey = null) : INativeInfolinkReceiver, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey;
+    private readonly string? _licenseKey = licenseKey;
     private RebexFtpReceiverInput _options = new();
     private IFtp _ftpOrSftp = null!;
-
-    public NativeRebexFtpReceiver(string? licenseKey = null)
-    {
-        _licenseKey = licenseKey;
-    }
 
     public async Task Initialize()
     {

@@ -23,14 +23,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// proving the cost buys something.
 /// </remarks>
 [Collection("Bitween")]
-public class PermissionGuardTests
+public class PermissionGuardTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public PermissionGuardTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     private static async Task<Account> CreateAccount(BitweenDbContext db, string email, params int[] roleIds)
     {

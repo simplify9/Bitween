@@ -6,18 +6,12 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Subscriptions
 {
     [HandlerName("receivenow")]
-    public class ReceiveNow : ICommandHandler<int, SubscriptionReceiveNow,object>
+    public class ReceiveNow(BitweenDbContext dbContext, RequestContext requestContext,
+        SubscriptionSchedulerService subScheduler) : ICommandHandler<int, SubscriptionReceiveNow,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public ReceiveNow(BitweenDbContext dbContext, RequestContext requestContext, SubscriptionSchedulerService subScheduler)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _subScheduler = subScheduler;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly SubscriptionSchedulerService _subScheduler = subScheduler;
 
         async public Task<object> Handle(int key, SubscriptionReceiveNow request)
         {

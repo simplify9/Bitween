@@ -14,19 +14,12 @@ namespace SW.Bitween.Resources.DataSources;
 /// published, and cannot silently disagree with what the adapter actually reads.
 /// </summary>
 [HandlerName("Providers")]
-public class Providers : IQueryHandler<object>
+public class Providers(BitweenDbContext dbContext, RequestContext requestContext,
+    DataSourceProviderCatalog catalog) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly DataSourceProviderCatalog _catalog;
-
-    public Providers(BitweenDbContext dbContext, RequestContext requestContext,
-        DataSourceProviderCatalog catalog)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _catalog = catalog;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly DataSourceProviderCatalog _catalog = catalog;
 
     public async Task<object> Handle()
     {

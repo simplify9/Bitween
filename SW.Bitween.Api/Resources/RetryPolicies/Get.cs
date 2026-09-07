@@ -8,18 +8,12 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.RetryPolicies;
 
-public class Get : IGetHandler<int, object>
+public class Get(BitweenDbContext dbContext, RequestContext requestContext, AdapterSecretProperties secrets)
+    : IGetHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly AdapterSecretProperties _secrets;
-
-    public Get(BitweenDbContext dbContext, RequestContext requestContext, AdapterSecretProperties secrets)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _secrets = secrets;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly AdapterSecretProperties _secrets = secrets;
 
     public async Task<object> Handle(int key)
     {

@@ -4,11 +4,9 @@ using SW.Scheduler.MySql;
 
 namespace SW.Bitween.MySql
 {
-    public class BitweenDbContext : Bitween.BitweenDbContext
+    public class BitweenDbContext(DbContextOptions options, RequestContext requestContext,
+        IPublish publish) : Bitween.BitweenDbContext(options, requestContext, publish)
     {
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish)
-            : base(options, requestContext, publish) { }
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

@@ -28,11 +28,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// feature has to avoid.
 /// </summary>
 [Collection("Bitween")]
-public class ExternalBusGatewayTests
+public class ExternalBusGatewayTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public ExternalBusGatewayTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     // ---------------------------------------------------------------- ingress
 
@@ -427,22 +425,14 @@ public class ExternalBusGatewayTests
         return new AdapterLease(host, dataSource.AdapterId, dataSourceId.ToString(), instance);
     }
 
-    private sealed class AdapterLease : IAsyncDisposable
+    private sealed class AdapterLease(IResidentAdapterHost host, string adapterId, string instanceKey,
+        ResidentAdapterInstance instance) : IAsyncDisposable
     {
-        private readonly IResidentAdapterHost _host;
-        private readonly string _adapterId;
-        private readonly string _instanceKey;
+        private readonly IResidentAdapterHost _host = host;
+        private readonly string _adapterId = adapterId;
+        private readonly string _instanceKey = instanceKey;
 
-        public AdapterLease(IResidentAdapterHost host, string adapterId, string instanceKey,
-            ResidentAdapterInstance instance)
-        {
-            _host = host;
-            _adapterId = adapterId;
-            _instanceKey = instanceKey;
-            Instance = instance;
-        }
-
-        public ResidentAdapterInstance Instance { get; }
+        public ResidentAdapterInstance Instance { get; } = instance;
 
         public ValueTask DisposeAsync() =>
             new(_host.StopAsync(_adapterId, _instanceKey, drain: false));

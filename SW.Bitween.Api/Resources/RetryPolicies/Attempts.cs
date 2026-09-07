@@ -25,7 +25,8 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// </para>
 /// </remarks>
 [HandlerName("attempts")]
-public class Attempts : ICommandHandler<int, RetryGroupAttemptsRequest, object>
+public class Attempts(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, RetryGroupAttemptsRequest, object>
 {
     /// <summary>
     /// Enough to show what keeps failing without turning one table row into a page. The caller is
@@ -33,14 +34,8 @@ public class Attempts : ICommandHandler<int, RetryGroupAttemptsRequest, object>
     /// </summary>
     private const int Limit = 10;
 
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Attempts(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, RetryGroupAttemptsRequest request)
     {

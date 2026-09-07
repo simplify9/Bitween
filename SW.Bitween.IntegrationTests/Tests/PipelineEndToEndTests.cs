@@ -34,16 +34,14 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// share nothing but the SDK, and both have to work for a single message to get through.
 /// </summary>
 [Collection("Bitween")]
-public class PipelineEndToEndTests
+public class PipelineEndToEndTests(BitweenFixture fixture)
 {
     private const string EchoHandler = "sw.bitween.samplehandler";
     private const string ConfigurableAdapter = "sw.bitween.sampleconfigurableadapter";
 
     private const string MappedOutput = "{\"mapped\":true,\"by\":\"configurable-adapter\"}";
 
-    private readonly BitweenFixture _fixture;
-
-    public PipelineEndToEndTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     // ---------------------------------------------------------------- external
 

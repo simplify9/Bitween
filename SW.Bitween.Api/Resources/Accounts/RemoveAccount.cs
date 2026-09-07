@@ -6,16 +6,11 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Accounts;
 
 [HandlerName("remove")]
-public class RemoveAccountModel : ICommandHandler<int, RemoveAccountModel,object>
+public class RemoveAccountModel(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, RemoveAccountModel,object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public RemoveAccountModel(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        this._dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, RemoveAccountModel request)
     {

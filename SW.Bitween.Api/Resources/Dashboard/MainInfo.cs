@@ -9,16 +9,10 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Dashboard;
 
 [HandlerName("MainInfo")]
-public class MainInfo : IQueryHandler<object>
+public class MainInfo(BitweenDbContext dbContext, RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public MainInfo(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle()
     {

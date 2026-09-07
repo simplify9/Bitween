@@ -8,17 +8,10 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.Partners
 {
-    public class Delete : IDeleteHandler<int,object>
+    public class Delete(BitweenDbContext dbContext, RequestContext requestContext) : IDeleteHandler<int,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-
-        public Delete(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this._dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(int key)
         {

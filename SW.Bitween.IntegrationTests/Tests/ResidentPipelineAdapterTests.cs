@@ -26,13 +26,11 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// and invoked through the same code path a classic adapter goes through.
 /// </summary>
 [Collection("Bitween")]
-public class ResidentPipelineAdapterTests
+public class ResidentPipelineAdapterTests(BitweenFixture fixture)
 {
     private const string ResidentHandlerId = "infolink6.handlers.residentsample";
 
-    private readonly BitweenFixture _fixture;
-
-    public ResidentPipelineAdapterTests(BitweenFixture fixture) => _fixture = fixture;
+    private readonly BitweenFixture _fixture = fixture;
 
     private async Task InstallAsync()
     {

@@ -12,14 +12,9 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class ServerlessAdapterTests
+public class ServerlessAdapterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public ServerlessAdapterTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task SampleHandler_echo_returns_input_unchanged()

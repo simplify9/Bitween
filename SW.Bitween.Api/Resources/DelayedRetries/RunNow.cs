@@ -7,18 +7,12 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.DelayedRetries
 {
     [HandlerName("runnow")]
-    public class RunNow : ICommandHandler<string, DelayedRetryRunNow, object>
+    public class RunNow(BitweenDbContext dbContext, RequestContext requestContext,
+        XchangeService xchangeService) : ICommandHandler<string, DelayedRetryRunNow, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly XchangeService _xchangeService;
-
-        public RunNow(BitweenDbContext dbContext, RequestContext requestContext, XchangeService xchangeService)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _xchangeService = xchangeService;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly XchangeService _xchangeService = xchangeService;
 
         public async Task<object> Handle(string key, DelayedRetryRunNow request)
         {

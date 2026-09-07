@@ -7,16 +7,11 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.SubscriptionCategories;
 
 [HandlerName("delete")]
-public class Delete : ICommandHandler<int, DeleteSubscriptionCategoryModel,object>
+public class Delete(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, DeleteSubscriptionCategoryModel,object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Delete(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, DeleteSubscriptionCategoryModel _)
     {

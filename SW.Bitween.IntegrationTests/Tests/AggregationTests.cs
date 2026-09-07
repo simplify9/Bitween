@@ -14,14 +14,9 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class AggregationTests
+public class AggregationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public AggregationTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     [Fact]
     public async Task Aggregation_job_creates_one_xchange_from_successful_source_xchanges()

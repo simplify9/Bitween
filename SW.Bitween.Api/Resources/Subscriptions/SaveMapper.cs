@@ -11,18 +11,12 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Subscriptions
 {
     [HandlerName("savemapper")]
-    public class SaveMapper : ICommandHandler<int, SubscriptionSaveMapper, object>
+    public class SaveMapper(BitweenDbContext dbContext, IInfolinkCache BitweenCache,
+        RequestContext requestContext) : ICommandHandler<int, SubscriptionSaveMapper, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-
-        public SaveMapper(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly IInfolinkCache _BitweenCache = BitweenCache;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(int key, SubscriptionSaveMapper model)
         {

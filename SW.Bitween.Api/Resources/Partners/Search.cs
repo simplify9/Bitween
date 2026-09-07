@@ -10,16 +10,10 @@ using System.Collections.Generic;
 
 namespace SW.Bitween.Resources.Partners
 {
-    public class Search : ISearchyHandler
+    public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public Search(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         async public Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {

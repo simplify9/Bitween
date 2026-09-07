@@ -16,7 +16,11 @@ using SW.Bus.RabbitMqExtensions;
 
 namespace SW.Bitween;
 
-public class XchangeService :
+public class XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
+    FilterService filterService,
+    ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
+    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
+    NativeAdapterDiscoveryService nativeAdapterDiscovery, IAdapterInvoker adapterInvoker) :
     // IConsume<ApiXchangeCreatedEvent>,
     // IConsume<InternalXchangeCreatedEvent>,
     // IConsume<AggregateXchangeCreatedEvent>,
@@ -27,34 +31,16 @@ public class XchangeService :
 
 {
     public const string ResultQueueSuffix = "-Result";
-    private readonly BitweenOptions _BitweenSettings;
-    private readonly BitweenDbContext _dbContext;
-    private readonly FilterService _filterService;
-    private readonly ICloudFilesService _cloudFiles;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IPublish _publish;
-    private readonly ILogger _logger;
-    private readonly IInfolinkCache _BitweenCache;
-    private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-    private readonly IAdapterInvoker _adapterInvoker;
-
-    public XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
-        FilterService filterService,
-        ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
-        IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
-        NativeAdapterDiscoveryService nativeAdapterDiscovery, IAdapterInvoker adapterInvoker)
-    {
-        _adapterInvoker = adapterInvoker;
-        _BitweenSettings = BitweenSettings;
-        _dbContext = dbContext;
-        _filterService = filterService;
-        _cloudFiles = cloudFiles;
-        _nativeAdapterDiscovery = nativeAdapterDiscovery;
-        _serviceProvider = serviceProvider;
-        _publish = publish;
-        _logger = logger;
-        _BitweenCache = BitweenCache;
-    }
+    private readonly BitweenOptions _BitweenSettings = BitweenSettings;
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly FilterService _filterService = filterService;
+    private readonly ICloudFilesService _cloudFiles = cloudFiles;
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly IPublish _publish = publish;
+    private readonly ILogger _logger = logger;
+    private readonly IInfolinkCache _BitweenCache = BitweenCache;
+    private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
+    private readonly IAdapterInvoker _adapterInvoker = adapterInvoker;
 
     public async Task<string> SubmitSubscriptionXchange(int subscriptionId, XchangeFile file,
         string[] references = null, Partner gatewayPartner = null,

@@ -14,16 +14,11 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// happens, or for handing back a total that is spent but not yet exhausted.
 /// </summary>
 [HandlerName("resetusage")]
-public class ResetUsage : ICommandHandler<int, RetryPolicyResetUsage, object>
+public class ResetUsage(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, RetryPolicyResetUsage, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public ResetUsage(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, RetryPolicyResetUsage request)
     {

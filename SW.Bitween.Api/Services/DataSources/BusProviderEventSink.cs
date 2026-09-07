@@ -27,16 +27,11 @@ namespace SW.Bitween.Services.DataSources;
 /// whole contract: persist, then ack. A crash in between means redelivery, which is why every
 /// event carries a dedupe key.
 /// </summary>
-public class BusProviderEventSink : IAdapterEventSink
+public class BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusProviderEventSink> logger)
+    : IAdapterEventSink
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<BusProviderEventSink> _logger;
-
-    public BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusProviderEventSink> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly ILogger<BusProviderEventSink> _logger = logger;
 
     public async Task<EventOutcome> OnEventAsync(InboundEvent inboundEvent, CancellationToken cancellationToken)
     {

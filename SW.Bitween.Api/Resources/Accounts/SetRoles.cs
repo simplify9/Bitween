@@ -9,16 +9,11 @@ namespace SW.Bitween.Resources.Accounts;
 
 /// <summary>Replaces the whole set of roles a member holds.</summary>
 [HandlerName("setRoles")]
-public class SetRoles : ICommandHandler<int, SetAccountRolesModel, object>
+public class SetRoles(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, SetAccountRolesModel, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public SetRoles(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, SetAccountRolesModel request)
     {

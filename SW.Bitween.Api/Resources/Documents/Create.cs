@@ -12,21 +12,13 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.Documents
 {
-    public class Create : ICommandHandler<DocumentCreate,object>
+    public class Create(BitweenDbContext dbContext, RequestContext requestContext, IBroadcast broadcast,
+        IInfolinkCache cache) : ICommandHandler<DocumentCreate,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IBroadcast _broadcast;
-        private readonly IInfolinkCache _cache;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext, IBroadcast broadcast,
-            IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _broadcast = broadcast;
-            _cache = cache;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IBroadcast _broadcast = broadcast;
+        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(DocumentCreate model)
         {

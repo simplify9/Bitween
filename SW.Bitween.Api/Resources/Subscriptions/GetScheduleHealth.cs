@@ -19,7 +19,11 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// subscription left flagged as running so its concurrency guard blocks every fire.
 /// </summary>
 [HandlerName("schedulehealth")]
-public class GetScheduleHealth : IQueryHandler<SearchSubscriptionScheduleHealthModel, object>
+public class GetScheduleHealth(
+    BitweenDbContext dbContext,
+    RequestContext requestContext,
+    IScheduleRepository scheduleRepo,
+    ISchedulerFactory schedulerFactory) : IQueryHandler<SearchSubscriptionScheduleHealthModel, object>
 {
     /// <summary>
     /// Mirrors SW.Scheduler's internal Constants.JobParamsKey — the Quartz data-map
@@ -28,22 +32,10 @@ public class GetScheduleHealth : IQueryHandler<SearchSubscriptionScheduleHealthM
     /// </summary>
     private const string JobParamsKey = "JobParams";
 
-    private readonly BitweenDbContext dbContext;
-    private readonly RequestContext requestContext;
-    private readonly IScheduleRepository scheduleRepo;
-    private readonly ISchedulerFactory schedulerFactory;
-
-    public GetScheduleHealth(
-        BitweenDbContext dbContext,
-        RequestContext requestContext,
-        IScheduleRepository scheduleRepo,
-        ISchedulerFactory schedulerFactory)
-    {
-        this.dbContext = dbContext;
-        this.requestContext = requestContext;
-        this.scheduleRepo = scheduleRepo;
-        this.schedulerFactory = schedulerFactory;
-    }
+    private readonly BitweenDbContext dbContext = dbContext;
+    private readonly RequestContext requestContext = requestContext;
+    private readonly IScheduleRepository scheduleRepo = scheduleRepo;
+    private readonly ISchedulerFactory schedulerFactory = schedulerFactory;
 
     public async Task<object> Handle(SearchSubscriptionScheduleHealthModel request)
     {

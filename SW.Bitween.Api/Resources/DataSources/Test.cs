@@ -26,19 +26,12 @@ namespace SW.Bitween.Resources.DataSources;
 /// never drained, and it is stopped again before this returns.
 /// </summary>
 [HandlerName("test")]
-public class Test : ICommandHandler<int, DataSourceTestRequest, object>
+public class Test(BitweenDbContext dbContext, RequestContext requestContext,
+    IResidentAdapterHost adapters = null) : ICommandHandler<int, DataSourceTestRequest, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly IResidentAdapterHost _adapters;
-
-    public Test(BitweenDbContext dbContext, RequestContext requestContext,
-        IResidentAdapterHost adapters = null)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _adapters = adapters;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly IResidentAdapterHost _adapters = adapters;
 
     public async Task<object> Handle(int key, DataSourceTestRequest request)
     {

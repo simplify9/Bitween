@@ -9,16 +9,11 @@ using SW.Bitween.Domain;
 namespace SW.Bitween.Resources.ApiGateways
 {
     [HandlerName(nameof(UpdatePartner))]
-    public class UpdatePartner : ICommandHandler<int, ApiGatewayPartnerCreate, object>
+public class UpdatePartner(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<int, ApiGatewayPartnerCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public UpdatePartner(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(int gatewayId, ApiGatewayPartnerCreate model)
         {

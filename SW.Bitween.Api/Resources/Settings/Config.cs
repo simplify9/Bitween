@@ -6,15 +6,10 @@ namespace SW.Bitween.Resources.Settings;
 
 [Unprotect]
 [HandlerName("Config")]
-public class Config : IQueryHandler<object>
+public class Config(BitweenOptions BitweenOptions, ThemeOptions themeOptions) : IQueryHandler<object>
 {
-    private readonly BitweenOptions _BitweenOptions;
-    private readonly ThemeOptions _themeOptions;
-    public Config(BitweenOptions BitweenOptions, ThemeOptions themeOptions)
-    {
-        _BitweenOptions = BitweenOptions;
-        _themeOptions = themeOptions;
-    }
+    private readonly BitweenOptions _BitweenOptions = BitweenOptions;
+    private readonly ThemeOptions _themeOptions = themeOptions;
 
     public async Task<object> Handle()
     {

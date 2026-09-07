@@ -13,16 +13,10 @@ namespace SW.Bitween.Resources.Accounts;
 /// permissions it returns are what the UI uses to decide which pages and actions to show.
 /// </summary>
 [HandlerName("profile")]
-public class Profile : IQueryHandler<object>
+public class Profile(BitweenDbContext dbContext, RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext dbContext;
-    private readonly RequestContext requestContext;
-
-    public Profile(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        this.dbContext = dbContext;
-        this.requestContext = requestContext;
-    }
+    private readonly BitweenDbContext dbContext = dbContext;
+    private readonly RequestContext requestContext = requestContext;
 
     public async Task<object> Handle()
     {

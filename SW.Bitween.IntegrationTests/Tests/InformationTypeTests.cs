@@ -24,15 +24,9 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// is created — the damage shows up later as messages arriving somewhere nobody meant them to.
 /// </remarks>
 [Collection("Bitween")]
-public class InformationTypeTests
+public class InformationTypeTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public InformationTypeTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
+    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 

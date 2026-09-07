@@ -13,14 +13,9 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class DelayedRetriesTests
+public class DelayedRetriesTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public DelayedRetriesTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private readonly BitweenFixture _fixture = fixture;
 
     private static SearchyRequest EmptySearch() => new()
     {

@@ -11,12 +11,9 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Sdk
 {
-    public class BitweenClient : ApiClientBase<BitweenClientOptions>, IBasicApiClient
+    public class BitweenClient(HttpClient httpClient, RequestContext requestContext,
+        BitweenClientOptions BitweenClientOptions) : ApiClientBase<BitweenClientOptions>(httpClient, requestContext, BitweenClientOptions), IBasicApiClient
     {
-        public BitweenClient(HttpClient httpClient, RequestContext requestContext, BitweenClientOptions BitweenClientOptions) : base(httpClient, requestContext, BitweenClientOptions)
-        {
-        }
-
         public Task<ApiResult<int?>> Create<TRequest>(string url, TRequest payload)
         {
             return Builder.Jwt().Path(url).AsApiResult<int?>().PostAsync(payload);

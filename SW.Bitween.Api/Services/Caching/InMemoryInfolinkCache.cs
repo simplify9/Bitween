@@ -16,26 +16,18 @@ public class RevokeCacheMessage
 {
 }
 
-public class InMemoryBitweenCache : IInfolinkCache
+public class InMemoryBitweenCache(IMemoryCache memoryCache, IServiceScopeFactory ssf,
+    ILogger<InMemoryBitweenCache> logger) : IInfolinkCache
 {
-    private readonly IMemoryCache _cache;
-    private readonly IServiceScopeFactory _ssf;
-    private readonly ILogger<InMemoryBitweenCache> _logger;
+    private readonly IMemoryCache _cache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+    private readonly IServiceScopeFactory _ssf = ssf ?? throw new ArgumentNullException(nameof(ssf));
+    private readonly ILogger<InMemoryBitweenCache> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>How many times <see cref="Load"/> re-reads before publishing regardless.</summary>
     private const int MaxLoadAttempts = 3;
 
     /// <summary>Bumped by every <see cref="Revoke"/>, so a load can tell one overtook it.</summary>
     private long _generation;
-
-
-    public InMemoryBitweenCache(IMemoryCache memoryCache, IServiceScopeFactory ssf,
-        ILogger<InMemoryBitweenCache> logger)
-    {
-        _cache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
-        _ssf = ssf ?? throw new ArgumentNullException(nameof(ssf));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
 
     /// <summary>
     /// Reads every cached set from the database and publishes it.

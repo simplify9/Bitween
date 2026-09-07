@@ -6,16 +6,10 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.GlobalAdapterValuesSets
 {
-    public class Get : IGetHandler<string, object>
+    public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<string, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Get(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
 
         public async Task<object> Handle(string key)
         {

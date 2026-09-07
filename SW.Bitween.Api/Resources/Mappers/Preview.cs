@@ -24,16 +24,11 @@ public class MapperPreviewResponse
     public string? Error { get; set; }
 }
 
-public class Preview : ICommandHandler<MapperPreviewRequest, MapperPreviewResponse>
+public class Preview(RequestContext requestContext, BitweenDbContext dbContext)
+    : ICommandHandler<MapperPreviewRequest, MapperPreviewResponse>
 {
-    private readonly RequestContext _requestContext;
-    private readonly BitweenDbContext _dbContext;
-
-    public Preview(RequestContext requestContext, BitweenDbContext dbContext)
-    {
-        _requestContext = requestContext;
-        _dbContext = dbContext;
-    }
+    private readonly RequestContext _requestContext = requestContext;
+    private readonly BitweenDbContext _dbContext = dbContext;
 
     public async Task<MapperPreviewResponse> Handle(MapperPreviewRequest request)
     {

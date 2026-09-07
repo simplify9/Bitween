@@ -22,21 +22,13 @@ namespace SW.Bitween.Resources.Subscriptions
     /// empty, inactive subscription it always did.
     /// </para>
     /// </summary>
-    public class Create : ICommandHandler<SubscriptionCreate, object>
+    public class Create(BitweenDbContext dbContext, RequestContext requestContext,
+        IInfolinkCache BitweenCache, SubscriptionSchedulerService subScheduler) : ICommandHandler<SubscriptionCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext,
-            IInfolinkCache BitweenCache, SubscriptionSchedulerService subScheduler)
-        {
-            this._dbContext = dbContext;
-            _requestContext = requestContext;
-            _BitweenCache = BitweenCache;
-            _subScheduler = subScheduler;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _BitweenCache = BitweenCache;
+        private readonly SubscriptionSchedulerService _subScheduler = subScheduler;
 
         public async Task<object> Handle(SubscriptionCreate model)
         {

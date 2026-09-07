@@ -13,16 +13,11 @@ namespace SW.Bitween.Resources.Accounts;
 /// Changing your own password goes through ChangePassword, which asks for the current one.
 /// </summary>
 [HandlerName("setPassword")]
-public class SetPassword : ICommandHandler<int, SetAccountPasswordModel, object>
+public class SetPassword(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, SetAccountPasswordModel, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public SetPassword(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
+    private readonly BitweenDbContext _dbContext = dbContext;
+    private readonly RequestContext _requestContext = requestContext;
 
     public async Task<object> Handle(int key, SetAccountPasswordModel request)
     {

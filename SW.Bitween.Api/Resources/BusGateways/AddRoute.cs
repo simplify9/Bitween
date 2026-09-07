@@ -9,22 +9,14 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.BusGateways
 {
     [HandlerName(nameof(AddRoute))]
-    public class AddRoute : ICommandHandler<int, BusGatewayRouteCreate, object>
+    public class AddRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache,
+        AdapterRequirements adapterRequirements) : ICommandHandler<int, BusGatewayRouteCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
+        private readonly BitweenDbContext _dbContext = dbContext;
+        private readonly RequestContext _requestContext = requestContext;
+        private readonly IInfolinkCache _cache = cache;
 
-        private readonly AdapterRequirements _adapterRequirements;
-
-        public AddRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache,
-            AdapterRequirements adapterRequirements)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-            _adapterRequirements = adapterRequirements;
-        }
+        private readonly AdapterRequirements _adapterRequirements = adapterRequirements;
 
         public async Task<object> Handle(int gatewayId, BusGatewayRouteCreate model)
         {
