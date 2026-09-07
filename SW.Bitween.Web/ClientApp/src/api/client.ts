@@ -11,6 +11,7 @@ import type {
   BusGateway,
   BusGatewayDetail,
   BusGatewayRow,
+  DataSourceProvider,
   DataSourceDetail,
   DataSourceInspectResult,
   DataSourceRow,
@@ -315,6 +316,8 @@ export interface ApiClient {
   deleteBusGateway(id: number): Promise<void>;
 
   // ——— Data sources ———
+  /** What Bitween can connect to, and what each provider accepts. */
+  listDataSourceProviders(): Promise<DataSourceProvider[]>;
   listDataSources(): Promise<DataSourceRow[]>;
   searchDataSources(query: {
     search: string;
@@ -327,6 +330,8 @@ export interface ApiClient {
     adapterId: string;
     properties: Record<string, string>;
     secretProperties: string[];
+    /** Broker, Relational, Document, ObjectStore or Http — the provider declares it. */
+    kind?: string;
   }): Promise<{ id: number }>;
   updateDataSource(
     id: number,

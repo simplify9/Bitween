@@ -1,78 +1,68 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { api } from "../../api";
+import { keys } from "../../api/queryKeys";
+import type { DataSourceProvider, DataSourceProviderSetting } from "../../api/types";
+
 /**
- * The bus providers Bitween ships, and what each expects.
+ * The bus providers this deployment can offer.
  *
- * Connection settings are untyped by design — a provider must not be limited to the subset of a
- * broker's model Bitween happens to have modelled — but an empty key/value grid is not a form
- * anyone can fill in. This is presentation only: it decides which fields a new data source starts
- * with, not which ones the adapter will accept.
+ * This used to be a hand-written table right here: the fields each provider starts with, their
+ * defaults, their allowed values, which of them are credentials. That is a copy of a contract the
+ * front end does not own, and it drifted — a hint told operators to set "Tls" while the adapter
+ * only ever read "UseSsl", so a connection that looked encrypted in this form was in the clear on
+ * the wire.
+ *
+ * The adapter declares its own settings now and the server reads them straight out of the package,
+ * so a provider added or a setting renamed shows up here without anyone editing the UI.
  */
-export interface BusProvider {
-  id: string;
-  label: string;
-  description: string;
-  /** Field name to a short explanation, shown under the input. */
-  hints: Record<string, string>;
-  defaults: Record<string, string>;
-  secrets: string[];
-}
+export const useDataSourceProviders = () =>
+  useQuery({
+    queryKey: keys.dataSources.providers,
+    queryFn: () => api.listDataSourceProviders(),
+    // Only changes when an adapter is republished, which is not something a session sees.
+    staleTime: 10 * 60 * 1000,
+  });
 
-export const BUS_PROVIDERS: BusProvider[] = [
-  {
-    id: "bitween.bus.rabbitmq",
-    label: "RabbitMQ",
-    description: "An AMQP broker the customer runs, separate from Bitween's own bus.",
-    defaults: {
-      Host: "",
-      Port: "5672",
-      UserName: "",
-      Password: "",
-      VirtualHost: "/",
-      DeclareMode: "assert",
-      Prefetch: "16",
-    },
-    secrets: ["Password"],
-    hints: {
-      DeclareMode:
-        "none — assume everything exists. assert — check and fail loudly if not. create — declare the queues.",
-      Prefetch: "How many messages the broker lets Bitween hold unacknowledged at once.",
-      Tls: "Set to true for anything that is not localhost — AMQP authenticates in the clear otherwise.",
-    },
-  },
-  {
-    id: "bitween.bus.sqs",
-    label: "Amazon SQS",
-    description:
-      "An SQS queue, including the one an Amazon Selling Partner notification subscription delivers to.",
-    defaults: {
-      Region: "eu-west-1",
-      AccessKeyId: "",
-      SecretAccessKey: "",
-      WaitTimeSeconds: "20",
-      VisibilityTimeoutSeconds: "60",
-      UnwrapSellingPartnerNotification: "false",
-    },
-    secrets: ["AccessKeyId", "SecretAccessKey"],
-    hints: {
-      AccessKeyId: "Leave both keys blank on AWS to use the instance profile or IRSA instead.",
-      VisibilityTimeoutSeconds:
-        "Must exceed how long Bitween takes to persist a message, or SQS redelivers one already being handled.",
-      UnwrapSellingPartnerNotification:
-        "true unwraps the SP-API envelope so subscriptions see the notification payload itself.",
-    },
-  },
-];
+export const providerOf = (
+  providers: DataSourceProvider[] | undefined,
+  adapterId: string,
+): DataSourceProvider | undefined => providers?.find((p) => p.adapterId === adapterId);
 
-export const providerOf = (adapterId: string): BusProvider | undefined =>
-  BUS_PROVIDERS.find((p) => p.id === adapterId);
-
-export const providerLabel = (adapterId: string): string =>
-  providerOf(adapterId)?.label ?? adapterId;
+export const settingOf = (
+  provider: DataSourceProvider | undefined,
+  name: string,
+): DataSourceProviderSetting | undefined =>
+  provider?.settings.find((s) => s.name.toLowerCase() === name.toLowerCase());
 
 /**
- * Whether a setting holds a credential. The backend decides this for real — and masks
- * accordingly — but the form needs to know before a value has ever been saved.
+ * The properties a new data source starts with: everything the adapter said is required, plus
+ * everything it gave a default. The rest stays off the form until someone adds it, because a form
+ * of twenty mostly-empty boxes hides the four that matter.
  */
-const CREDENTIAL = /password|secret|token|credential|apikey|accesskey|privatekey|connectionstring|sas|passphrase|certificate/i;
+export const initialProperties = (provider: DataSourceProvider): Record<string, string> =>
+  Object.fromEntries(
+    provider.settings
+      .filter((s) => s.required || s.default !== null)
+      .map((s) => [s.name, s.default ?? ""]),
+  );
 
-export const isSecretName = (name: string, declared: string[] = []): boolean =>
-  declared.some((d) => d.toLowerCase() === name.toLowerCase()) || CREDENTIAL.test(name);
+export const declaredSecrets = (provider: DataSourceProvider): string[] =>
+  provider.settings.filter((s) => s.secret).map((s) => s.name);
+
+/**
+ * Whether a setting holds a credential. The adapter says so for the settings it declares, and the
+ * backend masks on the same rule; this covers a property someone added by hand, before it has ever
+ * been saved.
+ */
+const CREDENTIAL =
+  /password|secret|token|credential|apikey|accesskey|privatekey|connectionstring|sas|passphrase|certificate/i;
+
+export const isSecretName = (
+  name: string,
+  declared: string[] = [],
+  setting?: DataSourceProviderSetting,
+): boolean =>
+  setting?.secret === true ||
+  declared.some((d) => d.toLowerCase() === name.toLowerCase()) ||
+  CREDENTIAL.test(name);

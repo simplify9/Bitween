@@ -1,5 +1,6 @@
 import type { ApiClient } from "../client";
 import type {
+  DataSourceProvider,
   DataSourceDetail,
   DataSourceInspectResult,
   DataSourceRow,
@@ -78,6 +79,11 @@ const toDetail = (raw: RawDataSource): DataSourceDetail => ({
 const EVERYTHING = 1_000_000;
 
 export const dataSourceMethods = {
+  async listDataSourceProviders(): Promise<DataSourceProvider[]> {
+    const providers = await get<DataSourceProvider[]>(`/datasources/Providers`);
+    return providers ?? [];
+  },
+
   async listDataSources(): Promise<DataSourceRow[]> {
     const res = await get<SearchyResponse<RawDataSource>>(
       `/datasources?offset=0&limit=${EVERYTHING}`,
@@ -109,11 +115,13 @@ export const dataSourceMethods = {
     adapterId: string;
     properties: Record<string, string>;
     secretProperties: string[];
+    kind?: string;
   }): Promise<{ id: number }> {
     const id = await post<number>("/datasources", {
       name: input.name,
       adapterId: input.adapterId,
-      kind: "Broker",
+      // What the provider says it connects to. Only a Broker can back a bus gateway.
+      kind: input.kind ?? "Broker",
       properties: input.properties,
       secretProperties: input.secretProperties,
       inactive: false,

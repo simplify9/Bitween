@@ -9,7 +9,7 @@ import { Pagination } from "../../components/ui/Pagination";
 import { Table } from "../../components/ui/Table";
 import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "./ConnectionBadge";
-import { providerLabel } from "./providers";
+import { providerOf, useDataSourceProviders } from "./providers";
 
 const PAGE_SIZE = 25;
 
@@ -26,6 +26,7 @@ export function DataSourcesPage() {
   const q = searchParams.get("q") ?? "";
   const offset = searchParams.get("offset") ? Number(searchParams.get("offset")) : 0;
 
+  const providers = useDataSourceProviders();
   const sources = useQuery({
     queryKey: keys.dataSources.search({ q, offset }),
     queryFn: () => api.searchDataSources({ search: q, offset, limit: PAGE_SIZE }),
@@ -134,7 +135,7 @@ export function DataSourcesPage() {
             {
               header: "Provider",
               cell: (d: DataSourceRow) => (
-                <span className="text-ink-700">{providerLabel(d.adapterId)}</span>
+                <span className="text-ink-700">{providerOf(providers.data, d.adapterId)?.label ?? d.adapterId}</span>
               ),
             },
             {

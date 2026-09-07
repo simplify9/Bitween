@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Gauge, Plug, Plus, Telescope, Trash2, X } from "lucide-react";
@@ -6,43 +6,22 @@ import {
   api,
   ApiRequestError,
   SECRET_SENTINEL,
-  type DataSourceDetail,
   type DataSourceInspectResult,
   type DataSourceTestResult,
 } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basics";
-import { Checkbox, Field, PasswordInput, TextInput } from "../../components/ui/forms";
+import { Checkbox, Field, PasswordInput, Select, TextInput } from "../../components/ui/forms";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { BackLink } from "../../components/ui/BackLink";
 import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "./ConnectionBadge";
-import { isSecretName, providerOf } from "./providers";
+import { isSecretName, providerOf, settingOf, useDataSourceProviders } from "./providers";
 import { LiveConnection } from "./LiveConnection";
+import { draftOf, editableFingerprint, type Draft } from "./draft";
 
 /** A draft is the whole editable surface, so the save bar can compare against what was loaded. */
-interface Draft {
-  name: string;
-  inactive: boolean;
-  deduplicationWindowDays: number;
-  softMemoryLimitMb: number;
-  hardMemoryLimitMb: number;
-  cpuPercentLimit: number;
-  cpuLimitSamples: number;
-  properties: Record<string, string>;
-}
-
-const draftOf = (d: DataSourceDetail): Draft => ({
-  name: d.name,
-  inactive: d.inactive,
-  deduplicationWindowDays: d.deduplicationWindowDays,
-  softMemoryLimitMb: d.softMemoryLimitMb,
-  hardMemoryLimitMb: d.hardMemoryLimitMb,
-  cpuPercentLimit: d.cpuPercentLimit,
-  cpuLimitSamples: d.cpuLimitSamples,
-  properties: { ...d.properties },
-});
 
 /**
  * One connection: its settings, whether it works, and who is holding it.
@@ -58,6 +37,7 @@ export function DataSourcePage() {
   const queryClient = useQueryClient();
   const canEdit = useSessionCan("data-sources.edit");
 
+  const providers = useDataSourceProviders();
   const source = useQuery({
     queryKey: keys.dataSources.detail(dataSourceId),
     queryFn: () => api.getDataSource(dataSourceId),
@@ -72,10 +52,19 @@ export function DataSourcePage() {
   const [inspect, setInspect] = useState<DataSourceInspectResult | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  // Re-seed whenever the server's copy changes: saving re-masks the secrets, so the form has to
-  // go back to showing "stored" rather than a value the server will never return again.
+  // Re-seed when the server's copy of the SETTINGS changes — saving re-masks the secrets, so the
+  // form has to go back to showing "stored" rather than a value the server will never return
+  // again. Not on every response: this query is polled for the connection panel, and re-seeding on
+  // each poll silently threw away anything typed but not yet saved.
+  const seeded = useRef<string | null>(null);
   useEffect(() => {
-    if (source.data) setDraft(draftOf(source.data));
+    if (!source.data) return;
+
+    const fingerprint = editableFingerprint(source.data);
+    if (seeded.current === fingerprint) return;
+
+    seeded.current = fingerprint;
+    setDraft(draftOf(source.data));
   }, [source.data]);
 
   const save = useMutation({
@@ -146,7 +135,7 @@ export function DataSourcePage() {
   // Only ever used to illustrate what a percentage means. This is the BROWSER's core count, not
   // the node's, so it is a rough translation rather than a claim about the server.
   const cores = navigator.hardwareConcurrency || 8;
-  const provider = providerOf(d.adapterId);
+  const provider = providerOf(providers.data, d.adapterId);
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(d));
 
   const setProperty = (key: string, value: string) =>
@@ -157,6 +146,12 @@ export function DataSourcePage() {
     delete properties[key];
     setDraft({ ...draft, properties });
   };
+
+  // Declared by the adapter but not on this data source yet — offered rather than imposed, so a
+  // form does not open with twenty empty boxes.
+  const unused = (provider?.settings ?? [])
+    .map((setting) => setting.name)
+    .filter((name) => !(name in draft.properties));
 
   const addProperty = () => {
     const key = newKey.trim();
@@ -487,13 +482,15 @@ export function DataSourcePage() {
           <div className="border-t border-ink-100 pt-4">
             <h3 className="mb-1 text-sm font-medium text-ink-800">Connection settings</h3>
             <p className="mb-3 text-[12px] text-ink-500">
-              Handed straight to the adapter. Bitween does not model any broker's topology, so
-              anything the provider understands can go here.
+              Handed straight to the adapter, which is also where this list comes from:{" "}
+              {provider ? provider.label : d.adapterId} declares what it accepts. Anything else it
+              understands can still be added by hand.
             </p>
 
             <div className="flex flex-col gap-3">
               {Object.keys(draft.properties).map((key) => {
-                const secret = isSecretName(key, d.secretProperties);
+                const declared = settingOf(provider, key);
+                const secret = isSecretName(key, d.secretProperties, declared);
                 const value = draft.properties[key];
                 const stored = secret && value === SECRET_SENTINEL;
 
@@ -501,11 +498,24 @@ export function DataSourcePage() {
                   <div key={key} className="flex items-start gap-2">
                     <div className="flex-1">
                       <Field
-                        label={key}
+                        label={declared?.required ? `${key} *` : key}
                         htmlFor={`ds-prop-${key}`}
-                        hint={stored ? "Stored. Type to replace it." : provider?.hints[key]}
+                        hint={stored ? "Stored. Type to replace it." : declared?.hint}
                       >
-                        {secret ? (
+                        {declared?.allowedValues ? (
+                          <Select
+                            id={`ds-prop-${key}`}
+                            value={value}
+                            disabled={!canEdit}
+                            onChange={(e) => setProperty(key, e.target.value)}
+                            // An empty option only where empty is legal: a setting the adapter did
+                            // not mark required can be left for the broker to decide.
+                            options={[
+                              ...(declared.required ? [] : [{ value: "", label: "—" }]),
+                              ...declared.allowedValues.map((v) => ({ value: v, label: v })),
+                            ]}
+                          />
+                        ) : secret ? (
                           <PasswordInput
                             id={`ds-prop-${key}`}
                             value={stored ? "" : value}
@@ -518,6 +528,7 @@ export function DataSourcePage() {
                         ) : (
                           <TextInput
                             id={`ds-prop-${key}`}
+                            type={declared?.type === "number" ? "number" : "text"}
                             value={value}
                             disabled={!canEdit}
                             onChange={(e) => setProperty(key, e.target.value)}
@@ -546,15 +557,28 @@ export function DataSourcePage() {
                   <Field
                     label="Add a setting"
                     htmlFor="ds-new-key"
-                    hint="A name that looks like a credential is masked automatically."
+                    hint={
+                      unused.length > 0
+                        ? `${provider?.label ?? "This provider"} also accepts ${unused
+                            .slice(0, 3)
+                            .join(", ")}${unused.length > 3 ? ` and ${unused.length - 3} more` : ""}.`
+                        : "A name that looks like a credential is masked automatically."
+                    }
                   >
                     <TextInput
                       id="ds-new-key"
+                      list="ds-known-settings"
                       value={newKey}
-                      placeholder="QueueType"
+                      placeholder={unused[0] ?? "QueueType"}
                       onChange={(e) => setNewKey(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addProperty()}
                     />
+                    {/* Typing is still allowed: an adapter may read more than it declares. */}
+                    <datalist id="ds-known-settings">
+                      {unused.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
                   </Field>
                 </div>
                 <Button onClick={addProperty} disabled={!newKey.trim()}>

@@ -7,7 +7,7 @@ import { Field, Select, TextInput } from "../../components/ui/forms";
 import { Dialog } from "../../components/ui/overlays";
 import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "../data-sources/ConnectionBadge";
-import { providerLabel } from "../data-sources/providers";
+import { providerOf, useDataSourceProviders } from "../data-sources/providers";
 
 
 /**
@@ -31,12 +31,18 @@ export function SourceDialog({
   const [endpoint, setEndpoint] = useState(gateway.endpoint ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  const providers = useDataSourceProviders();
   const sources = useQuery({
     queryKey: keys.dataSources.list,
     queryFn: () => api.listDataSources(),
   });
 
-  const available = sources.data ?? [];
+  // Brokers only. A data source can also be a database or an object store held open by a resident
+  // adapter, and none of those has a queue for a gateway to read — the API refuses them too, so
+  // this is the same rule stated where the operator can see it rather than a second one.
+  const available = (sources.data ?? []).filter(
+    (s) => (s.kind ?? "Broker").toLowerCase() === "broker",
+  );
   const selected = available.find((s) => s.id === dataSourceId);
 
   const save = useMutation({
@@ -101,7 +107,7 @@ export function SourceDialog({
 
         {available.length === 0 && (
           <InlineNotice>
-            No data sources exist yet, so there is no broker to point at.{" "}
+            No broker data sources exist yet, so there is nothing to point at.{" "}
             <Link to="/data-sources/new" className="font-medium text-crimson-700 hover:underline">
               Add one first
             </Link>
@@ -118,7 +124,7 @@ export function SourceDialog({
                 onChange={(e) => setDataSourceId(Number(e.target.value))}
                 options={available.map((s) => ({
                   value: String(s.id),
-                  label: `${s.name} — ${providerLabel(s.adapterId)}${s.inactive ? " (inactive)" : ""}`,
+                  label: `${s.name} — ${providerOf(providers.data, s.adapterId)?.label ?? s.adapterId}${s.inactive ? " (inactive)" : ""}`,
                 }))}
               />
             </Field>

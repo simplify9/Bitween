@@ -498,12 +498,55 @@ public class DataSourceApiTests
         Assert.NotNull(result.Error);
     }
 
+    /// <summary>
+    /// A data source is not only a broker: a resident adapter holding a database session is one
+    /// too, and one of those has no queue for a gateway to consume. Refusing it here matters more
+    /// than the menu that hides it — the menu is a courtesy, this is the rule.
+    /// </summary>
+    [Fact]
+    public async Task A_bus_gateway_cannot_read_from_a_non_broker_data_source()
+    {
+        var dataSourceId = await CreateAsync(new Dictionary<string, string>(), kind: "Relational");
+        var documentId = await CreateDocumentAsync();
+
+        await using var scope = _fixture.CreateScope();
+        scope.Superuser();
+        var create = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => create.Handle(new BusGatewayCreate
+        {
+            Name = Unique("gw"),
+            DocumentId = documentId,
+            DataSourceId = dataSourceId,
+            Endpoint = "orders"
+        }));
+
+        Assert.Contains("Broker", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And the same rule on the way in through an edit, which is the path that would otherwise
+    /// move a working gateway onto a database connection.
+    /// </summary>
+    [Fact]
+    public async Task A_bus_gateway_cannot_be_moved_onto_a_non_broker_data_source()
+    {
+        var broker = await CreateAsync(new Dictionary<string, string>());
+        var database = await CreateAsync(new Dictionary<string, string>(), kind: "Relational");
+        var gatewayId = await CreateGatewayAsync(broker, Unique("q"));
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            () => UpdateGatewayAsync(gatewayId, database, "orders"));
+
+        Assert.Contains("Broker", error.Message, StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}"[..20];
 
     private async Task<int> CreateAsync(Dictionary<string, string> properties,
-        string name = null, List<string> secretProperties = null)
+        string name = null, List<string> secretProperties = null, string kind = "Broker")
     {
         await using var scope = _fixture.CreateScope();
         scope.Superuser();
@@ -513,7 +556,7 @@ public class DataSourceApiTests
         {
             Name = name ?? Unique("ds"),
             AdapterId = BusAdapters.RabbitMq,
-            Kind = "Broker",
+            Kind = kind,
             Properties = properties,
             SecretProperties = secretProperties ?? ["Password"]
         });

@@ -1176,3 +1176,33 @@ export interface DashboardData {
     pausedSubscriptions: { id: number; name: string }[];
   };
 }
+
+/**
+ * One connection setting, as the adapter itself declares it. The UI keeps no list of its own —
+ * see DataSourceProviderCatalog on the server for why.
+ */
+export interface DataSourceProviderSetting {
+  name: string;
+  /** string, number or boolean — enough to pick an input, nothing more. */
+  type: "string" | "number" | "boolean";
+  hint: string | null;
+  /** What a new data source starts with. Null means start it empty. */
+  default: string | null;
+  /** When present, the only legal values: rendered as a menu instead of a text box. */
+  allowedValues: string[] | null;
+  secret: boolean;
+  required: boolean;
+}
+
+export interface DataSourceProvider {
+  adapterId: string;
+  label: string;
+  /**
+   * What it connects to: Broker, Relational, Document, ObjectStore or Http. A bus gateway can
+   * only read from a Broker — a provider that holds a database session is a data source too, but
+   * it has no queue to consume.
+   */
+  kind: string;
+  description: string | null;
+  settings: DataSourceProviderSetting[];
+}

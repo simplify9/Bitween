@@ -169,6 +169,11 @@ namespace SW.Bitween.Web
                 configure.AdapterRemotePath = bitweenOptions.AdapterPath;
             });
 
+            // Describes what each bus provider accepts, read from the adapter packages. Not
+            // behind BusProvidersEnabled: a node that does not run connections still configures
+            // them, and describing an adapter never starts one.
+            services.AddSingleton<DataSourceProviderCatalog>();
+
             // External bus providers. Off by default because it is opt-in, not because it is
             // unsafe to run on more than one node: a broker connection is exclusive, and every
             // data source is held through a lease with a database-issued fencing term, so only

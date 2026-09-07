@@ -51,10 +51,22 @@ namespace SW.Bitween.Resources.BusGateways
         {
             if (model.DataSourceId == null) return;
 
-            var exists = await dbContext.Set<Domain.DataSources.DataSource>()
-                .AnyAsync(d => d.Id == model.DataSourceId);
-            if (!exists)
+            // FirstOrDefaultAsync rather than a projection: FluentValidation is in scope here and
+            // its own Where extension wins the overload.
+            var dataSource = await dbContext.Set<Domain.DataSources.DataSource>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == model.DataSourceId);
+            if (dataSource == null)
                 throw new SWNotFoundException($"DataSource with Id {model.DataSourceId} not found");
+
+            // A data source is not only a broker connection — a resident adapter holding a database
+            // session is one too — and only a broker has queues to consume. Reading this from the
+            // kind rather than from the adapter id keeps the rule true for providers nobody has
+            // written yet.
+            if (dataSource.Kind != Domain.DataSources.DataSourceKind.Broker)
+                throw new SWException(
+                    $"Data source {model.DataSourceId} is a {dataSource.Kind} connection. A bus "
+                    + "gateway reads messages from a queue or topic, so it can only use a Broker.");
 
             if (string.IsNullOrWhiteSpace(model.Endpoint))
                 throw new SWException(

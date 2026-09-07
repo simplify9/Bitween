@@ -71,6 +71,8 @@ export const keys = {
 
   dataSources: {
     all: ["data-sources"] as const,
+    /** The provider catalog, described by the adapters themselves. Rarely changes; cached hard. */
+    providers: ["data-sources", "providers"] as const,
     list: ["data-sources", "list"] as const,
     search: (params: Record<string, unknown>) => ["data-sources", "search", params] as const,
     detail: (id: number | string) => ["data-sources", "detail", id] as const,

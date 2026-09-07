@@ -48,4 +48,8 @@
     <ProjectReference Include="..\SW.Bitween.Sdk\SW.Bitween.Sdk.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reads adapter assemblies without loading them; see BusProviderCatalog. -->
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="9.0.0" />
+  </ItemGroup>
 </Project>

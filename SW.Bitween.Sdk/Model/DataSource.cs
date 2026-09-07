@@ -188,3 +188,57 @@ public class DataSourceInspectResult
 
     public string Error { get; set; }
 }
+
+/// <summary>
+/// What a bus provider accepts, as the adapter itself declares it.
+///
+/// This exists so the UI can render a data source form without knowing anything about brokers. The
+/// alternative — the one this replaced — is a table of fields, defaults and allowed values kept by
+/// hand in the front end, which is a copy of a contract it does not own and cannot be told when it
+/// changes.
+/// </summary>
+public class DataSourceProviderDescriptor
+{
+    public string AdapterId { get; set; }
+
+    /// <summary>What to call it in a menu. The adapter id when the adapter did not say.</summary>
+    public string Label { get; set; }
+
+    /// <summary>
+    /// Which DataSourceKind this provider produces — Broker, Relational, Document, ObjectStore or
+    /// Http. A data source is not only a broker connection: a resident adapter that holds a
+    /// database session is one too, and it must never be offered as a bus gateway's source.
+    /// </summary>
+    public string Kind { get; set; } = "Broker";
+
+    public string Description { get; set; }
+
+    public List<DataSourceProviderSetting> Settings { get; set; } = [];
+}
+
+/// <summary>One connection setting an operator can fill in.</summary>
+public class DataSourceProviderSetting
+{
+    public const string StringType = "string";
+    public const string NumberType = "number";
+    public const string BooleanType = "boolean";
+
+    /// <summary>The property name the adapter binds by — this is the data source property key.</summary>
+    public string Name { get; set; }
+
+    /// <summary>string, number or boolean. Coarse on purpose: it picks an input, nothing more.</summary>
+    public string Type { get; set; } = StringType;
+
+    public string Hint { get; set; }
+
+    /// <summary>What a new data source starts with. Null means start it empty.</summary>
+    public string Default { get; set; }
+
+    /// <summary>When set, the only legal values — the UI offers these instead of free text.</summary>
+    public string[] AllowedValues { get; set; }
+
+    /// <summary>Masked in responses and never shown back once stored.</summary>
+    public bool Secret { get; set; }
+
+    public bool Required { get; set; }
+}

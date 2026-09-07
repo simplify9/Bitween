@@ -11,4 +11,9 @@
     <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
     <PackageReference Include="SimplyWorks.Serverless.Sdk" Version="8.1.19" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The settings contract is source, not a package: adapters target net8.0 while the rest of
+         the solution is on net10.0, and Bitween matches these attributes by name anyway. -->
+    <Compile Include="..\SW.Bitween.Adapters.Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
