@@ -15,8 +15,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class DelayedRetriesTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     private static SearchyRequest EmptySearch() => new()
     {
         PageSize = 50,
@@ -46,7 +44,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task Retry_throws_when_auto_retry_already_scheduled()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (_, _, xchange) = await CreateSubscriptionWithXchange(db, xs, "Retry Guard Doc");
@@ -63,7 +61,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task Retry_succeeds_when_no_auto_retry_scheduled()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (_, _, xchange) = await CreateSubscriptionWithXchange(db, xs, "Retry OK Doc");
@@ -78,7 +76,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task BulkRetry_skips_ids_with_scheduled_auto_retry_and_processes_others()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -107,7 +105,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task DelayedRetries_Search_returns_expected_row()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (doc, sub, xchange) = await CreateSubscriptionWithXchange(db, xs, "Search Row Doc");
@@ -133,7 +131,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task RunNow_executes_immediately_even_when_not_yet_due_and_removes_record()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var ctx = scope.Superuser();
@@ -156,7 +154,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task RunNow_throws_when_nothing_is_scheduled()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var ctx = scope.Superuser();
@@ -172,7 +170,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task Xchanges_Search_includes_ScheduledRetryOn_when_delayed_retry_exists()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (_, _, xchange) = await CreateSubscriptionWithXchange(db, xs, "Xchange Search Scheduled Doc");
@@ -193,7 +191,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
     [Fact]
     public async Task Xchanges_Search_has_null_ScheduledRetryOn_when_no_delayed_retry_exists()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (_, _, xchange) = await CreateSubscriptionWithXchange(db, xs, "Xchange Search Unscheduled Doc");

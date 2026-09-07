@@ -12,12 +12,10 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext, I
         : ICommandHandler<BusGatewayCreate, object>
     {
         private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(BusGatewayCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Create);
+            await requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Create);
 
             var documentExists = await _dbContext.Set<Document>().AnyAsync(d => d.Id == model.DocumentId);
             if (!documentExists)
@@ -37,7 +35,7 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext, I
 
             _dbContext.Add(entity);
             await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await cache.BroadcastRevoke();
             return entity.Id;
         }
 

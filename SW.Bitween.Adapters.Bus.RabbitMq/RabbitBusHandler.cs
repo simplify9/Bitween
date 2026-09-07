@@ -28,7 +28,6 @@ namespace SW.Bitween.Adapters.Bus.RabbitMq;
 public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBusHandler> logger) : IResidentAdapter
 {
     private readonly RabbitOptions _options = options.Value;
-    private readonly ILogger<RabbitBusHandler> _logger = logger;
 
     private IAdapterContext _context;
     private IConnection _connection;
@@ -80,7 +79,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
         {
             _state = "Disconnected";
             _lastError = $"{e.ReplyCode} {e.ReplyText}";
-            _logger.LogWarning("Connection to {Host} closed: {Reason}", _options.Host, e.ReplyText);
+            logger.LogWarning("Connection to {Host} closed: {Reason}", _options.Host, e.ReplyText);
         };
 
         _publishChannel = _connection.CreateModel();
@@ -95,7 +94,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
         if (!_options.Consume)
         {
             _state = "Idle";
-            _logger.LogInformation("Connected to {Host} without consuming (Consume=false).", _options.Host);
+            logger.LogInformation("Connected to {Host} without consuming (Consume=false).", _options.Host);
             return Task.CompletedTask;
         }
 
@@ -109,7 +108,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
         }
 
         _state = _endpoints.Count == 0 ? "Idle" : "Connected";
-        _logger.LogInformation("Connected to {Host}:{Port}{VHost}, consuming {Count} endpoint(s) with prefetch {Prefetch}.",
+        logger.LogInformation("Connected to {Host}:{Port}{VHost}, consuming {Count} endpoint(s) with prefetch {Prefetch}.",
             _options.Host, _options.Port, _options.VirtualHost, _endpoints.Count, _options.Prefetch);
 
         return Task.CompletedTask;
@@ -249,7 +248,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
                 lock (_consumeGate) _consumeChannel.BasicNack(delivery.DeliveryTag, multiple: false, requeue: true);
                 Interlocked.Increment(ref _nacked);
                 _lastError = result.Error;
-                _logger.LogWarning("Bitween rejected a message from {Endpoint}: {Error}. Requeued.",
+                logger.LogWarning("Bitween rejected a message from {Endpoint}: {Error}. Requeued.",
                     endpoint, result.Error);
             }
         }
@@ -261,7 +260,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
         {
             Interlocked.Increment(ref _failed);
             _lastError = ex.Message;
-            _logger.LogError(ex, "Failed to hand a delivery from {Endpoint} to Bitween.", endpoint);
+            logger.LogError(ex, "Failed to hand a delivery from {Endpoint} to Bitween.", endpoint);
             try { lock (_consumeGate) _consumeChannel.BasicNack(delivery.DeliveryTag, false, requeue: true); } catch { }
         }
     }
@@ -271,7 +270,7 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
     private string WarnUnkeyed(string endpoint)
     {
         if (Interlocked.Increment(ref _unkeyed) == 1)
-            _logger.LogWarning(
+            logger.LogWarning(
                 "A message arrived on {Endpoint} with no MessageId, so it cannot be deduplicated. " +
                 "A redelivery of it will be processed again. Publishers should set one.", endpoint);
 

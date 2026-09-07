@@ -29,11 +29,9 @@ public class ResidentAsPipelineAdapterTests(BitweenFixture fixture)
     private const string ResidentHandlerId = "infolink6.handlers.residenttest";
     private const string ClassicHandlerId = "infolink6.handlers.classictest";
 
-    private readonly BitweenFixture _fixture = fixture;
-
     private async Task InstallAsync()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var cloudFiles = scope.ServiceProvider.GetRequiredService<ICloudFilesService>();
 
         // The same sample twice, under two names. The only difference the host could possibly see
@@ -105,7 +103,7 @@ public class ResidentAsPipelineAdapterTests(BitweenFixture fixture)
     {
         const string oddlyNamedId = "acme.orders.processor";
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var cloudFiles = scope.ServiceProvider.GetRequiredService<ICloudFilesService>();
             await AdapterInstaller.InstallAsync(cloudFiles,
@@ -140,7 +138,7 @@ public class ResidentAsPipelineAdapterTests(BitweenFixture fixture)
 
     private async Task<List<string>> ListAsync(string prefix)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
 
         var handler = ActivatorUtilities.CreateInstance<Resources.Adapters.SearchVersioned>(scope.ServiceProvider);
@@ -159,7 +157,7 @@ public class ResidentAsPipelineAdapterTests(BitweenFixture fixture)
 
     private async Task<IDictionary<string, string>?> StartupValuesAsync(string adapterId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
 
         var handler = ActivatorUtilities.CreateInstance<Resources.Adapters.GetProperties>(scope.ServiceProvider);

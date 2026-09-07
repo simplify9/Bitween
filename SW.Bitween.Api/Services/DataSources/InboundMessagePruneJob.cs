@@ -25,12 +25,9 @@ public class InboundMessagePruneJob(BitweenDbContext dbContext, ILogger<InboundM
 {
     private const int BatchSize = 5_000;
 
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly ILogger<InboundMessagePruneJob> _logger = logger;
-
     public async Task Execute()
     {
-        var windows = await _dbContext.Set<DataSource>().AsNoTracking()
+        var windows = await dbContext.Set<DataSource>().AsNoTracking()
             .Where(d => d.DeduplicationWindowDays > 0)
             .Select(d => new { d.Id, d.DeduplicationWindowDays })
             .ToListAsync();
@@ -45,15 +42,15 @@ public class InboundMessagePruneJob(BitweenDbContext dbContext, ILogger<InboundM
             // matter, and there is no urgency about finishing in one pass.
             while (true)
             {
-                var batch = await _dbContext.Set<InboundMessage>()
+                var batch = await dbContext.Set<InboundMessage>()
                     .Where(m => m.DataSourceId == window.Id && m.SeenOn < cutoff)
                     .Take(BatchSize)
                     .ToListAsync();
 
                 if (batch.Count == 0) break;
 
-                _dbContext.RemoveRange(batch);
-                await _dbContext.SaveChangesAsync();
+                dbContext.RemoveRange(batch);
+                await dbContext.SaveChangesAsync();
                 total += batch.Count;
 
                 if (batch.Count < BatchSize) break;
@@ -63,6 +60,6 @@ public class InboundMessagePruneJob(BitweenDbContext dbContext, ILogger<InboundM
         // A data source that has been deleted takes its rows with it via the cascade, so there is
         // nothing orphaned to sweep up here.
         if (total > 0)
-            _logger.LogInformation("Pruned {Count} dedupe keys past their retention window.", total);
+            logger.LogInformation("Pruned {Count} dedupe keys past their retention window.", total);
     }
 }

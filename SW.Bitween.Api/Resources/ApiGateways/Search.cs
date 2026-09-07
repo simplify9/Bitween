@@ -10,17 +10,14 @@ namespace SW.Bitween.Resources.ApiGateways
 {
     public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {
             // Lookup returns only id/name pairs, which pickers across the app rely on;
             // the full list is the data, so that's what the view permission covers.
             if (!lookup)
-                await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.View);
+                await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.View);
 
-            var query = from gateway in _dbContext.Set<ApiGateway>()
+            var query = from gateway in dbContext.Set<ApiGateway>()
                         select new ApiGatewayRow
                         {
                             Id = gateway.Id,
@@ -47,7 +44,7 @@ namespace SW.Bitween.Resources.ApiGateways
             // count), so hydrate it with one grouped query instead of Get.cs's
             // per-row Include (gateways are few, so this stays a single round trip).
             var ids = result.Select(r => r.Id).ToList();
-            var partnersByGateway = (await _dbContext.Set<ApiGatewayPartner>()
+            var partnersByGateway = (await dbContext.Set<ApiGatewayPartner>()
                 .AsNoTracking()
                 .Where(p => ids.Contains(p.ApiGatewayId))
                 .Include(p => p.Partner)

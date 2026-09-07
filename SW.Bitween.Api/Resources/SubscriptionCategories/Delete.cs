@@ -10,20 +10,17 @@ namespace SW.Bitween.Resources.SubscriptionCategories;
 public class Delete(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, DeleteSubscriptionCategoryModel,object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, DeleteSubscriptionCategoryModel _)
     {
-        var category = await _dbContext.Set<SubscriptionCategory>().FindAsync(key);
+        var category = await dbContext.Set<SubscriptionCategory>().FindAsync(key);
         if (category is null)
             throw new SWValidationException("CATEGORY_NOT_FOUND", $"Category with id {key} was not found");
 
-        if (await _dbContext.Set<Subscription>().AnyAsync(i => i.CategoryId.Value == category.Id))
+        if (await dbContext.Set<Subscription>().AnyAsync(i => i.CategoryId.Value == category.Id))
             throw new SWValidationException("CANT_BE_DELETED", "Categories with Subscriptions cant be deleted");
 
-        _dbContext.Remove(category);
-        await _dbContext.SaveChangesAsync();
+        dbContext.Remove(category);
+        await dbContext.SaveChangesAsync();
         return null;
     }
 }

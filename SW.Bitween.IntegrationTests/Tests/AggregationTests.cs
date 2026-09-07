@@ -16,15 +16,13 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class AggregationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task Aggregation_job_creates_one_xchange_from_successful_source_xchanges()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         // Source subscription whose Xchanges will be aggregated
         var sourceDoc = new Document(null, "Agg Source Doc", DocumentFormat.Json);
@@ -75,10 +73,10 @@ public class AggregationTests(BitweenFixture fixture)
     [Fact]
     public async Task Aggregation_job_skips_already_aggregated_xchanges()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var sourceDoc = new Document(null, "Agg Source Doc 2", DocumentFormat.Json);
         db.Set<Document>().Add(sourceDoc);
@@ -131,7 +129,7 @@ public class AggregationTests(BitweenFixture fixture)
     [Fact]
     public async Task Aggregation_job_does_nothing_for_inactive_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
 
@@ -163,10 +161,10 @@ public class AggregationTests(BitweenFixture fixture)
     [Fact]
     public async Task A_run_that_rolls_something_up_records_the_exchange_it_made()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var sourceDoc = new Document(null, "Agg Attempt Doc", DocumentFormat.Json);
         db.Set<Document>().Add(sourceDoc);
@@ -205,10 +203,10 @@ public class AggregationTests(BitweenFixture fixture)
     [Fact]
     public async Task A_run_with_nothing_outstanding_records_no_new_data_rather_than_nothing()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var sourceDoc = new Document(null, "Agg Empty Attempt Doc", DocumentFormat.Json);
         db.Set<Document>().Add(sourceDoc);
@@ -241,7 +239,7 @@ public class AggregationTests(BitweenFixture fixture)
     [Fact]
     public async Task An_inactive_aggregation_records_no_run_at_all()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<AggregationJob>();
 
@@ -276,7 +274,7 @@ public class AggregationTests(BitweenFixture fixture)
     /// <summary>An integration to roll up, and a partner to attribute the roll-up to.</summary>
     private async Task<(int sourceId, int partnerId)> Groundwork()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, Unique("Agg config doc"), DocumentFormat.Json);
@@ -297,7 +295,7 @@ public class AggregationTests(BitweenFixture fixture)
 
     private async Task<int> CreateAggregation(int sourceId, int partnerId, XchangeFileType? target)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Create>(scope.ServiceProvider);
 
@@ -322,7 +320,7 @@ public class AggregationTests(BitweenFixture fixture)
         var (sourceId, partnerId) = await Groundwork();
         var id = await CreateAggregation(sourceId, partnerId, XchangeFileType.Output);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var entity = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
 
@@ -335,7 +333,7 @@ public class AggregationTests(BitweenFixture fixture)
         var (sourceId, partnerId) = await Groundwork();
         var id = await CreateAggregation(sourceId, partnerId, null);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var entity = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
 
@@ -348,7 +346,7 @@ public class AggregationTests(BitweenFixture fixture)
         var (sourceId, partnerId) = await Groundwork();
         var id = await CreateAggregation(sourceId, partnerId, XchangeFileType.Input);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var update = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Update>(scope.ServiceProvider);
@@ -362,7 +360,7 @@ public class AggregationTests(BitweenFixture fixture)
             });
         }
 
-        await using var check = _fixture.CreateScope();
+        await using var check = fixture.CreateScope();
         var db = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var entity = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
 
@@ -375,7 +373,7 @@ public class AggregationTests(BitweenFixture fixture)
         var (sourceId, partnerId) = await Groundwork();
         var id = await CreateAggregation(sourceId, partnerId, XchangeFileType.Output);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var search = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Search>(scope.ServiceProvider);
 

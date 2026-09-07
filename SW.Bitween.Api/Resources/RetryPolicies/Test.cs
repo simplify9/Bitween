@@ -14,13 +14,10 @@ namespace SW.Bitween.Resources.RetryPolicies;
 public class Test(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<TestRetryPolicyRequest, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(TestRetryPolicyRequest request)
     {
         // A pure simulation with no side effects, so viewing a policy is enough to dry-run one.
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.View);
 
         if (request.ResultType == XchangeResultType.Success)
             throw new SWValidationException("INVALID_RESULT_TYPE",

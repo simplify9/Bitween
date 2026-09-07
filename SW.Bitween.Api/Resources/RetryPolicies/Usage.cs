@@ -31,24 +31,20 @@ namespace SW.Bitween.Resources.RetryPolicies;
 public class Usage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
     : ICommandHandler<int, RetryPolicyUsageRequest, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly RetryUsageReport _report = report;
-
     public async Task<object> Handle(int key, RetryPolicyUsageRequest request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.View);
 
-        var policy = await _dbContext.Set<RetryPolicy>().AsNoTracking()
+        var policy = await dbContext.Set<RetryPolicy>().AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == key);
         if (policy == null) throw new SWNotFoundException(key.ToString());
 
-        var subscriptions = await _dbContext.Set<Subscription>().AsNoTracking()
+        var subscriptions = await dbContext.Set<Subscription>().AsNoTracking()
             .Where(s => s.RetryPolicyId == key)
             .Select(s => new { s.Id, s.Name })
             .ToListAsync();
 
-        return await _report.Build(
+        return await report.Build(
             subscriptions.Select(s => (s.Id, s.Name)).ToList(), policy.Groups, policy);
     }
 }

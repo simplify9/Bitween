@@ -6,8 +6,6 @@ namespace SW.Bitween.NativeAdapters.RebexPop3Receiver;
 
 public class NativeRebexPop3Receiver(string? licenseKey = null) : INativeInfolinkReceiver, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey = licenseKey;
-
     private RebexPop3ReceiverInput _options = new();
     private Pop3 _pop3 = new();
 
@@ -18,7 +16,7 @@ public class NativeRebexPop3Receiver(string? licenseKey = null) : INativeInfolin
 
     public async Task Initialize()
     {
-        Rebex.Licensing.Key = _licenseKey;
+        Rebex.Licensing.Key = licenseKey;
         _pop3 = new Pop3();
         var sslMode = UseSsl ? SslMode.Implicit : SslMode.None;
         await _pop3.ConnectAsync(_options.Host, Port, sslMode);

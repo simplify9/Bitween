@@ -41,7 +41,6 @@ namespace SW.Bitween.Adapters.Bus.Sqs;
 public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> logger) : IResidentAdapter
 {
     private readonly SqsOptions _options = options.Value;
-    private readonly ILogger<SqsBusHandler> _logger = logger;
 
     private IAmazonSQS _sqs;
     private IAdapterContext _context;
@@ -67,7 +66,7 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
         _sqs = CreateClient(_options);
 
         _state = _endpoints.Count == 0 ? "Idle" : "Connected";
-        _logger.LogInformation("SQS client for {Region}, polling {Count} queue(s) with {Wait}s long poll.",
+        logger.LogInformation("SQS client for {Region}, polling {Count} queue(s) with {Wait}s long poll.",
             _options.Region, _endpoints.Count, _options.WaitTimeSeconds);
 
         // One poller per queue. Long polling means these are cheap: a blocked receive costs
@@ -189,7 +188,7 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
             {
                 _state = "Disconnected";
                 _lastError = ex.Message;
-                _logger.LogError(ex, "Polling {Queue} failed.", Short(queueUrl));
+                logger.LogError(ex, "Polling {Queue} failed.", Short(queueUrl));
 
                 // Back off rather than hammering a failing endpoint; the supervisor decides
                 // whether this is terminal.
@@ -247,7 +246,7 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
                 await ReturnToQueueAsync(queueUrl, message, ct);
                 Interlocked.Increment(ref _returned);
                 _lastError = result.Error;
-                _logger.LogWarning("Bitween rejected {MessageId} from {Queue}: {Error}. Returned to the queue.",
+                logger.LogWarning("Bitween rejected {MessageId} from {Queue}: {Error}. Returned to the queue.",
                     message.MessageId, Short(queueUrl), result.Error);
             }
         }
@@ -256,7 +255,7 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
         {
             Interlocked.Increment(ref _failed);
             _lastError = ex.Message;
-            _logger.LogError(ex, "Failed to hand {MessageId} to Bitween.", message.MessageId);
+            logger.LogError(ex, "Failed to hand {MessageId} to Bitween.", message.MessageId);
             try { await ReturnToQueueAsync(queueUrl, message, CancellationToken.None); } catch { }
         }
     }
@@ -294,7 +293,7 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
         catch (Exception ex)
         {
             // Not fatal: forward the raw body and let a mapper deal with it.
-            _logger.LogWarning(ex, "Body did not look like an SP-API notification; forwarding it whole.");
+            logger.LogWarning(ex, "Body did not look like an SP-API notification; forwarding it whole.");
             return body;
         }
     }

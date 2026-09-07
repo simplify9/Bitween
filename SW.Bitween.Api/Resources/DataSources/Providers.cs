@@ -17,16 +17,12 @@ namespace SW.Bitween.Resources.DataSources;
 public class Providers(BitweenDbContext dbContext, RequestContext requestContext,
     DataSourceProviderCatalog catalog) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly DataSourceProviderCatalog _catalog = catalog;
-
     public async Task<object> Handle()
     {
         // Viewing is enough: this describes what Bitween can connect to, not what it is connected
         // to. Nothing here comes from a data source, so there is no credential to leak.
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.View);
 
-        return await _catalog.ListAsync();
+        return await catalog.ListAsync();
     }
 }

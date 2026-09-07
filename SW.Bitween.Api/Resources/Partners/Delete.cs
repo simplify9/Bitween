@@ -10,17 +10,14 @@ namespace SW.Bitween.Resources.Partners
 {
     public class Delete(BitweenDbContext dbContext, RequestContext requestContext) : IDeleteHandler<int,object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Partners.Delete);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Partners.Delete);
 
             if (key == Partner.SystemId)
                 throw new SWException("System partner can not be deleted.");
 
-            await _dbContext.DeleteByKeyAsync<Partner>(key);
+            await dbContext.DeleteByKeyAsync<Partner>(key);
             return null;
         }
     }

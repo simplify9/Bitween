@@ -8,10 +8,6 @@ namespace SW.Bitween.Resources.Notifiers
 public class Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
         : IDeleteHandler<int,object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
-
         /// <remarks>
         /// No reference check, unlike an integration's delete: nothing has a foreign key to a
         /// notifier. <c>RunOnSubscriptions</c> points the other way — the notifier names the
@@ -19,10 +15,10 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext, I
         /// </remarks>
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Notifiers.Delete);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Notifiers.Delete);
 
-            await _dbContext.DeleteByKeyAsync<Notifier>(key);
-            await _cache.BroadcastRevoke();
+            await dbContext.DeleteByKeyAsync<Notifier>(key);
+            await cache.BroadcastRevoke();
             return null;
         }
     }

@@ -41,8 +41,6 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
 
     private const string MappedOutput = "{\"mapped\":true,\"by\":\"configurable-adapter\"}";
 
-    private readonly BitweenFixture _fixture = fixture;
-
     // ---------------------------------------------------------------- external
 
     /// <summary>
@@ -169,7 +167,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
         await using var adapter = await StartAdapterAsync(setup.DataSourceId);
 
         // The resident adapter is already attached and consuming before the message exists.
-        var health = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
+        var health = fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
             .Describe().Single(h => h.InstanceKey == setup.DataSourceId.ToString());
         Assert.Equal(InstanceState.Ready, health.State);
 
@@ -184,7 +182,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
         Assert.True(result!.Success, $"the classic handler failed: {result.Exception}");
 
         // The resident adapter is still running, having outlived the processes that did the work.
-        var after = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
+        var after = fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
             .Describe().Single(h => h.InstanceKey == setup.DataSourceId.ToString());
         Assert.Equal(InstanceState.Ready, after.State);
         Assert.Equal(0, after.RestartCount);
@@ -240,7 +238,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
         string? mapperId = null,
         IDictionary<string, string>? mapperProperties = null)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("e2e-doc"), DocumentFormat.Json);
@@ -274,7 +272,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
                 Name = Unique("e2e-ds"),
                 AdapterId = BusAdapters.RabbitMq,
                 Kind = DataSourceKind.Broker,
-                Properties = new Dictionary<string, string>(_fixture.ExternalRabbitProperties)
+                Properties = new Dictionary<string, string>(fixture.ExternalRabbitProperties)
                 {
                     ["Endpoints"] = endpoint
                 }
@@ -308,7 +306,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
     private async Task<int> AddRouteAsync(int gatewayId, int documentId, string handlerId,
         IPropertyMatchSpecification matchExpression)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var subscription = new Subscription(Unique("e2e-sub2"), documentId, SubscriptionType.BusGateway)
@@ -354,7 +352,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
 
         await ProcessAsync(child.Id);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<XchangeResult>().AsNoTracking().FirstOrDefaultAsync(r => r.Id == child.Id);
     }
@@ -369,7 +367,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
     /// </summary>
     private async Task<List<Xchange>> ChildXchangesAsync(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Xchange>().AsNoTracking()
             .Where(x => x.DocumentId == documentId && x.SubscriptionId != null)
@@ -378,7 +376,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
 
     private async Task Run(Func<IServiceScope, Task> work)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         await work(scope);
     }
 
@@ -387,7 +385,7 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
         Xchange? found = null;
         await WaitAsync(async () =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             found = await db.Set<Xchange>().AsNoTracking()
                 .Where(x => x.DocumentId == documentId && x.SubscriptionId == null)
@@ -400,11 +398,11 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
 
     private async Task<AdapterLease> StartAdapterAsync(int dataSourceId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var dataSource = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == dataSourceId);
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
         await host.StartExclusiveAsync(new AdapterSpec
         {
             AdapterId = dataSource.AdapterId,
@@ -444,10 +442,10 @@ public class PipelineEndToEndTests(BitweenFixture fixture)
 
     private IConnection ExternalConnection() => new ConnectionFactory
     {
-        HostName = _fixture.ExternalRabbitHost,
-        Port = _fixture.ExternalRabbitPort,
-        UserName = _fixture.ExternalRabbitUser,
-        Password = _fixture.ExternalRabbitPassword
+        HostName = fixture.ExternalRabbitHost,
+        Port = fixture.ExternalRabbitPort,
+        UserName = fixture.ExternalRabbitUser,
+        Password = fixture.ExternalRabbitPassword
     }.CreateConnection("pipeline-tests");
 
     private static async Task WaitAsync(Func<bool> condition, TimeSpan timeout, string because) =>

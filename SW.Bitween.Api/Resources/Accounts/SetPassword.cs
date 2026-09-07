@@ -16,23 +16,20 @@ namespace SW.Bitween.Resources.Accounts;
 public class SetPassword(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, SetAccountPasswordModel, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, SetAccountPasswordModel request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Users.Edit);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Edit);
 
-        if (key == Convert.ToInt32(_requestContext.GetNameIdentifier()))
+        if (key == Convert.ToInt32(requestContext.GetNameIdentifier()))
             throw new SWValidationException("USE_CHANGE_PASSWORD",
                 "Use Change password to set your own, so the current one is still required.");
 
-        var account = await _dbContext.Set<Account>().FindAsync(key);
+        var account = await dbContext.Set<Account>().FindAsync(key);
         if (account is null)
             throw new SWValidationException("ACCOUNT_NOT_FOUND", $"No account exists with the id {key}");
 
         account.SetPassword(request.Password);
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
 
         return null;
     }

@@ -28,8 +28,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class RabbitBusAdapterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     /// <summary>
     /// Two identical messages are two messages.
     ///
@@ -168,7 +166,7 @@ public class RabbitBusAdapterTests(BitweenFixture fixture)
     {
         int dataSourceId, documentId;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
@@ -177,7 +175,7 @@ public class RabbitBusAdapterTests(BitweenFixture fixture)
                 Name = Unique("ds"),
                 AdapterId = BusAdapters.RabbitMq,
                 Kind = DataSourceKind.Broker,
-                Properties = new Dictionary<string, string>(_fixture.ExternalRabbitProperties)
+                Properties = new Dictionary<string, string>(fixture.ExternalRabbitProperties)
                 {
                     ["Endpoints"] = queue
                 }
@@ -205,12 +203,12 @@ public class RabbitBusAdapterTests(BitweenFixture fixture)
             documentId = document.Id;
         }
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
         var instance = await host.StartExclusiveAsync(new AdapterSpec
         {
             AdapterId = BusAdapters.RabbitMq,
             InstanceKey = dataSourceId.ToString(),
-            StartupValues = new Dictionary<string, string>(_fixture.ExternalRabbitProperties)
+            StartupValues = new Dictionary<string, string>(fixture.ExternalRabbitProperties)
             {
                 ["Endpoints"] = queue
             }
@@ -224,22 +222,20 @@ public class RabbitBusAdapterTests(BitweenFixture fixture)
         ResidentAdapterInstance instance) : IAsyncDisposable
     {
         private readonly IResidentAdapterHost _host = host;
-        private readonly string _adapterId = adapterId;
-        private readonly string _instanceKey = instanceKey;
 
         public ResidentAdapterInstance Instance { get; } = instance;
 
         public ValueTask DisposeAsync() =>
-            new(_host.StopAsync(_adapterId, _instanceKey, drain: false));
+            new(_host.StopAsync(adapterId, instanceKey, drain: false));
     }
 
     private InstanceHealth InstanceOf(int dataSourceId) =>
-        _fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
+        fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
             .Describe().FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString());
 
     private async Task<int> CountAsync(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Xchange>().AsNoTracking().CountAsync(x => x.DocumentId == documentId);
     }
@@ -295,10 +291,10 @@ public class RabbitBusAdapterTests(BitweenFixture fixture)
 
     private IConnection ExternalConnection() => new ConnectionFactory
     {
-        HostName = _fixture.ExternalRabbitHost,
-        Port = _fixture.ExternalRabbitPort,
-        UserName = _fixture.ExternalRabbitUser,
-        Password = _fixture.ExternalRabbitPassword
+        HostName = fixture.ExternalRabbitHost,
+        Port = fixture.ExternalRabbitPort,
+        UserName = fixture.ExternalRabbitUser,
+        Password = fixture.ExternalRabbitPassword
     }.CreateConnection("rabbit-adapter-tests");
 
     private static async Task WaitAsync(Func<Task<bool>> condition, TimeSpan timeout, string because)

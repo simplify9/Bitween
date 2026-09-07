@@ -36,14 +36,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class SqsBusGatewayTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     // ---------------------------------------------------------------- ingress
 
     [Fact]
     public async Task A_message_on_an_SQS_queue_becomes_an_Xchange()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("orders"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("orders"));
         var setup = await ArrangeAsync(queueUrl);
 
         await using var adapter = await StartAsync(setup.DataSourceId);
@@ -64,7 +62,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task A_persisted_message_is_deleted_from_the_queue()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("delete"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("delete"));
         var setup = await ArrangeAsync(queueUrl);
 
         await using var adapter = await StartAsync(setup.DataSourceId);
@@ -85,7 +83,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task A_rejected_message_returns_to_the_queue_rather_than_being_deleted()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("reject"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("reject"));
 
         // A data source with no gateway claiming a DIFFERENT endpoint: the sink cannot attribute
         // the message, so it rejects, and the adapter must return it.
@@ -119,7 +117,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task A_selling_partner_notification_is_unwrapped_to_its_payload()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("spapi"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("spapi"));
         var setup = await ArrangeAsync(queueUrl, unwrapSpApi: true);
 
         await using var adapter = await StartAsync(setup.DataSourceId);
@@ -171,7 +169,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task A_notification_carries_its_notification_id_as_the_dedupe_reference()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("spref"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("spref"));
         var setup = await ArrangeAsync(queueUrl, unwrapSpApi: true);
 
         await using var adapter = await StartAsync(setup.DataSourceId);
@@ -192,7 +190,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task Test_connection_reports_the_queue_and_its_visibility_timeout()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("probe"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("probe"));
         var dataSourceId = await CreateDataSourceAsync(queueUrl);
 
         await using var adapter = await StartAsync(dataSourceId);
@@ -208,7 +206,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task Discover_lists_the_queues_the_credentials_can_see()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("discover"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("discover"));
         var dataSourceId = await CreateDataSourceAsync(queueUrl);
 
         await using var adapter = await StartAsync(dataSourceId);
@@ -222,8 +220,8 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task Bitween_can_send_a_message_out_to_SQS()
     {
-        var consumed = await _fixture.CreateSqsQueueAsync(Unique("out-in"));
-        var target = await _fixture.CreateSqsQueueAsync(Unique("out-target"));
+        var consumed = await fixture.CreateSqsQueueAsync(Unique("out-in"));
+        var target = await fixture.CreateSqsQueueAsync(Unique("out-target"));
 
         // Send to a queue the adapter is NOT polling, or it consumes the message as fast as it
         // sends it and the depth assertion can never be satisfied.
@@ -244,12 +242,12 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task Health_carries_the_queue_detail_from_the_heartbeat()
     {
-        var queueUrl = await _fixture.CreateSqsQueueAsync(Unique("health"));
+        var queueUrl = await fixture.CreateSqsQueueAsync(Unique("health"));
         var dataSourceId = await CreateDataSourceAsync(queueUrl);
 
         await using var adapter = await StartAsync(dataSourceId);
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
 
         await WaitAsync(() => host.Describe()
                 .Any(h => h.InstanceKey == dataSourceId.ToString() && h.LastHeartbeatOn != null),
@@ -272,7 +270,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
     {
         var dataSourceId = await CreateDataSourceAsync(queueUrl, unwrapSpApi);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("sqs-doc"), DocumentFormat.Json);
@@ -296,10 +294,10 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
 
     private async Task<int> CreateDataSourceAsync(string queueUrl, bool unwrapSpApi = false)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
-        var properties = new Dictionary<string, string>(_fixture.SqsProperties)
+        var properties = new Dictionary<string, string>(fixture.SqsProperties)
         {
             ["Endpoints"] = queueUrl
         };
@@ -320,11 +318,11 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
 
     private async Task<AdapterLease> StartAsync(int dataSourceId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var dataSource = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == dataSourceId);
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
         var instance = await host.StartExclusiveAsync(new AdapterSpec
         {
             AdapterId = dataSource.AdapterId,
@@ -344,13 +342,13 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
 
     private async Task SendAsync(string queueUrl, string body)
     {
-        using var sqs = _fixture.CreateSqsClient();
+        using var sqs = fixture.CreateSqsClient();
         await sqs.SendMessageAsync(new SendMessageRequest { QueueUrl = queueUrl, MessageBody = body });
     }
 
     private async Task<int> DepthAsync(string queueUrl)
     {
-        using var sqs = _fixture.CreateSqsClient();
+        using var sqs = fixture.CreateSqsClient();
         var attributes = await sqs.GetQueueAttributesAsync(queueUrl,
             new List<string> { "ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible" });
 
@@ -364,7 +362,7 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
         Xchange? found = null;
         await WaitAsync(async () =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             found = await db.Set<Xchange>().AsNoTracking()
                 .Where(x => x.DocumentId == documentId && x.SubscriptionId == null)

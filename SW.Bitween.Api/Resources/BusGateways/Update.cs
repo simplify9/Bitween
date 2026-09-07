@@ -11,12 +11,10 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext, I
         : ICommandHandler<int, BusGatewayUpdate, object>
     {
         private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
 
         public async Task<object> Handle(int key, BusGatewayUpdate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
+            await requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
 
             var entity = await _dbContext.Set<BusGateway>()
                 .FirstOrDefaultAsync(bg => bg.Id == key);
@@ -36,7 +34,7 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext, I
             entity.EndpointProperties = model.EndpointProperties ?? new();
 
             await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await cache.BroadcastRevoke();
             return null;
         }
 

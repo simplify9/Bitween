@@ -8,12 +8,9 @@ namespace SW.Bitween.Resources.RetryPolicies;
 public class Create(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<RetryPolicyCreate, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(RetryPolicyCreate model)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.Create);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.Create);
         RetryGroupValidation.EnsureCanFire(model.Groups);
         RetryGroupValidation.EnsureAlertTransportIsSecure(
             model.AlertHandlerId, model.AlertHandlerProperties);
@@ -30,8 +27,8 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
             AlertHandlerId = model.AlertHandlerId,
             AlertHandlerProperties = AdapterSecretProperties.Merge(null, model.AlertHandlerProperties)
         };
-        _dbContext.Add(entity);
-        await _dbContext.SaveChangesAsync();
+        dbContext.Add(entity);
+        await dbContext.SaveChangesAsync();
         return entity.Id;
     }
 }

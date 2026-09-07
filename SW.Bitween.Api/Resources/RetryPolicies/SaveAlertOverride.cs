@@ -17,18 +17,14 @@ namespace SW.Bitween.Resources.RetryPolicies;
 public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext requestContext,
     AdapterSecretProperties secrets) : ICommandHandler<int, RetryAlertOverrideSave, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly AdapterSecretProperties _secrets = secrets;
-
     public async Task<object> Handle(int key, RetryAlertOverrideSave request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.Edit);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.Edit);
         RetryGroupValidation.EnsureAlertCanSend(request.AlertMode, request.AlertHandlerId);
         RetryGroupValidation.EnsureAlertTransportIsSecure(
             request.AlertHandlerId, request.AlertHandlerProperties);
 
-        var policy = await _dbContext.Set<RetryPolicy>().AsNoTracking()
+        var policy = await dbContext.Set<RetryPolicy>().AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == key);
         if (policy == null) throw new SWNotFoundException(key.ToString());
 
@@ -38,13 +34,13 @@ public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext reques
             throw new SWValidationException("GROUP_NOT_IN_POLICY",
                 "That group does not belong to this retry policy.");
 
-        var usesPolicy = await _dbContext.Set<Subscription>()
+        var usesPolicy = await dbContext.Set<Subscription>()
             .AnyAsync(s => s.Id == request.SubscriptionId && s.RetryPolicyId == key);
         if (!usesPolicy)
             throw new SWValidationException("SUBSCRIPTION_NOT_USING_POLICY",
                 "That subscription does not use this retry policy.");
 
-        var existing = await _dbContext.Set<RetryAlertOverride>()
+        var existing = await dbContext.Set<RetryAlertOverride>()
             .FirstOrDefaultAsync(o => o.SubscriptionId == request.SubscriptionId
                                       && o.GroupId == request.GroupId);
 
@@ -52,8 +48,8 @@ public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext reques
         // — otherwise the routing list would have to explain a row that changes no behaviour.
         if (request.AlertMode == RetryAlertMode.Inherit)
         {
-            if (existing != null) _dbContext.Remove(existing);
-            await _dbContext.SaveChangesAsync();
+            if (existing != null) dbContext.Remove(existing);
+            await dbContext.SaveChangesAsync();
             return null;
         }
 
@@ -74,7 +70,7 @@ public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext reques
 
         if (existing == null)
         {
-            _dbContext.Add(new RetryAlertOverride
+            dbContext.Add(new RetryAlertOverride
             {
                 SubscriptionId = request.SubscriptionId,
                 GroupId = request.GroupId,
@@ -90,7 +86,7 @@ public class SaveAlertOverride(BitweenDbContext dbContext, RequestContext reques
             existing.AlertHandlerProperties = properties;
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         return null;
     }
 }

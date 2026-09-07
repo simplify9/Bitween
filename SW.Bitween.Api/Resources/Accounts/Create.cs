@@ -13,12 +13,11 @@ namespace SW.Bitween.Resources.Accounts
         BitweenOptions bitweenOptions) : ICommandHandler<CreateAccountModel,object>
     {
         private readonly BitweenDbContext dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
         private readonly BitweenOptions _bitweenOptions = bitweenOptions;
 
         public async Task<object> Handle(CreateAccountModel request)
         {
-            await _requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Create);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Create);
 
             if (string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Email) ||
                 (!_bitweenOptions.DisableEmailPasswordLogin && string.IsNullOrEmpty(request.Password)))

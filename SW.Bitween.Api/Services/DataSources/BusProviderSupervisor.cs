@@ -38,11 +38,6 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
 {
     private static readonly TimeSpan ReconcileInterval = TimeSpan.FromSeconds(30);
 
-    private readonly IServiceProvider _serviceProvider = serviceProvider;
-    private readonly IResidentAdapterHost _adapters = adapters;
-    private readonly ILeaderElection _election = election;
-    private readonly ILogger<BusProviderSupervisor> _logger = logger;
-
     // What we last started, and the configuration fingerprint it was started with.
     private readonly Dictionary<int, string> _running = new();
 
@@ -66,7 +61,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
             catch (Exception ex)
             {
                 // Never let one bad reconcile end the loop; the next pass retries everything.
-                _logger.LogError(ex, "Bus provider reconciliation failed.");
+                logger.LogError(ex, "Bus provider reconciliation failed.");
             }
 
             try { await Task.Delay(ReconcileInterval, stoppingToken); }
@@ -91,7 +86,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     /// </summary>
     public async Task ReconcileAsync(CancellationToken cancellationToken = default)
     {
-        using var scope = _serviceProvider.CreateScope();
+        using var scope = serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var desired = await dbContext.Set<DataSource>()
@@ -126,15 +121,15 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
             {
                 if (current == fingerprint) continue;
 
-                _logger.LogInformation("Data source {Name} changed; restarting its adapter.", dataSource.Name);
-                await _adapters.StopAsync(dataSource.AdapterId, dataSource.Id.ToString(),
+                logger.LogInformation("Data source {Name} changed; restarting its adapter.", dataSource.Name);
+                await adapters.StopAsync(dataSource.AdapterId, dataSource.Id.ToString(),
                     drain: true, cancellationToken);
                 _running.Remove(dataSource.Id);
             }
 
             try
             {
-                await _adapters.StartExclusiveAsync(new AdapterSpec
+                await adapters.StartExclusiveAsync(new AdapterSpec
                 {
                     AdapterId = dataSource.AdapterId,
                     // The instance key IS the data source id, which is how the sink knows which
@@ -151,13 +146,13 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
                 }, cancellationToken);
 
                 _running[dataSource.Id] = fingerprint;
-                _logger.LogInformation("Data source {Name} running on adapter {AdapterId}.",
+                logger.LogInformation("Data source {Name} running on adapter {AdapterId}.",
                     dataSource.Name, dataSource.AdapterId);
             }
             catch (Exception ex)
             {
                 // One unreachable broker must not stop the others from starting.
-                _logger.LogError(ex, "Could not start adapter {AdapterId} for data source {Name}.",
+                logger.LogError(ex, "Could not start adapter {AdapterId} for data source {Name}.",
                     dataSource.AdapterId, dataSource.Name);
 
                 // And the operator who configured it learns why here rather than from the node's
@@ -189,7 +184,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
         {
             if (await held.ValidateAsync(cancellationToken)) return true;
 
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Lease on data source {Name} is no longer current; another node has taken it.",
                 dataSource.Name);
 
@@ -197,7 +192,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
             return false;
         }
 
-        var lease = await _election.TryAcquireAsync(ResourceOf(dataSource), cancellationToken);
+        var lease = await election.TryAcquireAsync(ResourceOf(dataSource), cancellationToken);
         if (lease == null) return false;
 
         _leases[dataSource.Id] = lease;
@@ -210,7 +205,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
         {
             if (await lease.ValidateAsync(cancellationToken)) continue;
 
-            _logger.LogWarning("Lost the lease on data source {DataSourceId} at term {Term}; stopping it.",
+            logger.LogWarning("Lost the lease on data source {DataSourceId} at term {Term}; stopping it.",
                 dataSourceId, lease.Term);
 
             // Stopped WITHOUT draining: another node may already be consuming, so finishing
@@ -225,11 +220,11 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     {
         if (!_running.ContainsKey(dataSourceId)) return;
 
-        adapterId ??= _adapters.Describe()
+        adapterId ??= adapters.Describe()
             .FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString())?.AdapterId;
 
         if (adapterId != null)
-            await _adapters.StopAsync(adapterId, dataSourceId.ToString(), drain, cancellationToken);
+            await adapters.StopAsync(adapterId, dataSourceId.ToString(), drain, cancellationToken);
 
         _running.Remove(dataSourceId);
     }
@@ -303,14 +298,14 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
 
             row.LastKnownState = "Failed";
             row.LastException = AdapterFailureReader.Explain(exception.Message,
-                _adapters.Get(dataSource.AdapterId, dataSource.Id.ToString())?.Diagnostics);
+                adapters.Get(dataSource.AdapterId, dataSource.Id.ToString())?.Diagnostics);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             // Recording why something failed must not become a second thing that fails.
-            _logger.LogWarning(ex, "Could not record the start failure for data source {Name}.",
+            logger.LogWarning(ex, "Could not record the start failure for data source {Name}.",
                 dataSource.Name);
         }
     }
@@ -321,7 +316,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     /// </summary>
     private async Task WriteBackHealthAsync(BitweenDbContext dbContext, CancellationToken cancellationToken)
     {
-        var health = _adapters.Describe().ToDictionary(h => h.InstanceKey);
+        var health = adapters.Describe().ToDictionary(h => h.InstanceKey);
         if (health.Count == 0) return;
 
         var ids = health.Keys.Select(k => int.TryParse(k, out var id) ? id : 0).Where(i => i > 0).ToList();
@@ -344,10 +339,10 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
             // that — otherwise the screen shows "Quarantined" with no reason anywhere near it.
             row.LastException = instance.LastError
                                 ?? AdapterFailureReader.Summarise(
-                                    _adapters.Get(row.AdapterId, row.Id.ToString())?.Diagnostics);
+                                    adapters.Get(row.AdapterId, row.Id.ToString())?.Diagnostics);
             row.ConsecutiveFailures = instance.RestartCount;
             row.OwnedByNode = _leases.TryGetValue(row.Id, out var lease)
-                ? $"{(_election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"
+                ? $"{(election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"
                 : null;
             changed = true;
         }

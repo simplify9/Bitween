@@ -13,7 +13,6 @@ namespace SW.Bitween.Resources.Adapters
         BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<string, IDictionary<string, StartupValue>>
     {
         private readonly IServerlessService serverless = serverless;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
         private readonly BitweenDbContext dbContext = dbContext;
         private readonly RequestContext requestContext = requestContext;
 
@@ -28,7 +27,7 @@ namespace SW.Bitween.Resources.Adapters
             // Check if it's a native adapter
             if (decodedKey.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                startupValues= _nativeAdapterDiscovery.GetStartupValues(decodedKey);
+                startupValues= nativeAdapterDiscovery.GetStartupValues(decodedKey);
             }
             else
             {

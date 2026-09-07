@@ -10,14 +10,11 @@ namespace SW.Bitween.Resources.ApiGateways
 public class RemovePartner(BitweenDbContext dbContext, RequestContext requestContext)
         : ICommandHandler<int, RemovePartnerRequest, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(int gatewayId, RemovePartnerRequest request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.Edit);
 
-            var gateway = await _dbContext.Set<ApiGateway>()
+            var gateway = await dbContext.Set<ApiGateway>()
                 .Include(ag => ag.Partners)
                 .FirstOrDefaultAsync(ag => ag.Id == gatewayId);
 
@@ -30,8 +27,8 @@ public class RemovePartner(BitweenDbContext dbContext, RequestContext requestCon
             if (partnerLink == null)
                 throw new SWNotFoundException($"Partner with Id {request.PartnerId} not found in gateway {gatewayId}");
 
-            _dbContext.Remove(partnerLink);
-            await _dbContext.SaveChangesAsync();
+            dbContext.Remove(partnerLink);
+            await dbContext.SaveChangesAsync();
 
             return null;
         }

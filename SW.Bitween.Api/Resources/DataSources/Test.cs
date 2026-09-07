@@ -29,21 +29,17 @@ namespace SW.Bitween.Resources.DataSources;
 public class Test(BitweenDbContext dbContext, RequestContext requestContext,
     IResidentAdapterHost adapters = null) : ICommandHandler<int, DataSourceTestRequest, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly IResidentAdapterHost _adapters = adapters;
-
     public async Task<object> Handle(int key, DataSourceTestRequest request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Operate);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.Operate);
 
         // Registered only when BusProvidersEnabled, so say which switch is off rather than
         // failing to resolve a service the operator has never heard of.
-        if (_adapters == null)
+        if (adapters == null)
             return Failed("External bus providers are turned off on this node "
                           + "(Bitween:BusProvidersEnabled). Nothing can connect from here.");
 
-        var dataSource = await _dbContext.Set<DataSource>().AsNoTracking()
+        var dataSource = await dbContext.Set<DataSource>().AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == key);
 
         if (dataSource == null)
@@ -55,7 +51,7 @@ public class Test(BitweenDbContext dbContext, RequestContext requestContext,
 
         // The endpoints its gateways want, so the test checks the queues that will actually be
         // used rather than only that the credentials work.
-        var endpoints = await _dbContext.Set<BusGateway>()
+        var endpoints = await dbContext.Set<BusGateway>()
             .Where(g => g.DataSourceId == key && !g.Inactive && g.Endpoint != null)
             .Select(g => g.Endpoint)
             .Distinct()
@@ -72,7 +68,7 @@ public class Test(BitweenDbContext dbContext, RequestContext requestContext,
 
         try
         {
-            instance = await _adapters.StartExclusiveAsync(new AdapterSpec
+            instance = await adapters.StartExclusiveAsync(new AdapterSpec
             {
                 AdapterId = dataSource.AdapterId,
                 InstanceKey = instanceKey,
@@ -96,7 +92,7 @@ public class Test(BitweenDbContext dbContext, RequestContext requestContext,
         }
         finally
         {
-            try { await _adapters.StopAsync(dataSource.AdapterId, instanceKey, drain: false); }
+            try { await adapters.StopAsync(dataSource.AdapterId, instanceKey, drain: false); }
             catch { /* the instance may never have started */ }
         }
     }

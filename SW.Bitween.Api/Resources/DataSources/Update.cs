@@ -10,21 +10,18 @@ namespace SW.Bitween.Resources.DataSources;
 public class Update(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, DataSourceUpdate, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, DataSourceUpdate model)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Edit);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.Edit);
 
         Create.EnsureCeilingsAreUsable(model.SoftMemoryLimitMb, model.HardMemoryLimitMb,
             model.CpuPercentLimit, model.CpuLimitSamples);
 
-        var entity = await _dbContext.Set<DataSource>().FirstOrDefaultAsync(d => d.Id == key);
+        var entity = await dbContext.Set<DataSource>().FirstOrDefaultAsync(d => d.Id == key);
         if (entity == null)
             throw new SWNotFoundException($"DataSource with Id {key} not found");
 
-        var nameTaken = await _dbContext.Set<DataSource>()
+        var nameTaken = await dbContext.Set<DataSource>()
             .AnyAsync(d => d.Name == model.Name && d.Id != key);
         if (nameTaken)
             throw new SWException($"A data source named '{model.Name}' already exists.");
@@ -45,7 +42,7 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
         entity.CpuPercentLimit = model.CpuPercentLimit;
         entity.CpuLimitSamples = model.CpuLimitSamples;
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
 
         // No cache to revoke and no adapter to restart from here: the supervisor reconciles against
         // these rows on its own loop, notices the fingerprint changed, and restarts the adapter.

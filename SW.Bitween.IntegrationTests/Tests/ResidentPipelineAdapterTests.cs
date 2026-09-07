@@ -30,11 +30,9 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
 {
     private const string ResidentHandlerId = "infolink6.handlers.residentsample";
 
-    private readonly BitweenFixture _fixture = fixture;
-
     private async Task InstallAsync()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var cloudFiles = scope.ServiceProvider.GetRequiredService<ICloudFilesService>();
 
         await AdapterInstaller.InstallAsync(cloudFiles,
@@ -52,7 +50,7 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
     {
         await InstallAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
 
         var result = await invoker.InvokeAsync<XchangeFile>(
@@ -79,7 +77,7 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
     {
         await InstallAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
 
         var counts = new List<int>();
@@ -105,7 +103,7 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
     {
         await InstallAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
 
         await using var session = await invoker.BeginAsync(ResidentHandlerId, AdapterRole.Handler);
@@ -128,7 +126,7 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
     [Fact]
     public async Task A_classic_adapter_still_runs_through_the_same_invoker()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
 
         var result = await invoker.InvokeAsync<XchangeFile>(
@@ -144,7 +142,7 @@ public class ResidentPipelineAdapterTests(BitweenFixture fixture)
     [Fact]
     public async Task A_native_adapter_runs_through_the_same_invoker()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
 
         // Resolving it is the assertion: the native runtime claims the id and returns a session

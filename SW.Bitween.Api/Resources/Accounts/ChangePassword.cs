@@ -12,15 +12,12 @@ namespace SW.Bitween.Resources.Accounts;
 public class ChangePassword(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<ChangePasswordModel, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(ChangePasswordModel request)
     {
         // Self-service: this only ever changes the caller's own password, and the old one has to
         // be supplied. The guard it replaces listed every role, so it granted nothing.
-        var accountId = Convert.ToInt32(_requestContext.GetNameIdentifier());
-        var account = await _dbContext.Set<Account>().FindAsync(accountId);
+        var accountId = Convert.ToInt32(requestContext.GetNameIdentifier());
+        var account = await dbContext.Set<Account>().FindAsync(accountId);
 
         if (!SecurePasswordHasher.Verify(request.OldPassword, account!.Password))
         {
@@ -29,7 +26,7 @@ public class ChangePassword(BitweenDbContext dbContext, RequestContext requestCo
         }
 
         account.SetPassword(request.NewPassword);
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
 
         return null;
     }

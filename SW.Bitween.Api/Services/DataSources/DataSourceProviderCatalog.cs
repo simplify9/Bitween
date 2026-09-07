@@ -47,12 +47,6 @@ public class DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesSe
     /// <summary>What the installer stamps on an adapter that connects to something.</summary>
     private static readonly string[] ProviderKinds = ["bus", "datasource"];
 
-    private readonly AdapterInstaller _installer = installer;
-    private readonly ICloudFilesService _cloudFiles = cloudFiles;
-    private readonly ServerlessOptions _options = options;
-    private readonly IMemoryCache _cache = cache;
-    private readonly ILogger<DataSourceProviderCatalog> _logger = logger;
-
     /// <summary>
     /// Every data source provider this deployment can offer, described, optionally narrowed to one
     /// DataSourceKind. An adapter that cannot be read is left out rather than throwing: one broken
@@ -85,21 +79,21 @@ public class DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesSe
     {
         try
         {
-            var installed = await _installer.GetMetadataAsync(adapterId);
+            var installed = await installer.GetMetadataAsync(adapterId);
             var cacheKey = $"bus-provider.{adapterId}.{installed.Hash}";
-            if (_cache.TryGetValue(cacheKey, out DataSourceProviderDescriptor cached)) return cached;
+            if (cache.TryGetValue(cacheKey, out DataSourceProviderDescriptor cached)) return cached;
 
             // LocalPath is the entry assembly's full path; it exists only once extracted.
-            await _installer.InstallAsync(adapterId);
+            await installer.InstallAsync(adapterId);
 
             var descriptor = Describe(adapterId, installed.LocalPath);
             if (descriptor == null) return null;
 
-            return _cache.Set(cacheKey, descriptor, TimeSpan.FromMinutes(30));
+            return cache.Set(cacheKey, descriptor, TimeSpan.FromMinutes(30));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not describe bus provider {AdapterId}; leaving it out of "
+            logger.LogWarning(ex, "Could not describe bus provider {AdapterId}; leaving it out of "
                                    + "the catalog.", adapterId);
             return null;
         }
@@ -107,10 +101,10 @@ public class DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesSe
 
     private async Task<List<string>> CandidatesAsync()
     {
-        var root = _options.AdapterRemotePath;
+        var root = options.AdapterRemotePath;
         var candidates = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in await _cloudFiles.ListAsync($"{root}/"))
+        foreach (var item in await cloudFiles.ListAsync($"{root}/"))
         {
             if (item.Size <= 0) continue;
 
@@ -138,7 +132,7 @@ public class DataSourceProviderCatalog(AdapterInstaller installer, ICloudFilesSe
     {
         try
         {
-            var metadata = await _installer.GetMetadataAsync(adapterId);
+            var metadata = await installer.GetMetadataAsync(adapterId);
             return metadata?.AdapterValues != null &&
                    metadata.AdapterValues.TryGetValue("Kind", out var kinds) &&
                    kinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

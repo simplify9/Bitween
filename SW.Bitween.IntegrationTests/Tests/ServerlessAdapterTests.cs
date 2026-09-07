@@ -14,12 +14,10 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class ServerlessAdapterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task SampleHandler_echo_returns_input_unchanged()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var serverless = scope.ServiceProvider.GetRequiredService<IServerlessService>();
 
         var correlationId = Guid.NewGuid().ToString();
@@ -36,7 +34,7 @@ public class ServerlessAdapterTests(BitweenFixture fixture)
     [Fact]
     public async Task ConfigurableAdapter_with_output_data_overrides_response()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var serverless = scope.ServiceProvider.GetRequiredService<IServerlessService>();
 
         var correlationId = Guid.NewGuid().ToString();
@@ -52,7 +50,7 @@ public class ServerlessAdapterTests(BitweenFixture fixture)
     [Fact]
     public async Task ConfigurableAdapter_simulate_error_throws_on_invoke()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var serverless = scope.ServiceProvider.GetRequiredService<IServerlessService>();
 
         var correlationId = Guid.NewGuid().ToString();
@@ -70,7 +68,7 @@ public class ServerlessAdapterTests(BitweenFixture fixture)
     [Fact]
     public async Task ConfigurableAdapter_delay_completes_within_tolerance()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var serverless = scope.ServiceProvider.GetRequiredService<IServerlessService>();
 
         var correlationId = Guid.NewGuid().ToString();

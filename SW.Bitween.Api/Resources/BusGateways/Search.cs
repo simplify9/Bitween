@@ -11,20 +11,17 @@ namespace SW.Bitween.Resources.BusGateways
 {
     public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {
             // Lookup returns only id/name pairs, which pickers across the app rely on;
             // the full list is the data, so that's what the view permission covers.
             if (!lookup)
-                await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.View);
+                await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.View);
 
-            var documents = _dbContext.Set<Document>();
-            var dataSources = _dbContext.Set<Domain.DataSources.DataSource>();
+            var documents = dbContext.Set<Document>();
+            var dataSources = dbContext.Set<Domain.DataSources.DataSource>();
 
-            var query = from gateway in _dbContext.Set<BusGateway>()
+            var query = from gateway in dbContext.Set<BusGateway>()
                         select new BusGatewayRow
                         {
                             Id = gateway.Id,
@@ -62,7 +59,7 @@ namespace SW.Bitween.Resources.BusGateways
             // so hydrate it with one grouped query instead of Get.cs's per-row
             // Include (gateways are few, so this stays a single round trip).
             var ids = result.Select(r => r.Id).ToList();
-            var routesByGateway = (await _dbContext.Set<BusGatewayRoute>()
+            var routesByGateway = (await dbContext.Set<BusGatewayRoute>()
                 .AsNoTracking()
                 .Where(r => ids.Contains(r.BusGatewayId))
                 .Include(r => r.Subscription)

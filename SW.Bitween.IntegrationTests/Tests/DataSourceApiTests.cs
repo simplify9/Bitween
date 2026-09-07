@@ -31,8 +31,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class DataSourceApiTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     // ---------------------------------------------------------------- secrets
 
     /// <summary>
@@ -132,7 +130,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
             ["Password"] = AdapterSecretProperties.Sentinel
         });
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var stored = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == id);
 
@@ -192,7 +190,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
         var id = await CreateAsync(new Dictionary<string, string>());
         await DeleteAsync(id);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await db.Set<DataSource>().AnyAsync(d => d.Id == id));
     }
@@ -208,7 +206,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
     {
         var documentId = await CreateDocumentAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var create = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
         var gatewayId = (int)await create.Handle(new BusGatewayCreate
@@ -248,7 +246,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
         var dataSourceId = await CreateAsync(new Dictionary<string, string>());
         var documentId = await CreateDocumentAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var create = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
 
@@ -287,7 +285,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
         var queue = Unique("q");
 
         int gatewayId;
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var create = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
@@ -325,10 +323,10 @@ public class DataSourceApiTests(BitweenFixture fixture)
     public async Task Changing_a_memory_ceiling_restarts_the_adapter()
     {
         var dataSourceId = await CreateAsync(
-            new Dictionary<string, string>(_fixture.ExternalRabbitProperties));
+            new Dictionary<string, string>(fixture.ExternalRabbitProperties));
         await CreateGatewayAsync(dataSourceId, Unique("mem"));
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
 
         // Disposed with the test: the election holds the exclusive queue that IS the lock, so
         // leaking one leaves this data source owned by a node that no longer exists — and every
@@ -401,10 +399,10 @@ public class DataSourceApiTests(BitweenFixture fixture)
     public async Task Changing_the_cpu_ceiling_restarts_the_adapter()
     {
         var dataSourceId = await CreateAsync(
-            new Dictionary<string, string>(_fixture.ExternalRabbitProperties));
+            new Dictionary<string, string>(fixture.ExternalRabbitProperties));
         await CreateGatewayAsync(dataSourceId, Unique("cpu"));
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
 
         // Disposed with the test: the election holds the exclusive queue that IS the lock, so
         // leaking one leaves this data source owned by a node that no longer exists — and every
@@ -507,7 +505,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
         var dataSourceId = await CreateAsync(new Dictionary<string, string>(), kind: "Relational");
         var documentId = await CreateDocumentAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var create = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
 
@@ -546,7 +544,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
     private async Task<int> CreateAsync(Dictionary<string, string> properties,
         string name = null, List<string> secretProperties = null, string kind = "Broker")
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Create>(scope.ServiceProvider);
 
@@ -562,7 +560,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task<DataSourceRow> GetAsync(int id)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Get>(scope.ServiceProvider);
         return (DataSourceRow)await handler.Handle(id);
@@ -570,7 +568,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task UpdateAsync(int id, DataSourceRow row)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Update>(scope.ServiceProvider);
         await handler.Handle(id, new DataSourceUpdate
@@ -591,7 +589,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task DeleteAsync(int id)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Delete>(scope.ServiceProvider);
         await handler.Handle(id);
@@ -599,7 +597,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task<List<DataSourceRow>> SearchAsync()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Search>(scope.ServiceProvider);
         var response = (SearchyResponse<DataSourceRow>)await handler.Handle(new SearchyRequest { PageSize = 500 });
@@ -608,26 +606,26 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task<string> StoredPropertyAsync(int id, string name)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var stored = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == id);
         return stored.Properties.TryGetValue(name, out var value) ? value : null;
     }
 
     private RabbitMqLeaderElection Node() => new(
-        _fixture.App.Services.GetRequiredService<IConfiguration>(),
-        _fixture.App.Services,
-        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+        fixture.App.Services.GetRequiredService<IConfiguration>(),
+        fixture.App.Services,
+        fixture.App.Services.GetRequiredService<ILoggerFactory>()
             .CreateLogger<RabbitMqLeaderElection>());
 
     private BusProviderSupervisor Supervisor(IResidentAdapterHost host, ILeaderElection election) => new(
-        _fixture.App.Services, host, election,
-        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+        fixture.App.Services, host, election,
+        fixture.App.Services.GetRequiredService<ILoggerFactory>()
             .CreateLogger<BusProviderSupervisor>());
 
     private async Task<DataSourceInspectResult> InspectAsync(int id, string command)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Inspect>(scope.ServiceProvider);
         return (DataSourceInspectResult)await handler.Handle(id, new DataSourceInspectRequest { Command = command });
@@ -635,7 +633,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task<int> CreateDocumentAsync()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var document = new Document(null, Unique("doc"), DocumentFormat.Json);
         db.Add(document);
@@ -647,7 +645,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
     {
         var documentId = await CreateDocumentAsync();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
 
@@ -662,7 +660,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task UpdateGatewayAsync(int gatewayId, int? dataSourceId, string endpoint)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Update>(scope.ServiceProvider);
 
@@ -678,7 +676,7 @@ public class DataSourceApiTests(BitweenFixture fixture)
 
     private async Task<BusGatewayRow> GetGatewayAsync(int gatewayId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Get>(scope.ServiceProvider);
         return (BusGatewayRow)await handler.Handle(gatewayId);

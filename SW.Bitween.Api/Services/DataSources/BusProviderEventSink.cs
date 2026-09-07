@@ -30,14 +30,11 @@ namespace SW.Bitween.Services.DataSources;
 public class BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusProviderEventSink> logger)
     : IAdapterEventSink
 {
-    private readonly IServiceProvider _serviceProvider = serviceProvider;
-    private readonly ILogger<BusProviderEventSink> _logger = logger;
-
     public async Task<EventOutcome> OnEventAsync(InboundEvent inboundEvent, CancellationToken cancellationToken)
     {
         // A resident adapter is a singleton and outlives any request, so ingest gets its own scope
         // per message rather than borrowing one.
-        using var scope = _serviceProvider.CreateScope();
+        using var scope = serviceProvider.CreateScope();
 
         var dbContext = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xchangeService = scope.ServiceProvider.GetRequiredService<XchangeService>();
@@ -62,7 +59,7 @@ public class BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusP
         {
             // Not an error: the adapter is consuming something no gateway claims. Rejecting would
             // requeue it forever, so accept and drop with a warning instead.
-            _logger.LogWarning(
+            logger.LogWarning(
                 "No active bus gateway on data source {DataSourceId} claims endpoint '{Endpoint}'. Discarding.",
                 dataSourceId, inboundEvent.Endpoint);
             return EventOutcome.Ok("unclaimed");
@@ -105,7 +102,7 @@ public class BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusP
             // The insert lost the race, so this message has already been persisted. ACCEPT it:
             // rejecting would nack and redeliver a message that is by definition already handled,
             // and the queue would never drain.
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Duplicate message on data source {DataSourceId} endpoint {Endpoint} (key {Key}); already persisted.",
                 dataSourceId, inboundEvent.Endpoint, dedupeKey);
 
@@ -115,7 +112,7 @@ public class BusProviderEventSink(IServiceProvider serviceProvider, ILogger<BusP
         {
             // Rejecting is the right answer: the adapter nacks, the broker redelivers, and nothing
             // is silently lost because Bitween happened to be unhealthy for a moment.
-            _logger.LogError(ex, "Failed to ingest a message from data source {DataSourceId} endpoint {Endpoint}.",
+            logger.LogError(ex, "Failed to ingest a message from data source {DataSourceId} endpoint {Endpoint}.",
                 dataSourceId, inboundEvent.Endpoint);
             return EventOutcome.Rejected(ex.Message);
         }

@@ -29,7 +29,7 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<RabbitMqLeaderElection> _logger;
-    private readonly string _nodeName;
+    private readonly string nodeName;
     private readonly ConnectionFactory _factory;
 
     private IConnection _connection;
@@ -43,7 +43,7 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
 
         // Distinct per process, not per machine: two instances on one host must not believe they
         // are the same owner.
-        _nodeName = $"{Environment.MachineName}:{Environment.ProcessId}";
+        nodeName = $"{Environment.MachineName}:{Environment.ProcessId}";
 
         var connectionString = configuration.GetConnectionString("RabbitMQ")
             ?? throw new InvalidOperationException(
@@ -61,7 +61,7 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
         };
     }
 
-    public string NodeName => _nodeName;
+    public string NodeName => nodeName;
 
     public async Task<IResourceLease> TryAcquireAsync(string resource,
         CancellationToken cancellationToken = default)
@@ -98,9 +98,9 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
             var term = await ClaimTermAsync(resource, cancellationToken);
 
             _logger.LogInformation("Node {Node} acquired {Resource} at term {Term}.",
-                _nodeName, resource, term);
+                nodeName, resource, term);
 
-            return new RabbitMqLease(resource, queue, term, channel, _serviceProvider, _nodeName);
+            return new RabbitMqLease(resource, queue, term, channel, _serviceProvider, nodeName);
         }
         catch (Exception ex)
         {
@@ -122,12 +122,12 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
 
         if (lease == null)
         {
-            lease = new ClusterLease(resource, _nodeName);
+            lease = new ClusterLease(resource, nodeName);
             dbContext.Add(lease);
         }
         else
         {
-            lease.Claim(_nodeName);
+            lease.Claim(nodeName);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -144,9 +144,9 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
             if (_connection is { IsOpen: true }) return _connection;
 
             _connection?.Dispose();
-            _connection = _factory.CreateConnection($"bitween-election-{_nodeName}");
+            _connection = _factory.CreateConnection($"bitween-election-{nodeName}");
 
-            _logger.LogInformation("Election connection open for node {Node}.", _nodeName);
+            _logger.LogInformation("Election connection open for node {Node}.", nodeName);
             return _connection;
         }
         catch (Exception ex)
@@ -174,7 +174,6 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
     {
         private readonly IModel _channel = channel;
         private readonly IServiceProvider _serviceProvider = serviceProvider;
-        private readonly string _nodeName = nodeName;
         private bool _released;
 
         private readonly string _queue = queue;
@@ -197,7 +196,7 @@ public class RabbitMqLeaderElection : ILeaderElection, IDisposable
 
             // A higher term means someone else acquired while we were not looking, whatever our
             // channel still believes.
-            return current != null && current.Term == Term && current.OwnerNode == _nodeName;
+            return current != null && current.Term == Term && current.OwnerNode == nodeName;
         }
 
         public ValueTask DisposeAsync()

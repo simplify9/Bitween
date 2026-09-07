@@ -9,23 +9,19 @@ namespace SW.Bitween.Resources.GlobalAdapterValuesSets
 public class Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
         : ICommandHandler<string, GlobalAdapterValuesSetUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
-
         public async Task<object> Handle(string key, GlobalAdapterValuesSetUpdate request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.GlobalValues.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.GlobalValues.Edit);
 
-            var entity = await _dbContext.Set<GlobalAdapterValuesSet>().FindAsync(key);
+            var entity = await dbContext.Set<GlobalAdapterValuesSet>().FindAsync(key);
             if (entity is null)
                 throw new SWValidationException("NOT_FOUND", $"GlobalAdapterValuesSet with id {key} was not found");
 
             entity.Name = request.Name;
             entity.Values = request.Values;
 
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
 

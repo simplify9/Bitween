@@ -14,22 +14,18 @@ namespace SW.Bitween.Resources.Dashboard;
 public class XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeService xchangeService,
     RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     private readonly DateTime _dataDateLimit = DateTime.UtcNow.AddMonths(-3);
-    private readonly XchangeService _xchangeService = xchangeService;
 
     public async Task<object> Handle()
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Dashboard.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Dashboard.View);
 
-        var totalXchangesCount = await _dbContext.Set<Xchange>().AsNoTracking().CountAsync();
-        var xChangeCountInTimeframe = await _dbContext.Set<Xchange>()
+        var totalXchangesCount = await dbContext.Set<Xchange>().AsNoTracking().CountAsync();
+        var xChangeCountInTimeframe = await dbContext.Set<Xchange>()
             .Where(i => i.StartedOn >= _dataDateLimit)
             .AsNoTracking().CountAsync();
 
-        var xchangeResultBase = _dbContext.Set<XchangeResult>().AsNoTracking().AsQueryable();
+        var xchangeResultBase = dbContext.Set<XchangeResult>().AsNoTracking().AsQueryable();
 
         var badResponseXchanges = await xchangeResultBase
             .Where(i => i.FinishedOn >= _dataDateLimit)
@@ -39,11 +35,10 @@ public class XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeSer
             .Where(i => i.FinishedOn >= _dataDateLimit)
             .Where(i => !string.IsNullOrEmpty(i.Exception)).CountAsync();
 
-
-        var latestFailedQ = from xchange in _dbContext.Set<Xchange>()
-            join result in _dbContext.Set<XchangeResult>() on xchange.Id equals result.Id into xr
+        var latestFailedQ = from xchange in dbContext.Set<Xchange>()
+            join result in dbContext.Set<XchangeResult>() on xchange.Id equals result.Id into xr
             from result in xr.DefaultIfEmpty()
-            join subscriber in _dbContext.Set<Subscription>() on xchange.SubscriptionId equals subscriber.Id into xs
+            join subscriber in dbContext.Set<Subscription>() on xchange.SubscriptionId equals subscriber.Id into xs
             from subscriber in xs.DefaultIfEmpty()
             select new
             {
@@ -51,7 +46,7 @@ public class XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeSer
                 result.FinishedOn,
                 result.ResponseBad,
                 result.Exception,
-                ResponseFileKey = _xchangeService.GetFileKey(xchange.Id, result.ResponseSize, XchangeFileType.Response),
+                ResponseFileKey = xchangeService.GetFileKey(xchange.Id, result.ResponseSize, XchangeFileType.Response),
             };
 
         var latestFailedxCahanges = await latestFailedQ
@@ -68,7 +63,6 @@ public class XChangesAndSubscriptionsInfo(BitweenDbContext dbContext, XchangeSer
             .Where(i => !i.OutputBad)
             .Where(i => !i.ResponseBad)
             .CountAsync();
-
 
         var res = new
         {

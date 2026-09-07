@@ -26,8 +26,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class DataSourceProviderCatalogTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     /// <summary>
     /// The adapters the fixture installed describe themselves. Nothing in Bitween names these
     /// settings — delete the attributes from RabbitOptions and this list empties.
@@ -129,7 +127,7 @@ public class DataSourceProviderCatalogTests(BitweenFixture fixture)
     [Fact]
     public async Task The_resource_lists_every_installed_provider()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSources.Providers>(scope.ServiceProvider);
 
@@ -149,7 +147,7 @@ public class DataSourceProviderCatalogTests(BitweenFixture fixture)
     [Fact]
     public async Task An_adapter_that_declares_nothing_is_simply_not_a_provider()
     {
-        var catalog = _fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
+        var catalog = fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
 
         Assert.Null(await catalog.DescribeAsync("no.such.adapter.at.all"));
     }
@@ -168,7 +166,7 @@ public class DataSourceProviderCatalogTests(BitweenFixture fixture)
     {
         const string adapterId = "acme.connectors.widgetbus";
 
-        using var scope = _fixture.App.Services.CreateScope();
+        using var scope = fixture.App.Services.CreateScope();
         await AdapterInstaller.InstallAsync(
             scope.ServiceProvider.GetRequiredService<ICloudFilesService>(),
             "SW.Bitween.Adapters.Bus.RabbitMq", adapterId,
@@ -178,7 +176,7 @@ public class DataSourceProviderCatalogTests(BitweenFixture fixture)
                 ["Protocol"] = "2", ["Lifecycle"] = "resident", ["Kind"] = "bus"
             });
 
-        var catalog = _fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
+        var catalog = fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
         var offered = await catalog.ListAsync();
 
         Assert.Contains(offered, p => p.AdapterId == adapterId);
@@ -187,7 +185,7 @@ public class DataSourceProviderCatalogTests(BitweenFixture fixture)
 
     private async Task<DataSourceProviderDescriptor> DescribeAsync(string adapterId)
     {
-        var catalog = _fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
+        var catalog = fixture.App.Services.GetRequiredService<DataSourceProviderCatalog>();
         var descriptor = await catalog.DescribeAsync(adapterId);
 
         Assert.NotNull(descriptor);

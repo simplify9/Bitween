@@ -10,14 +10,11 @@ namespace SW.Bitween.Resources.Roles;
 
 public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Roles.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Roles.View);
 
-        var query = from role in _dbContext.Set<Role>()
+        var query = from role in dbContext.Set<Role>()
             select new RoleRow
             {
                 Id = role.Id,
@@ -26,7 +23,7 @@ public class Search(BitweenDbContext dbContext, RequestContext requestContext) :
                 IsSystem = role.IsSystem,
                 Permissions = role.Permissions,
                 CreatedOn = role.CreatedOn,
-                MemberCount = _dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
+                MemberCount = dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
             };
 
         query = query.AsNoTracking();

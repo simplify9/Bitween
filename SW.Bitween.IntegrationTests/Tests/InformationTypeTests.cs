@@ -26,13 +26,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class InformationTypeTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     private async Task<int> Create(DocumentCreate model)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Documents.Create>(scope.ServiceProvider);
         return (int)await handler.Handle(model);
@@ -40,7 +39,7 @@ public class InformationTypeTests(BitweenFixture fixture)
 
     private async Task Update(int id, DocumentUpdate model)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Documents.Update>(scope.ServiceProvider);
         await handler.Handle(id, model);
@@ -48,7 +47,7 @@ public class InformationTypeTests(BitweenFixture fixture)
 
     private async Task<Document> Stored(int id)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Document>().AsNoTracking().SingleAsync(d => d.Id == id);
     }

@@ -23,13 +23,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class NotifierTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     private async Task<int> Create(string name)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Notifiers.Create>(scope.ServiceProvider);
         return (int)await handler.Handle(new NotifierCreate { Name = name });
@@ -37,7 +36,7 @@ public class NotifierTests(BitweenFixture fixture)
 
     private async Task Update(int id, NotifierUpdate model)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Notifiers.Update>(scope.ServiceProvider);
         await handler.Handle(id, model);
@@ -45,7 +44,7 @@ public class NotifierTests(BitweenFixture fixture)
 
     private async Task<Notifier> Stored(int id)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Notifier>().AsNoTracking().SingleAsync(n => n.Id == id);
     }
@@ -97,7 +96,7 @@ public class NotifierTests(BitweenFixture fixture)
         var id = await Create(Unique("Watcher"));
         int first, second;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var document = new Document(null, Unique("Notifier doc"), DocumentFormat.Json);
@@ -138,7 +137,7 @@ public class NotifierTests(BitweenFixture fixture)
         var id = await Create(Unique("Doomed"));
         int subscriptionId;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var document = new Document(null, Unique("Doomed doc"), DocumentFormat.Json);
@@ -157,14 +156,14 @@ public class NotifierTests(BitweenFixture fixture)
             RunOnSubscriptions = [new NotifierSubscription { Id = subscriptionId }],
         });
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.Notifiers.Delete>(scope.ServiceProvider);
             await handler.Handle(id);
         }
 
-        await using var check = _fixture.CreateScope();
+        await using var check = fixture.CreateScope();
         var checkDb = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await checkDb.Set<Notifier>().AnyAsync(n => n.Id == id));
 
@@ -178,7 +177,7 @@ public class NotifierTests(BitweenFixture fixture)
     {
         var id = await Create(Unique("Guarded notifier"));
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         await scope.AsNewViewer(Unique("notifier-viewer"));
 
         var create = ActivatorUtilities.CreateInstance<Resources.Notifiers.Create>(scope.ServiceProvider);

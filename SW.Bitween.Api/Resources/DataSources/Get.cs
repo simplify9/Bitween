@@ -10,14 +10,11 @@ namespace SW.Bitween.Resources.DataSources;
 
 public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.View);
 
-        var dataSource = await _dbContext.Set<DataSource>()
+        var dataSource = await dbContext.Set<DataSource>()
             .AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == key);
 
@@ -48,7 +45,7 @@ public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IG
             ConsecutiveFailures = dataSource.ConsecutiveFailures,
             OwnedByNode = dataSource.OwnedByNode,
 
-            GatewayCount = await _dbContext.Set<BusGateway>()
+            GatewayCount = await dbContext.Set<BusGateway>()
                 .CountAsync(gateway => gateway.DataSourceId == key)
         };
     }

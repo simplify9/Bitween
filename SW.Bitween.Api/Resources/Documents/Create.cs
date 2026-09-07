@@ -15,26 +15,21 @@ namespace SW.Bitween.Resources.Documents
     public class Create(BitweenDbContext dbContext, RequestContext requestContext, IBroadcast broadcast,
         IInfolinkCache cache) : ICommandHandler<DocumentCreate,object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IBroadcast _broadcast = broadcast;
-        private readonly IInfolinkCache _cache = cache;
-
         public async Task<object> Handle(DocumentCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Documents.Create);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Documents.Create);
 
             // Same check Update makes, and compared the same way. Without it two types
             // could be created under one name, and then neither could be saved again —
             // Update refuses the name it already has. Ignoring case, because a list
             // holding both "Invoice" and "invoice" reads as a mistake, not a choice.
             var wantedName = (model.Name ?? string.Empty).ToLower();
-            if (await _dbContext.Set<Document>().AsNoTracking().AnyAsync(d => d.Name.ToLower() == wantedName))
+            if (await dbContext.Set<Document>().AsNoTracking().AnyAsync(d => d.Name.ToLower() == wantedName))
                 throw new SWValidationException("NAME_TAKEN", "An information type with this name already exists.");
 
             var code = string.IsNullOrWhiteSpace(model.Code) ? null : model.Code;
 
-            if (code != null && await _dbContext.Set<Document>().AsNoTracking().AnyAsync(d => d.Code == code))
+            if (code != null && await dbContext.Set<Document>().AsNoTracking().AnyAsync(d => d.Code == code))
                 throw new SWValidationException("CODE_TAKEN", "This code is already in use.");
 
             if (model.BusEnabled && !string.IsNullOrEmpty(model.BusMessageTypeName))
@@ -46,7 +41,7 @@ namespace SW.Bitween.Resources.Documents
                 // either name reached both gateways, silently. ToLower() rather than a
                 // provider-specific collation — this runs on Postgres, MySql and MsSql.
                 var wanted = model.BusMessageTypeName.ToLower();
-                var busTypeNameDuplicated = await _dbContext.Set<Document>()
+                var busTypeNameDuplicated = await dbContext.Set<Document>()
                     .AsNoTracking()
                     .AnyAsync(d => d.BusMessageTypeName.ToLower() == wanted);
                 if (busTypeNameDuplicated)
@@ -67,17 +62,17 @@ namespace SW.Bitween.Resources.Documents
             if (model.PromotedProperties != null)
                 entity.SetDictionaries(model.PromotedProperties.ToDictionary());
 
-            _dbContext.Add(entity);
-            await _dbContext.SaveChangesAsync();
+            dbContext.Add(entity);
+            await dbContext.SaveChangesAsync();
             // Routing resolves an information type by name off the cache, so a new one is
             // invisible to it until this lands.
-            await _cache.BroadcastRevoke();
+            await cache.BroadcastRevoke();
 
             // A bus-enabled type adds a queue, and the consumer set is only rebuilt when asked.
             // Without this the queue is declared but nothing ever consumes it, until either an
             // unrelated document update happens to refresh consumers or the app restarts.
             if (entity.BusEnabled)
-                await _broadcast.RefreshConsumers();
+                await broadcast.RefreshConsumers();
 
             return entity.Id;
         }

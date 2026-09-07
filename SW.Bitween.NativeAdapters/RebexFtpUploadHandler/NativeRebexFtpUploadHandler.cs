@@ -6,12 +6,11 @@ namespace SW.Bitween.NativeAdapters.RebexFtpUploadHandler;
 
 public class NativeRebexFtpUploadHandler(string? licenseKey = null) : INativeInfolinkHandler, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey = licenseKey;
     private RebexFtpUploadHandlerInput _options = new();
 
     public async Task<XchangeFile> Handle(XchangeFile xchangeFile)
     {
-        Rebex.Licensing.Key = _licenseKey;
+        Rebex.Licensing.Key = licenseKey;
         FtpProtocol.EnsurePasswordProvided(_options.Protocol, _options.Password);
         FtpProtocol.EnsurePrivateKeyProvided(_options.Protocol, _options.PrivateKey);
 

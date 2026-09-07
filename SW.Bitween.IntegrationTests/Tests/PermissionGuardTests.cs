@@ -25,8 +25,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class PermissionGuardTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     private static async Task<Account> CreateAccount(BitweenDbContext db, string email, params int[] roleIds)
     {
         var account = new Account("Test User", email, "irrelevant-hash", AccountRole.Member);
@@ -43,7 +41,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task Viewer_may_read_but_not_write()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var viewer = await CreateAccount(db, "viewer-rw@test.local", Role.ViewerId);
@@ -65,7 +63,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task Member_may_write_integrations_but_not_manage_the_team()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var member = await CreateAccount(db, "member-scope@test.local", Role.MemberId);
@@ -87,7 +85,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task Administrator_holds_the_whole_catalog()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var admin = await CreateAccount(db, "admin-all@test.local", Role.AdministratorId);
@@ -99,7 +97,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task Revoking_a_role_takes_effect_without_a_new_token()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var account = await CreateAccount(db, "revoked@test.local", Role.MemberId);
@@ -120,7 +118,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task Granting_a_role_also_takes_effect_immediately()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var account = await CreateAccount(db, "granted@test.local");
@@ -138,7 +136,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task An_account_with_no_roles_is_granted_nothing()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var account = await CreateAccount(db, "no-roles@test.local");
@@ -152,7 +150,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task A_token_with_no_account_behind_it_is_refused()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         // Fails closed rather than falling through to an empty grant set: a token that carries no
@@ -165,7 +163,7 @@ public class PermissionGuardTests(BitweenFixture fixture)
     [Fact]
     public async Task A_custom_role_grants_exactly_what_it_stores()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         // Non-system roles take their grants from the column, unlike the built-in three.

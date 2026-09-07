@@ -14,15 +14,13 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class ReceivingTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task Receiving_job_creates_one_xchange_per_received_file()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<ReceivingJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var document = new Document(null, "Receiving Test Doc", DocumentFormat.Json);
         db.Set<Document>().Add(document);
@@ -48,10 +46,10 @@ public class ReceivingTests(BitweenFixture fixture)
     [Fact]
     public async Task Receiving_job_records_one_attempt_with_the_exchanges_it_created()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<ReceivingJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var document = new Document(null, "Receiving Attempt Doc", DocumentFormat.Json);
         db.Set<Document>().Add(document);
@@ -85,10 +83,10 @@ public class ReceivingTests(BitweenFixture fixture)
     [Fact]
     public async Task Receiving_job_records_a_failed_attempt_when_listing_files_throws()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<ReceivingJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var document = new Document(null, "Receiving Failure Doc", DocumentFormat.Json);
         db.Set<Document>().Add(document);
@@ -114,10 +112,10 @@ public class ReceivingTests(BitweenFixture fixture)
     [Fact]
     public async Task Receiving_job_records_no_new_data_when_nothing_is_found()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<ReceivingJob>();
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
 
         var document = new Document(null, "Receiving Empty Doc", DocumentFormat.Json);
         db.Set<Document>().Add(document);
@@ -143,7 +141,7 @@ public class ReceivingTests(BitweenFixture fixture)
     [Fact]
     public async Task Receiving_job_does_nothing_for_inactive_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var job = scope.ServiceProvider.GetRequiredService<ReceivingJob>();
 

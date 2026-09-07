@@ -25,13 +25,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class BusGatewayRouteTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     private async Task<int> CreateDocument()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var document = new Document(null, Unique("Bus doc"), DocumentFormat.Json);
         db.Set<Document>().Add(document);
@@ -41,7 +40,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
 
     private async Task<int> CreateGateway(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
         return (int)await handler.Handle(new BusGatewayCreate
@@ -50,7 +49,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
 
     private async Task<int> AddRoute(int gatewayId, BusGatewayRouteCreate model)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.AddRoute>(scope.ServiceProvider);
         return (int)await handler.Handle(gatewayId, model);
@@ -58,7 +57,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
 
     private async Task<int> CreateBusIntegration(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var subscription = new Subscription(Unique("Bus integration"), documentId, SubscriptionType.BusGateway);
         db.Set<Subscription>().Add(subscription);
@@ -69,7 +68,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
     [Fact]
     public async Task A_gateway_has_to_name_an_information_type_that_exists()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Create>(scope.ServiceProvider);
 
@@ -101,7 +100,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
         var gatewayId = await CreateGateway(documentId);
 
         int wrongKind;
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             // Right information type, wrong trigger — this one is started by its own schedule.
@@ -144,7 +143,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
             NewIntegration = new InlineIntegrationCreate { Name = integrationName, DocumentId = 999_999 },
         });
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var created = await db.Set<Subscription>().SingleAsync(s => s.Name == integrationName);
 
@@ -169,7 +168,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
 
         async Task Update(BusGatewayRouteUpdate model)
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.UpdateRoute>(scope.ServiceProvider);
             await handler.Handle(gatewayId, model);
@@ -193,7 +192,7 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
             MatchExpression = new OneOfSpec("channel", ["pos"]),
         });
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var route = await db.Set<BusGatewayRoute>().SingleAsync(r => r.Id == routeId);
 
@@ -209,14 +208,14 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
         var subscriptionId = await CreateBusIntegration(documentId);
         await AddRoute(gatewayId, new BusGatewayRouteCreate { SubscriptionId = subscriptionId });
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.Delete>(scope.ServiceProvider);
             await handler.Handle(gatewayId);
         }
 
-        await using var check = _fixture.CreateScope();
+        await using var check = fixture.CreateScope();
         var db = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await db.Set<BusGateway>().AnyAsync(g => g.Id == gatewayId));
         Assert.False(await db.Set<BusGatewayRoute>().AnyAsync(r => r.BusGatewayId == gatewayId));
@@ -236,14 +235,14 @@ public class BusGatewayRouteTests(BitweenFixture fixture)
         var second = await AddRoute(gatewayId,
             new BusGatewayRouteCreate { SubscriptionId = await CreateBusIntegration(documentId) });
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.BusGateways.RemoveRoute>(scope.ServiceProvider);
             await handler.Handle(gatewayId, new RemoveRouteRequest { RouteId = first });
         }
 
-        await using var check = _fixture.CreateScope();
+        await using var check = fixture.CreateScope();
         var db = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await db.Set<BusGatewayRoute>().AnyAsync(r => r.Id == first));
         Assert.True(await db.Set<BusGatewayRoute>().AnyAsync(r => r.Id == second));

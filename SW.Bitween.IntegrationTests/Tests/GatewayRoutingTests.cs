@@ -26,7 +26,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class GatewayRoutingTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
@@ -57,7 +56,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     /// </summary>
     private async Task<FilterResult> Dispatch(int documentId, string payload)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.ServiceProvider.GetRequiredService<IInfolinkCache>().Revoke();
         var filterService = scope.ServiceProvider.GetRequiredService<FilterService>();
         return await filterService.Filter(documentId, new XchangeFile(payload));
@@ -66,7 +65,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     [Fact]
     public async Task A_route_with_no_filter_runs_its_integration_for_every_message()
     {
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var docId = await OrdersDocument(db, "Routing catch-all");
@@ -98,7 +97,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     {
         int docId, jordan, emirates;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing by country");
@@ -142,7 +141,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     {
         int docId, integrationId, partnerId;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing with partner");
@@ -182,7 +181,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     {
         int docId, integrationId, gatewayId;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing deactivated");
@@ -207,7 +206,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
         Assert.Contains((await Dispatch(docId, "{\"country\":\"JO\"}")).GatewayHits,
             h => h.SubscriptionId == integrationId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var gateway = await db.Set<BusGateway>().SingleAsync(g => g.Id == gatewayId);
@@ -228,7 +227,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
         int docId;
         var ids = new Dictionary<SubscriptionType, int>();
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing entry points");
@@ -282,7 +281,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     {
         int docId, matching, filteredOut;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing internal");
@@ -317,7 +316,7 @@ public class GatewayRoutingTests(BitweenFixture fixture)
     {
         int docId;
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             docId = await OrdersDocument(db, "Routing promoted properties");

@@ -12,21 +12,14 @@ namespace SW.Bitween.Resources.Adapters
         NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
         RequestContext requestContext, SW.Serverless.AdapterInstaller adapterInstaller) : IQueryHandler<AdapterSearchRequest,object>
     {
-        private readonly ServerlessOptions _serverlessOptions = serverlessOptions;
-        private readonly ICloudFilesService _cloudFilesService = cloudFilesService;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly SW.Serverless.AdapterInstaller _adapterInstaller = adapterInstaller;
-
         public async Task<object> Handle(AdapterSearchRequest request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
-            var index = _serverlessOptions.AdapterRemotePath.Length + 1;
+            var index = serverlessOptions.AdapterRemotePath.Length + 1;
 
             // Get native adapters first (they don't have versions)
-            var nativeAdapters = _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix)
+            var nativeAdapters = nativeAdapterDiscovery.GetNativeAdapters(request.Prefix)
                 .Select(key => new
                 {
                     Key = key,
@@ -77,16 +70,16 @@ namespace SW.Bitween.Resources.Adapters
         /// </summary>
         private async Task<List<CloudFileInfo>> ListByKindAsync(string prefix)
         {
-            var root = _serverlessOptions.AdapterRemotePath;
+            var root = serverlessOptions.AdapterRemotePath;
 
-            var byConvention = (await _cloudFilesService.ListAsync($"{root}/infolink6.{prefix}")).ToList();
+            var byConvention = (await cloudFilesService.ListAsync($"{root}/infolink6.{prefix}")).ToList();
             var named = byConvention.Select(i => i.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             // The plural the UI asks with — "handlers" — against the singular an adapter declares.
             var kind = prefix?.TrimEnd('s') ?? "";
             if (string.IsNullOrWhiteSpace(kind)) return byConvention;
 
-            foreach (var item in await _cloudFilesService.ListAsync($"{root}/"))
+            foreach (var item in await cloudFilesService.ListAsync($"{root}/"))
             {
                 if (item.Size <= 0 || named.Contains(item.Key)) continue;
 
@@ -116,7 +109,7 @@ namespace SW.Bitween.Resources.Adapters
                 if (Semver.IsVersionNumber(adapterId.Split('/').Last()))
                     adapterId = string.Join('/', adapterId.Split('/')[..^1]);
 
-                var metadata = await _adapterInstaller.GetMetadataAsync(adapterId);
+                var metadata = await adapterInstaller.GetMetadataAsync(adapterId);
                 if (metadata?.AdapterValues == null) return [];
 
                 return metadata.AdapterValues.TryGetValue("Kind", out var kinds) && !string.IsNullOrWhiteSpace(kinds)

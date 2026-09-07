@@ -10,17 +10,14 @@ namespace SW.Bitween.Resources.RetryPolicies;
 
 public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
     {
         // Lookup returns only id/name pairs, which pickers across the app rely on;
         // the full list is the data, so that's what the view permission covers.
         if (!lookup)
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.View);
 
-        var query = from policy in _dbContext.Set<RetryPolicy>()
+        var query = from policy in dbContext.Set<RetryPolicy>()
             select new RetryPolicyRow
             {
                 Id = policy.Id,
@@ -28,7 +25,7 @@ public class Search(BitweenDbContext dbContext, RequestContext requestContext) :
                 GroupCount = policy.Groups.Count,
                 // A correlated count, so the "used by" column the UI shows costs one subquery per
                 // row instead of the whole Subscription table over the wire.
-                UsedByCount = _dbContext.Set<Subscription>()
+                UsedByCount = dbContext.Set<Subscription>()
                     .Count(subscription => subscription.RetryPolicyId == policy.Id)
             };
 

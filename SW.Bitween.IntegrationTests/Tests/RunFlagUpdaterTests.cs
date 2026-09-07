@@ -13,12 +13,10 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class RunFlagUpdaterTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task Run_flag_claims_once_then_blocks_until_idle()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var runFlag = scope.ServiceProvider.GetRequiredService<RunFlagUpdater>();
 
@@ -43,7 +41,7 @@ public class RunFlagUpdaterTests(BitweenFixture fixture)
     [Fact]
     public async Task Run_flag_only_affects_the_requested_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var runFlag = scope.ServiceProvider.GetRequiredService<RunFlagUpdater>();
 

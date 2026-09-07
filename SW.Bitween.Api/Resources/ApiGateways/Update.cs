@@ -11,14 +11,11 @@ namespace SW.Bitween.Resources.ApiGateways
 public class Update(BitweenDbContext dbContext, RequestContext requestContext)
         : ICommandHandler<int, ApiGatewayUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(int key, ApiGatewayUpdate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.Edit);
 
-            var entity = await _dbContext.Set<ApiGateway>()
+            var entity = await dbContext.Set<ApiGateway>()
                 .Include(ag => ag.Partners)
                 .FirstOrDefaultAsync(ag => ag.Id == key);
 
@@ -31,7 +28,7 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
             entity.UrlName = model.UrlName;
             entity.Inactive = model.Inactive;
 
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
             return null;
         }
     }

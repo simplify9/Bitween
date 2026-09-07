@@ -16,8 +16,6 @@ namespace SW.Bitween.Resources.Subscriptions
     {
         private readonly BitweenDbContext dbContext = dbContext;
         private readonly RequestContext requestContext = requestContext;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
-        private readonly IServiceProvider _serviceProvider = serviceProvider;
 
         private const string PrivateSentinel = "__private__";
 
@@ -91,11 +89,11 @@ namespace SW.Bitween.Resources.Subscriptions
             {
                 if (adapterId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
                 {
-                    startupValues = _nativeAdapterDiscovery.GetStartupValues(adapterId);
+                    startupValues = nativeAdapterDiscovery.GetStartupValues(adapterId);
                 }
                 else
                 {
-                    var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
+                    var serverless = serviceProvider.GetRequiredService<IServerlessService>();
                     await serverless.StartAsync(adapterId, null);
                     startupValues = await serverless.GetExpectedStartupValues();
                 }

@@ -16,18 +16,15 @@ namespace SW.Bitween.Resources.ApiGateways
 public class SearchAttachments(BitweenDbContext dbContext, RequestContext requestContext)
         : IQueryHandler<SearchApiGatewayAttachmentsModel, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(SearchApiGatewayAttachmentsModel request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.View);
 
             var offset = request.Offset ?? 0;
             var limit = request.Limit ?? 25;
             var term = request.Search?.Trim();
 
-            var query = _dbContext.Set<ApiGatewayPartner>()
+            var query = dbContext.Set<ApiGatewayPartner>()
                 .AsNoTracking()
                 .Where(p => p.ApiGatewayId == request.ApiGatewayId);
 

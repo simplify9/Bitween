@@ -28,7 +28,6 @@ public class SettingsTests(BitweenFixture fixture) : IAsyncLifetime
     private const string EditableKey = "Bitween.JwtExpiryMinutes";
     private const string EnvironmentOwnedKey = "Bitween.DocumentPrefix";
 
-    private readonly BitweenFixture _fixture = fixture;
     private readonly Dictionary<string, string> _originals = new();
 
     /// <summary>
@@ -51,7 +50,7 @@ public class SettingsTests(BitweenFixture fixture) : IAsyncLifetime
 
     private async Task Store(string key, string value)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Settings.Update>(scope.ServiceProvider);
         await handler.Handle(key, new SettingUpdate { Value = value });
@@ -59,7 +58,7 @@ public class SettingsTests(BitweenFixture fixture) : IAsyncLifetime
 
     private async Task<string> RawStored(string key)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var row = await db.Set<Setting>().AsNoTracking().SingleOrDefaultAsync(s => s.Id == key);
         return row?.Value;
@@ -67,7 +66,7 @@ public class SettingsTests(BitweenFixture fixture) : IAsyncLifetime
 
     private async Task<string> LiveValue(string key)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
         return settings.LiveValue(SettingsCatalog.Find(key));
     }

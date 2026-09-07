@@ -12,25 +12,22 @@ namespace SW.Bitween.Resources.Xchanges
 public class BulkRetry(BitweenDbContext dbContext, XchangeService xchangeService)
         : ICommandHandler<XchangeBulkRetry, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly XchangeService _xchangeService = xchangeService;
-
         public async Task<object> Handle(XchangeBulkRetry request)
         {
-            var scheduledIds = await _dbContext.Set<DelayedRetry>()
+            var scheduledIds = await dbContext.Set<DelayedRetry>()
                 .Where(d => request.Ids.Contains(d.Id))
                 .Select(d => d.Id)
                 .ToListAsync();
 
-            var xchanges = await _dbContext.Set<Xchange>()
+            var xchanges = await dbContext.Set<Xchange>()
                 .Where(c => request.Ids.Contains(c.Id) && !scheduledIds.Contains(c.Id)).AsNoTracking()
                 .ToListAsync();
 
             foreach (var xchange in xchanges)
             {
-                var inputFileData = await _xchangeService.GetFile(xchange.Id, XchangeFileType.Input);
+                var inputFileData = await xchangeService.GetFile(xchange.Id, XchangeFileType.Input);
                 var xchangeFile = new XchangeFile(inputFileData, xchange.InputName);
-                var subscription = await _dbContext.Subscriptions()
+                var subscription = await dbContext.Subscriptions()
                     .FirstOrDefaultAsync(s => s.Id == xchange.SubscriptionId);
                 
                 if (request.Reset)
@@ -38,22 +35,21 @@ public class BulkRetry(BitweenDbContext dbContext, XchangeService xchangeService
                     if (subscription == null)
                         throw new SWValidationException("SUBSCRIPTION_NOT_FOUND",
                             "Cant reset properties, subscription doesnt exist anymore");
-                    await _xchangeService.CreateXchange(subscription, xchange, xchangeFile,
+                    await xchangeService.CreateXchange(subscription, xchange, xchangeFile,
                         manualRetry: true);
                 }
                 else
                 {
-                    
                     // Null when the subscription has since been deleted, which a document-only
                     // exchange also has from the start. The single-exchange retry has always allowed
                     // for it; without the same here, one such id in a selection threw and took the
                     // whole bulk retry down with it.
-                    await _xchangeService.CreateXchange(xchange, xchangeFile, subscription?.WorkGroup,
+                    await xchangeService.CreateXchange(xchange, xchangeFile, subscription?.WorkGroup,
                         manualRetry: true);
                 }
             }
 
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
 
             return null;
         }

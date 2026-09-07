@@ -11,10 +11,6 @@ namespace SW.Bitween
     {
         private const string MessageTypeNameToDocumentId = "MessageTypeNameToDocumentId";
 
-        private readonly XchangeService _xchangeService = xchangeService;
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<IEnumerable<string>> GetMessageTypeNames()
         {
             var map = await GetMessageTypeNameToDocumentIdMap();
@@ -27,12 +23,12 @@ namespace SW.Bitween
 
             var xf = new XchangeFile(message);
 
-            await _xchangeService.SubmitFilterXchange(map[messageTypeName], xf, null, _requestContext.CorrelationId);
+            await xchangeService.SubmitFilterXchange(map[messageTypeName], xf, null, requestContext.CorrelationId);
         }
 
         private async Task<IReadOnlyDictionary<string, int>> GetMessageTypeNameToDocumentIdMap()
         {
-            return (await _dbContext.ListAsync(new BusEnabledDocuments())).ToDictionary(k => k.BusMessageTypeName,
+            return (await dbContext.ListAsync(new BusEnabledDocuments())).ToDictionary(k => k.BusMessageTypeName,
                 v => v.Id);
         }
     }

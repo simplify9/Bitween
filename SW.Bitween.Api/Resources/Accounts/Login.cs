@@ -19,46 +19,40 @@ namespace SW.Bitween.Resources.Accounts
         private const int MaxFailedLoginAttempts = 5;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly BitweenOptions _BitweenSettings = BitweenSettings;
-        private readonly JwtTokenParameters _jwtTokenParameters = jwtTokenParameters;
-        private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
-        private readonly ILogger<Login> _logger = logger;
-
         public async Task<object> Handle(UserLogin request)
         {
-            var jwtExpiryTimeSpan = TimeSpan.FromMinutes(_BitweenSettings.JwtExpiryMinutes);
+            var jwtExpiryTimeSpan = TimeSpan.FromMinutes(BitweenSettings.JwtExpiryMinutes);
 
-            var accountQ = _dbContext
+            var accountQ = dbContext
                 .Set<Account>()
                 .AsQueryable();
 
             // Prefer refresh token from HttpOnly cookie (secure), fall back to body (legacy)
-            var refreshTokenValue = _httpContextAccessor.HttpContext?.Request.Cookies["refresh_token"];
+            var refreshTokenValue = httpContextAccessor.HttpContext?.Request.Cookies["refresh_token"];
             if (string.IsNullOrEmpty(refreshTokenValue))
                 refreshTokenValue = request.RefreshToken;
 
             if (!string.IsNullOrEmpty(refreshTokenValue))
             {
-                var refreshToken = await _dbContext.Set<RefreshToken>()
+                var refreshToken = await dbContext.Set<RefreshToken>()
                     .SingleOrDefaultAsync(x => x.Id == refreshTokenValue);
                 if (refreshToken is null)
                 {
-                    _logger.LogWarning("Refresh token not found in DB, clearing cookie and falling back to credentials.");
-                    _httpContextAccessor.HttpContext?.Response.Cookies.Delete("refresh_token");
+                    logger.LogWarning("Refresh token not found in DB, clearing cookie and falling back to credentials.");
+                    httpContextAccessor.HttpContext?.Response.Cookies.Delete("refresh_token");
                     refreshTokenValue = null;
                 }
                 else
                 {
-                    _dbContext.Remove(refreshToken);
+                    dbContext.Remove(refreshToken);
                     accountQ = accountQ.Where(u => u.Id == refreshToken.AccountId);
                 }
             }
 
             if (string.IsNullOrEmpty(refreshTokenValue) && string.IsNullOrEmpty(request.MsToken) &&
-                _BitweenSettings.DisableEmailPasswordLogin)
+                BitweenSettings.DisableEmailPasswordLogin)
             {
-                _logger.LogWarning("Email/password login attempt rejected: DisableEmailPasswordLogin is enabled.");
+                logger.LogWarning("Email/password login attempt rejected: DisableEmailPasswordLogin is enabled.");
                 throw new SWException("Email and password login is disabled. Please sign in with Microsoft.");
             }
 
@@ -68,7 +62,7 @@ namespace SW.Bitween.Resources.Accounts
             if (string.IsNullOrEmpty(refreshTokenValue) && string.IsNullOrEmpty(request.MsToken) &&
                 (string.IsNullOrEmpty(request.Username) || string.IsNullOrEmpty(request.Password)))
             {
-                _logger.LogWarning("Login rejected: missing username or password on a credential login.");
+                logger.LogWarning("Login rejected: missing username or password on a credential login.");
                 throw new SWException("Invalid username or password.");
             }
 
@@ -78,20 +72,19 @@ namespace SW.Bitween.Resources.Accounts
             }
             else if (!string.IsNullOrEmpty(request.MsToken))
             {
-                var email = (await request.GetEmailFromAzureJwtDefault(_logger))?.ToLower();
+                var email = (await request.GetEmailFromAzureJwtDefault(logger))?.ToLower();
                 if (string.IsNullOrEmpty(email))
                 {
-                    _logger.LogWarning("MS login failed: could not extract email from token.");
+                    logger.LogWarning("MS login failed: could not extract email from token.");
                     throw new SWException("Could not retrieve your email from Microsoft. Please ensure your Microsoft account has a valid email address and try again.");
                 }
-                _logger.LogInformation("MS login attempt. Extracted email from token: '{Email}'", email);
+                logger.LogInformation("MS login attempt. Extracted email from token: '{Email}'", email);
                 accountQ = accountQ.Where(u => u.Email.ToLower() == email);
             }
             else
             {
                 accountQ = accountQ.Where(u => u.Email.ToLower() == request.Username.ToLower());
             }
-
 
             var account = await accountQ
                 .SingleOrDefaultAsync();
@@ -100,7 +93,7 @@ namespace SW.Bitween.Resources.Accounts
             {
                 if (!string.IsNullOrEmpty(request.MsToken))
                 {
-                    _logger.LogWarning("MS login failed: no account found matching the token email.");
+                    logger.LogWarning("MS login failed: no account found matching the token email.");
                     throw new SWException("Your Microsoft account is not registered in the system. Please contact your administrator to be added.");
                 }
 
@@ -111,13 +104,12 @@ namespace SW.Bitween.Resources.Accounts
             {
                 if (!string.IsNullOrEmpty(request.MsToken))
                 {
-                    _logger.LogWarning("MS login failed: account '{Email}' is disabled.", account.Email);
+                    logger.LogWarning("MS login failed: account '{Email}' is disabled.", account.Email);
                     throw new SWException("Your Microsoft account has been disabled. Please contact your administrator.");
                 }
 
                 throw new SWException("Your account has been disabled. Please contact your administrator.");
             }
-
 
             if (string.IsNullOrEmpty(refreshTokenValue) && !string.IsNullOrEmpty(request.Username) &&
                 !string.IsNullOrEmpty(request.Password) && string.IsNullOrEmpty(request.MsToken))
@@ -126,7 +118,7 @@ namespace SW.Bitween.Resources.Accounts
                 if (account.IsLockedOut(nowUtc))
                 {
                     var minutes = (int)Math.Ceiling((account.LockoutEnd!.Value - nowUtc).TotalMinutes);
-                    _logger.LogWarning("Login rejected: account '{Email}' is temporarily locked.", account.Email);
+                    logger.LogWarning("Login rejected: account '{Email}' is temporarily locked.", account.Email);
                     throw new SWException(
                         $"Your account is temporarily locked due to multiple failed login attempts. " +
                         $"Please try again in {minutes} minute{(minutes == 1 ? "" : "s")}.");
@@ -143,7 +135,7 @@ namespace SW.Bitween.Resources.Accounts
                     // Atomic DB-side update so concurrent wrong-password attempts can't read the
                     // same count and lose increments, which would let them slip past the lockout.
                     var lockoutEnd = nowUtc.Add(LockoutDuration);
-                    await _dbContext.Set<Account>()
+                    await dbContext.Set<Account>()
                         .Where(a => a.Id == account.Id)
                         .ExecuteUpdateAsync(s => s
                             .SetProperty(a => a.LockoutEnd,
@@ -157,12 +149,12 @@ namespace SW.Bitween.Resources.Accounts
             }
 
             var newRefreshToken = CreateRefreshToken(account, LoginMethod.EmailAndPassword);
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
 
             // Set refresh token as a secure, HttpOnly cookie — not accessible to JavaScript.
             // Secure is always on: the app is served over HTTPS, and TLS is terminated at the
             // reverse proxy, so Request.IsHttps would otherwise be false and drop the attribute.
-            _httpContextAccessor.HttpContext?.Response.Cookies.Append("refresh_token", newRefreshToken, new CookieOptions
+            httpContextAccessor.HttpContext?.Response.Cookies.Append("refresh_token", newRefreshToken, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
@@ -171,13 +163,13 @@ namespace SW.Bitween.Resources.Accounts
             });
 
             // Return only the JWT — refresh token stays in the cookie, not in the response body
-            return new { Jwt = account.CreateJwt(LoginMethod.EmailAndPassword, _jwtTokenParameters, jwtExpiryTimeSpan) };
+            return new { Jwt = account.CreateJwt(LoginMethod.EmailAndPassword, jwtTokenParameters, jwtExpiryTimeSpan) };
         }
 
         private string CreateRefreshToken(Account account, LoginMethod loginMethod)
         {
             var refreshToken = new RefreshToken(account.Id, loginMethod);
-            _dbContext.Add(refreshToken);
+            dbContext.Add(refreshToken);
             return refreshToken.Id;
         }
     }

@@ -6,13 +6,12 @@ namespace SW.Bitween.NativeAdapters.RebexFtpReceiver;
 
 public class NativeRebexFtpReceiver(string? licenseKey = null) : INativeInfolinkReceiver, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey = licenseKey;
     private RebexFtpReceiverInput _options = new();
     private IFtp _ftpOrSftp = null!;
 
     public async Task Initialize()
     {
-        Rebex.Licensing.Key = _licenseKey;
+        Rebex.Licensing.Key = licenseKey;
         FtpProtocol.EnsurePasswordProvided(_options.Protocol, _options.Password);
         FtpProtocol.EnsurePrivateKeyProvided(_options.Protocol, _options.PrivateKey);
 

@@ -17,17 +17,14 @@ namespace SW.Bitween.Resources.Subscriptions;
 public class GetReceiveAttempts(BitweenDbContext dbContext, RequestContext requestContext)
     : IQueryHandler<SearchReceiveAttemptsModel, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(SearchReceiveAttemptsModel request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
         var offset = request.Offset ?? 0;
         var limit = request.Limit ?? 25;
 
-        var query = _dbContext.Set<ReceiveAttempt>()
+        var query = dbContext.Set<ReceiveAttempt>()
             .AsNoTracking()
             .Where(a => a.SubscriptionId == request.SubscriptionId);
 
@@ -47,10 +44,10 @@ public class GetReceiveAttempts(BitweenDbContext dbContext, RequestContext reque
         // Left join: an id an attempt still points at but whose Xchange got cleaned up some
         // other way shows up with nulls rather than silently dropping the row's own history.
         var exchangesById = await (
-            from x in _dbContext.Set<Xchange>()
-            join r in _dbContext.Set<XchangeResult>() on x.Id equals r.Id into xr
+            from x in dbContext.Set<Xchange>()
+            join r in dbContext.Set<XchangeResult>() on x.Id equals r.Id into xr
             from r in xr.DefaultIfEmpty()
-            join p in _dbContext.Set<XchangePromotedProperties>() on x.Id equals p.Id into xp
+            join p in dbContext.Set<XchangePromotedProperties>() on x.Id equals p.Id into xp
             from p in xp.DefaultIfEmpty()
             where exchangeIds.Contains(x.Id)
             select new ReceiveAttemptExchangeRef

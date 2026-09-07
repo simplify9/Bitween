@@ -12,14 +12,11 @@ namespace SW.Bitween.Resources.Accounts;
 public class SetRoles(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, SetAccountRolesModel, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, SetAccountRolesModel request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Users.Edit);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Edit);
 
-        var account = await _dbContext.Set<Account>().FindAsync(key);
+        var account = await dbContext.Set<Account>().FindAsync(key);
         if (account is null)
             throw new SWValidationException("ACCOUNT_NOT_FOUND", $"No account exists with the id {key}");
 
@@ -28,11 +25,11 @@ public class SetRoles(BitweenDbContext dbContext, RequestContext requestContext)
         // Don't let the last administrator be demoted — including by themselves. Otherwise an
         // instance ends up with nobody able to manage members or roles.
         if (!roleIds.Contains(Role.AdministratorId))
-            await Administrators.EnsureNotTheLast(_dbContext, key);
+            await Administrators.EnsureNotTheLast(dbContext, key);
 
-        await AccountRoles.Set(_dbContext, key, roleIds);
+        await AccountRoles.Set(dbContext, key, roleIds);
         account.SetRole(AccountRoles.LegacyRoleFor(roleIds));
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
 
         return null;
     }

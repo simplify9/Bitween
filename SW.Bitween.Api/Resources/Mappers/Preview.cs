@@ -27,16 +27,13 @@ public class MapperPreviewResponse
 public class Preview(RequestContext requestContext, BitweenDbContext dbContext)
     : ICommandHandler<MapperPreviewRequest, MapperPreviewResponse>
 {
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly BitweenDbContext _dbContext = dbContext;
-
     public async Task<MapperPreviewResponse> Handle(MapperPreviewRequest request)
     {
         var partner = request.PartnerId.HasValue
-            ? await _dbContext.FindAsync<Partner>(request.PartnerId.Value)
+            ? await dbContext.FindAsync<Partner>(request.PartnerId.Value)
             : null;
 
-        var globalSets = await _dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
+        var globalSets = await dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
 
         try
         {

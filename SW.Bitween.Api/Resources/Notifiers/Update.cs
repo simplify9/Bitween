@@ -10,15 +10,11 @@ namespace SW.Bitween.Resources.Notifiers
 public class Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
         : ICommandHandler<int, NotifierUpdate,object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
-
         public async Task<object> Handle(int key, NotifierUpdate request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Notifiers.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Notifiers.Edit);
 
-            var notifier = await _dbContext.FindAsync<Notifier>(key);
+            var notifier = await dbContext.FindAsync<Notifier>(key);
 
             notifier.Update(request.Name, request.RunOnSuccessfulResult,
                 request.RunOnBadResult,
@@ -31,9 +27,8 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext, I
             // and a retry policy's groups. Left implicit it threw ArgumentNullException.
             notifier.SetDictionaries((request.HandlerProperties ?? []).ToDictionary());
 
-
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
 

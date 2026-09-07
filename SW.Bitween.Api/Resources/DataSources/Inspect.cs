@@ -32,24 +32,20 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
     /// </summary>
     private static readonly string[] Allowed = ["Discover", "GetStats"];
 
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly IResidentAdapterHost _adapters = adapters;
-
     public async Task<object> Handle(int key, DataSourceInspectRequest request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.View);
 
         var command = request?.Command ?? "Discover";
         if (!Allowed.Contains(command, StringComparer.OrdinalIgnoreCase))
             throw new SWException(
                 $"'{command}' is not something this endpoint relays. Allowed: {string.Join(", ", Allowed)}.");
 
-        var exists = await _dbContext.Set<DataSource>().AsNoTracking().AnyAsync(d => d.Id == key);
+        var exists = await dbContext.Set<DataSource>().AsNoTracking().AnyAsync(d => d.Id == key);
         if (!exists)
             throw new SWNotFoundException($"DataSource with id '{key}' was not found");
 
-        var instance = _adapters?.Describe()
+        var instance = adapters?.Describe()
             .FirstOrDefault(h => h.InstanceKey == key.ToString());
 
         if (instance == null)
@@ -65,7 +61,7 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
 
         try
         {
-            var live = _adapters.Get(instance.AdapterId, instance.InstanceKey);
+            var live = adapters.Get(instance.AdapterId, instance.InstanceKey);
             if (live == null)
                 return new DataSourceInspectResult { Ran = false, Error = "The adapter went away." };
 

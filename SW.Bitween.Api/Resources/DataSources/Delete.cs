@@ -10,16 +10,13 @@ namespace SW.Bitween.Resources.DataSources;
 
 public class Delete(BitweenDbContext dbContext, RequestContext requestContext) : IDeleteHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Delete);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.Delete);
 
         // The database refuses this anyway — the foreign key restricts — but a raw constraint
         // violation tells an operator nothing about which gateway is in the way.
-        var gateways = await _dbContext.Set<BusGateway>()
+        var gateways = await dbContext.Set<BusGateway>()
             .Where(gateway => gateway.DataSourceId == key)
             .Select(gateway => gateway.Name)
             .Take(5)
@@ -33,8 +30,8 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext) :
 
         // Dedupe keys cascade with the data source, which is what makes deleting and recreating a
         // data source a genuine reset rather than one that silently suppresses the first messages.
-        await _dbContext.DeleteByKeyAsync<DataSource>(key);
-        await _dbContext.SaveChangesAsync();
+        await dbContext.DeleteByKeyAsync<DataSource>(key);
+        await dbContext.SaveChangesAsync();
         return null;
     }
 }

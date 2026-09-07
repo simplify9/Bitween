@@ -9,18 +9,15 @@ namespace SW.Bitween.Resources.Accounts;
 public class Update(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, UpdateAccountModel, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, UpdateAccountModel request)
     {
-        var loggedInUserId = Convert.ToInt32(_requestContext.GetNameIdentifier());
+        var loggedInUserId = Convert.ToInt32(requestContext.GetNameIdentifier());
 
         // Anyone may edit their own name; editing someone else needs the grant.
         if (key != loggedInUserId)
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Users.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Edit);
 
-        var account = await _dbContext.Set<Account>().FindAsync(key);
+        var account = await dbContext.Set<Account>().FindAsync(key);
         if (account is null)
             throw new SWValidationException("ACCOUNT_NOT_FOUND", $"No account exists with the id {key}");
 
@@ -29,13 +26,13 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
         // Changing a role is never self-service, or anyone could promote themselves.
         if (request.Role is not null && (AccountRole)request.Role != account.Role)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Users.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Edit);
             var role = (AccountRole)request.Role;
             account.SetRole(role);
-            await AccountRoles.Set(_dbContext, key, [BuiltInRoleFor(role)]);
+            await AccountRoles.Set(dbContext, key, [BuiltInRoleFor(role)]);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
 
         return null;
     }

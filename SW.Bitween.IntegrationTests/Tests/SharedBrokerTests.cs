@@ -40,8 +40,6 @@ public class SharedBrokerTests(BitweenFixture fixture)
 {
     private const string EchoHandler = "sw.bitween.samplehandler";
 
-    private readonly BitweenFixture _fixture = fixture;
-
     /// <summary>
     /// The multiplexing claim, stated as a number: three gateways, one process.
     ///
@@ -314,7 +312,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
             TimeSpan.FromSeconds(60), "the two tenants did not both work");
 
         // Ownership is per data source, so each holds its own lease.
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         foreach (var id in new[] { acme, contoso })
             Assert.NotNull(await db.Set<Domain.Cluster.ClusterLease>().AsNoTracking()
@@ -366,7 +364,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
     /// <summary>A data source with connection settings only — the endpoints come from its gateways.</summary>
     private async Task<int> BrokerAsync(string label)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var dataSource = new DataSource
@@ -374,7 +372,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
             Name = Unique($"ds-{label}"),
             AdapterId = BusAdapters.RabbitMq,
             Kind = DataSourceKind.Broker,
-            Properties = new Dictionary<string, string>(_fixture.ExternalRabbitProperties),
+            Properties = new Dictionary<string, string>(fixture.ExternalRabbitProperties),
         };
 
         db.Add(dataSource);
@@ -388,7 +386,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
     {
         var queue = Unique(label);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique($"doc-{label}"), DocumentFormat.Json);
@@ -445,7 +443,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
 
     private async Task SetGatewayInactiveAsync(int gatewayId, bool inactive)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var gateway = await db.Set<BusGateway>().FirstAsync(g => g.Id == gatewayId);
         gateway.Inactive = inactive;
@@ -454,12 +452,12 @@ public class SharedBrokerTests(BitweenFixture fixture)
     }
 
     private List<InstanceHealth> Instances(int dataSourceId) =>
-        _fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
+        fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
             .Describe().Where(h => h.InstanceKey == dataSourceId.ToString()).ToList();
 
     private async Task<int> CountAsync(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Xchange>().AsNoTracking()
             .CountAsync(x => x.DocumentId == documentId && x.SubscriptionId == null);
@@ -467,7 +465,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
 
     private async Task<List<string?>> ReferencesAsync(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Xchange>().AsNoTracking()
             .Where(x => x.DocumentId == documentId && x.SubscriptionId == null)
@@ -479,7 +477,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
     {
         await ProcessAsync(xchange.Id);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var child = await db.Set<Xchange>().AsNoTracking()
@@ -498,7 +496,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
 
     private async Task ProcessAsync(string xchangeId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         await scope.ServiceProvider.GetRequiredService<XchangeService>()
             .Process("XchangeCreated", JsonConvert.SerializeObject(new { Id = xchangeId }));
     }
@@ -508,7 +506,7 @@ public class SharedBrokerTests(BitweenFixture fixture)
         Xchange? found = null;
         await WaitAsync(async () =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             found = await db.Set<Xchange>().AsNoTracking()
                 .FirstOrDefaultAsync(x => x.DocumentId == documentId && x.SubscriptionId == null);
@@ -520,16 +518,16 @@ public class SharedBrokerTests(BitweenFixture fixture)
 
     private TestSupervisor Supervisor() => new(
         new BusProviderSupervisor(
-            _fixture.App.Services,
-            _fixture.App.Services.GetRequiredService<IResidentAdapterHost>(),
+            fixture.App.Services,
+            fixture.App.Services.GetRequiredService<IResidentAdapterHost>(),
             new RabbitMqLeaderElection(
-                _fixture.App.Services.GetRequiredService<IConfiguration>(),
-                _fixture.App.Services,
-                _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+                fixture.App.Services.GetRequiredService<IConfiguration>(),
+                fixture.App.Services,
+                fixture.App.Services.GetRequiredService<ILoggerFactory>()
                     .CreateLogger<RabbitMqLeaderElection>()),
-            _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+            fixture.App.Services.GetRequiredService<ILoggerFactory>()
                 .CreateLogger<BusProviderSupervisor>()),
-        _fixture.App.Services.GetRequiredService<IResidentAdapterHost>());
+        fixture.App.Services.GetRequiredService<IResidentAdapterHost>());
 
     /// <summary>
     /// A supervisor that cleans up after itself. Only instances that appeared after it was built
@@ -609,10 +607,10 @@ public class SharedBrokerTests(BitweenFixture fixture)
 
     private IConnection ExternalConnection() => new ConnectionFactory
     {
-        HostName = _fixture.ExternalRabbitHost,
-        Port = _fixture.ExternalRabbitPort,
-        UserName = _fixture.ExternalRabbitUser,
-        Password = _fixture.ExternalRabbitPassword,
+        HostName = fixture.ExternalRabbitHost,
+        Port = fixture.ExternalRabbitPort,
+        UserName = fixture.ExternalRabbitUser,
+        Password = fixture.ExternalRabbitPassword,
     }.CreateConnection("shared-broker-tests");
 
     private static async Task WaitAsync(Func<Task<bool>> condition, TimeSpan timeout, string because)

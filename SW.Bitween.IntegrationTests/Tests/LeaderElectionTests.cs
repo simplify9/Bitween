@@ -26,8 +26,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class LeaderElectionTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task Only_one_node_can_hold_a_resource()
     {
@@ -150,7 +148,7 @@ public class LeaderElectionTests(BitweenFixture fixture)
         await using var lease = await node.TryAcquireAsync(resource);
         Assert.NotNull(lease);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var row = await db.Set<ClusterLease>().AsNoTracking().FirstAsync(l => l.Id == resource);
 
@@ -167,14 +165,14 @@ public class LeaderElectionTests(BitweenFixture fixture)
     /// which is what makes the exclusive-queue lock meaningful between them.
     /// </summary>
     private RabbitMqLeaderElection Node() => new(
-        _fixture.App.Services.GetRequiredService<IConfiguration>(),
-        _fixture.App.Services,
-        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+        fixture.App.Services.GetRequiredService<IConfiguration>(),
+        fixture.App.Services,
+        fixture.App.Services.GetRequiredService<ILoggerFactory>()
             .CreateLogger<RabbitMqLeaderElection>());
 
     private async Task<long> TermOf(string resource)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var row = await db.Set<ClusterLease>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == resource);
         return row?.Term ?? 0;

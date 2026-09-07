@@ -17,27 +17,24 @@ namespace SW.Bitween.Resources.RetryPolicies;
 public class ResetUsage(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<int, RetryPolicyResetUsage, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, RetryPolicyResetUsage request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.Edit);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.Edit);
 
-        var policy = await _dbContext.Set<RetryPolicy>().AsNoTracking()
+        var policy = await dbContext.Set<RetryPolicy>().AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == key);
         if (policy == null) throw new SWNotFoundException(key.ToString());
 
         // Scope the reset to this policy's own integrations and groups, so a policy id in the
         // route can never clear a counter belonging to a different policy.
-        var subscriptionIds = await _dbContext.Set<Subscription>()
+        var subscriptionIds = await dbContext.Set<Subscription>()
             .Where(s => s.RetryPolicyId == key)
             .Select(s => s.Id)
             .ToListAsync();
 
         var groupIds = policy.Groups.Select(g => g.Id).ToList();
 
-        var query = _dbContext.Set<RetryGroupUsage>()
+        var query = dbContext.Set<RetryGroupUsage>()
             .Where(u => subscriptionIds.Contains(u.SubscriptionId) && groupIds.Contains(u.GroupId));
 
         if (request.SubscriptionId.HasValue)

@@ -10,23 +10,19 @@ namespace SW.Bitween.Resources.BusGateways
 public class RemoveRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
         : ICommandHandler<int, RemoveRouteRequest, object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
-
         public async Task<object> Handle(int gatewayId, RemoveRouteRequest request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.Edit);
 
-            var route = await _dbContext.Set<BusGatewayRoute>()
+            var route = await dbContext.Set<BusGatewayRoute>()
                 .FirstOrDefaultAsync(r => r.Id == request.RouteId && r.BusGatewayId == gatewayId);
 
             if (route == null)
                 throw new SWNotFoundException($"Route with Id {request.RouteId} not found in gateway {gatewayId}");
 
-            _dbContext.Remove(route);
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            dbContext.Remove(route);
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
     }

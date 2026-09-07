@@ -39,8 +39,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class BusProviderSupervisorTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     /// <summary>
     /// The whole point, end to end: a row in the database becomes a live broker connection, and a
     /// message on that broker becomes an Xchange — with nobody starting an adapter by hand.
@@ -254,7 +252,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
         var termBefore = await TermOf($"datasource.{dataSourceId}");
 
         // Someone else won the resource while this node was not looking.
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var row = await db.Set<ClusterLease>().FirstAsync(l => l.Id == $"datasource.{dataSourceId}");
@@ -398,7 +396,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
         var liveDocument = await AddGatewayAsync(dataSourceId, live);
         var deadGatewayId = await AddGatewayAsync(dataSourceId, dead, returnGatewayId: true);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var gateway = await db.Set<BusGateway>().FirstAsync(g => g.Id == deadGatewayId);
@@ -430,12 +428,12 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
     /// </summary>
     private TestSupervisor Supervisor() => new(
         new BusProviderSupervisor(
-            _fixture.App.Services,
-            _fixture.App.Services.GetRequiredService<IResidentAdapterHost>(),
+            fixture.App.Services,
+            fixture.App.Services.GetRequiredService<IResidentAdapterHost>(),
             Node(),
-            _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+            fixture.App.Services.GetRequiredService<ILoggerFactory>()
                 .CreateLogger<BusProviderSupervisor>()),
-        _fixture.App.Services.GetRequiredService<IResidentAdapterHost>());
+        fixture.App.Services.GetRequiredService<IResidentAdapterHost>());
 
     private sealed class TestSupervisor : IAsyncDisposable
     {
@@ -485,9 +483,9 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
     }
 
     private RabbitMqLeaderElection Node() => new(
-        _fixture.App.Services.GetRequiredService<IConfiguration>(),
-        _fixture.App.Services,
-        _fixture.App.Services.GetRequiredService<ILoggerFactory>()
+        fixture.App.Services.GetRequiredService<IConfiguration>(),
+        fixture.App.Services,
+        fixture.App.Services.GetRequiredService<ILoggerFactory>()
             .CreateLogger<RabbitMqLeaderElection>());
 
     private static async Task<IResourceLease> WaitForAcquireAsync(ILeaderElection node, string resource)
@@ -508,7 +506,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
     /// </summary>
     private async Task<int> CreateDataSourceAsync(string adapterId = null)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var dataSource = new DataSource
@@ -516,7 +514,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
             Name = Unique("ds"),
             AdapterId = adapterId ?? BusAdapters.RabbitMq,
             Kind = DataSourceKind.Broker,
-            Properties = new Dictionary<string, string>(_fixture.ExternalRabbitProperties)
+            Properties = new Dictionary<string, string>(fixture.ExternalRabbitProperties)
         };
 
         db.Add(dataSource);
@@ -526,7 +524,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
 
     private async Task<int> AddGatewayAsync(int dataSourceId, string endpoint, bool returnGatewayId = false)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("doc"), DocumentFormat.Json);
@@ -552,7 +550,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
 
     private async Task MutateAsync(int dataSourceId, Action<DataSource> mutate)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var row = await db.Set<DataSource>().FirstAsync(d => d.Id == dataSourceId);
         mutate(row);
@@ -561,7 +559,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
 
     private async Task<long> TermOf(string resource)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var row = await db.Set<ClusterLease>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == resource);
         return row?.Term ?? 0;
@@ -569,13 +567,13 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
 
     private async Task<DataSource> ReadAsync(int dataSourceId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == dataSourceId);
     }
 
     private InstanceHealth InstanceOf(int dataSourceId) =>
-        _fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
+        fixture.App.Services.GetRequiredService<IResidentAdapterHost>()
             .Describe().FirstOrDefault(h => h.InstanceKey == dataSourceId.ToString());
 
     /// <summary>
@@ -601,7 +599,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
         var instance = InstanceOf(dataSourceId);
         if (instance == null) return;
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
         try { await host.StopAsync(instance.AdapterId, instance.InstanceKey, drain: false); } catch { }
     }
 
@@ -622,10 +620,10 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
 
     private IConnection ExternalConnection() => new ConnectionFactory
     {
-        HostName = _fixture.ExternalRabbitHost,
-        Port = _fixture.ExternalRabbitPort,
-        UserName = _fixture.ExternalRabbitUser,
-        Password = _fixture.ExternalRabbitPassword
+        HostName = fixture.ExternalRabbitHost,
+        Port = fixture.ExternalRabbitPort,
+        UserName = fixture.ExternalRabbitUser,
+        Password = fixture.ExternalRabbitPassword
     }.CreateConnection("supervisor-tests");
 
     private async Task<Xchange> WaitForXchangeAsync(int documentId)
@@ -633,7 +631,7 @@ public class BusProviderSupervisorTests(BitweenFixture fixture)
         Xchange found = null;
         await WaitAsync(async () =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             found = await db.Set<Xchange>().AsNoTracking()
                 .FirstOrDefaultAsync(x => x.DocumentId == documentId);

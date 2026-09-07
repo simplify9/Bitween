@@ -30,8 +30,6 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class ExternalBusGatewayTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     // ---------------------------------------------------------------- ingress
 
     [Fact]
@@ -89,7 +87,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task The_sink_rejects_an_event_it_cannot_attribute_to_a_data_source()
     {
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var outcome = await sink.OnEventAsync(new InboundEvent
         {
@@ -112,7 +110,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
     public async Task The_sink_accepts_and_discards_an_event_no_gateway_claims()
     {
         var dataSourceId = await CreateDataSourceAsync(Unique("orphan"), withGateway: false);
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var outcome = await sink.OnEventAsync(new InboundEvent
         {
@@ -147,7 +145,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         Assert.Equal(shipmentDoc, xchange!.DocumentId);
 
         // And nothing landed on the other document.
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.Equal(0, await db.Set<Xchange>().CountAsync(x => x.DocumentId == invoiceDoc));
     }
@@ -170,7 +168,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         var catchAllDoc = await AddGatewayAsync(dataSourceId, endpoint: null);
         var invoiceDoc = await AddGatewayAsync(dataSourceId, invoices);
 
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var outcome = await sink.OnEventAsync(new InboundEvent
         {
@@ -183,7 +181,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
         Assert.True(outcome.Accepted, outcome.Error);
 
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         Assert.Equal(1, await db.Set<Xchange>().CountAsync(x => x.DocumentId == invoiceDoc));
@@ -203,7 +201,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         var catchAllDoc = await AddGatewayAsync(dataSourceId, endpoint: null);
         var knownDoc = await AddGatewayAsync(dataSourceId, known);
 
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var outcome = await sink.OnEventAsync(new InboundEvent
         {
@@ -216,7 +214,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
         Assert.True(outcome.Accepted, outcome.Error);
 
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         Assert.Equal(1, await db.Set<Xchange>().CountAsync(x => x.DocumentId == catchAllDoc));
@@ -238,14 +236,14 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         var dataSourceId = await CreateDataSourceAsync(queue, withGateway: false);
         await AddGatewayAsync(dataSourceId, queue);
 
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         db.Remove(await db.Set<DataSource>().FirstAsync(d => d.Id == dataSourceId));
         await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
 
         // And the gateway is untouched — still external, still on its data source.
-        await using var check = _fixture.App.Services.CreateAsyncScope();
+        await using var check = fixture.App.Services.CreateAsyncScope();
         var fresh = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var gateway = await fresh.Set<BusGateway>().AsNoTracking()
             .FirstAsync(g => g.DataSourceId == dataSourceId);
@@ -304,7 +302,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
         await using var adapter = await StartAsync(dataSourceId);
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
 
         await WaitAsync(() => host.Describe()
                 .Any(h => h.InstanceKey == dataSourceId.ToString() && h.LastHeartbeatOn != null),
@@ -326,7 +324,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
     [Fact]
     public async Task A_gateway_with_no_data_source_is_still_an_internal_bus_gateway()
     {
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("internal"), DocumentFormat.Json);
@@ -356,10 +354,10 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
     private async Task<int> CreateDataSourceAsync(string queue, bool withGateway)
     {
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
-        var properties = new Dictionary<string, string>(_fixture.ExternalRabbitProperties)
+        var properties = new Dictionary<string, string>(fixture.ExternalRabbitProperties)
         {
             // The supervisor normally derives this from the bound gateways; tests that create a
             // data source without one still need the adapter to declare and consume something.
@@ -381,7 +379,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
     private async Task<int> AddGatewayAsync(int dataSourceId, string endpoint)
     {
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("doc"), DocumentFormat.Json);
@@ -408,11 +406,11 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
     /// <summary>Starts the adapter for a data source and stops it when the test finishes.</summary>
     private async Task<AdapterLease> StartAsync(int dataSourceId)
     {
-        await using var scope = _fixture.App.Services.CreateAsyncScope();
+        await using var scope = fixture.App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var dataSource = await db.Set<DataSource>().AsNoTracking().FirstAsync(d => d.Id == dataSourceId);
 
-        var host = _fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
 
         var instance = await host.StartExclusiveAsync(new AdapterSpec
         {
@@ -429,13 +427,11 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         ResidentAdapterInstance instance) : IAsyncDisposable
     {
         private readonly IResidentAdapterHost _host = host;
-        private readonly string _adapterId = adapterId;
-        private readonly string _instanceKey = instanceKey;
 
         public ResidentAdapterInstance Instance { get; } = instance;
 
         public ValueTask DisposeAsync() =>
-            new(_host.StopAsync(_adapterId, _instanceKey, drain: false));
+            new(_host.StopAsync(adapterId, instanceKey, drain: false));
     }
 
     private void Publish(string queue, string body)
@@ -469,10 +465,10 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
     private IConnection ExternalConnection() => new ConnectionFactory
     {
-        HostName = _fixture.ExternalRabbitHost,
-        Port = _fixture.ExternalRabbitPort,
-        UserName = _fixture.ExternalRabbitUser,
-        Password = _fixture.ExternalRabbitPassword
+        HostName = fixture.ExternalRabbitHost,
+        Port = fixture.ExternalRabbitPort,
+        UserName = fixture.ExternalRabbitUser,
+        Password = fixture.ExternalRabbitPassword
     }.CreateConnection("integration-tests");
 
     private async Task<Xchange?> WaitForXchangeAsync(int documentId)
@@ -480,7 +476,7 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
         Xchange? found = null;
         await WaitAsync(async () =>
         {
-            await using var scope = _fixture.App.Services.CreateAsyncScope();
+            await using var scope = fixture.App.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             found = await db.Set<Xchange>().AsNoTracking()
                 .FirstOrDefaultAsync(x => x.DocumentId == documentId);

@@ -25,15 +25,11 @@ namespace SW.Bitween.Resources.DataSources;
 public class Telemetry(BitweenDbContext dbContext, RequestContext requestContext,
     IResidentAdapterHost adapters = null) : IGetHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly IResidentAdapterHost _adapters = adapters;
-
     public async Task<object> Handle(int key)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.View);
 
-        var dataSource = await _dbContext.Set<DataSource>().AsNoTracking()
+        var dataSource = await dbContext.Set<DataSource>().AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == key);
 
         if (dataSource == null)
@@ -53,7 +49,7 @@ public class Telemetry(BitweenDbContext dbContext, RequestContext requestContext
 
         // Registered only when BusProvidersEnabled, so a node with the feature off answers
         // "not here" rather than failing to resolve a service.
-        var instance = _adapters?.Describe()
+        var instance = adapters?.Describe()
             .FirstOrDefault(h => h.InstanceKey == key.ToString());
 
         if (instance == null) return telemetry;

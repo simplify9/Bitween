@@ -11,17 +11,14 @@ namespace SW.Bitween.Resources.DataSources;
 
 public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
     {
         // Lookup is id/name pairs, which the bus gateway picker needs in order to offer a data
         // source at all; the full list carries connection detail, so that is what View covers.
         if (!lookup)
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.View);
 
-        var query = from dataSource in _dbContext.Set<DataSource>()
+        var query = from dataSource in dbContext.Set<DataSource>()
             select new DataSourceRow
             {
                 Id = dataSource.Id,
@@ -42,7 +39,7 @@ public class Search(BitweenDbContext dbContext, RequestContext requestContext) :
 
                 // A correlated count, so the "used by" column costs one subquery per row rather
                 // than the whole BusGateway table over the wire.
-                GatewayCount = _dbContext.Set<BusGateway>()
+                GatewayCount = dbContext.Set<BusGateway>()
                     .Count(gateway => gateway.DataSourceId == dataSource.Id)
             };
 

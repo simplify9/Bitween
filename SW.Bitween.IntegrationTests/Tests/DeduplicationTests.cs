@@ -28,13 +28,11 @@ namespace SW.Bitween.IntegrationTests.Tests;
 [Collection("Bitween")]
 public class DeduplicationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture = fixture;
-
     [Fact]
     public async Task A_redelivered_message_does_not_produce_a_second_Xchange()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var first = await sink.OnEventAsync(Event(setup, "dup-key-1"), CancellationToken.None);
         var second = await sink.OnEventAsync(Event(setup, "dup-key-1"), CancellationToken.None);
@@ -58,7 +56,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task Concurrent_deliveries_of_one_key_produce_exactly_one_Xchange()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 8)
             .Select(_ => sink.OnEventAsync(Event(setup, "race-key"), CancellationToken.None)));
@@ -71,7 +69,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task Different_keys_are_not_confused_for_each_other()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         await sink.OnEventAsync(Event(setup, "key-a"), CancellationToken.None);
         await sink.OnEventAsync(Event(setup, "key-b"), CancellationToken.None);
@@ -89,7 +87,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     {
         var first = await ArrangeAsync();
         var second = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         await sink.OnEventAsync(Event(first, "spapi:notif-shared"), CancellationToken.None);
         await sink.OnEventAsync(Event(second, "spapi:notif-shared"), CancellationToken.None);
@@ -102,7 +100,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task An_event_with_no_key_is_never_deduplicated()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         // Nothing identifies these as the same message, so both must be persisted. Silently
         // collapsing unidentified messages would lose data.
@@ -116,7 +114,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task A_window_of_zero_turns_deduplication_off()
     {
         var setup = await ArrangeAsync(deduplicationWindowDays: 0);
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         await sink.OnEventAsync(Event(setup, "off-key"), CancellationToken.None);
         await sink.OnEventAsync(Event(setup, "off-key"), CancellationToken.None);
@@ -133,7 +131,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task A_failed_ingest_does_not_remember_the_key()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         // No gateway claims this endpoint, so nothing is persisted for it.
         var outcome = await sink.OnEventAsync(new InboundEvent
@@ -147,7 +145,7 @@ public class DeduplicationTests(BitweenFixture fixture)
 
         Assert.True(outcome.Accepted);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         Assert.False(
@@ -163,7 +161,7 @@ public class DeduplicationTests(BitweenFixture fixture)
     {
         var setup = await ArrangeAsync(deduplicationWindowDays: 7);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
@@ -172,13 +170,13 @@ public class DeduplicationTests(BitweenFixture fixture)
             await db.SaveChangesAsync();
         }
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var job = ActivatorUtilities.CreateInstance<InboundMessagePruneJob>(scope.ServiceProvider);
             await job.Execute();
         }
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
@@ -193,11 +191,11 @@ public class DeduplicationTests(BitweenFixture fixture)
     public async Task Deleting_a_data_source_forgets_its_keys()
     {
         var setup = await ArrangeAsync();
-        var sink = _fixture.App.Services.GetRequiredService<IAdapterEventSink>();
+        var sink = fixture.App.Services.GetRequiredService<IAdapterEventSink>();
 
         await sink.OnEventAsync(Event(setup, "cascade-key"), CancellationToken.None);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         Assert.True(await db.Set<InboundMessage>().AnyAsync(m => m.DataSourceId == setup.DataSourceId));
@@ -239,14 +237,14 @@ public class DeduplicationTests(BitweenFixture fixture)
 
     private async Task<int> XchangeCountAsync(int documentId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Xchange>().CountAsync(x => x.DocumentId == documentId && x.SubscriptionId == null);
     }
 
     private async Task<Setup> ArrangeAsync(int deduplicationWindowDays = 30)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var endpoint = Unique("dedupe-q");

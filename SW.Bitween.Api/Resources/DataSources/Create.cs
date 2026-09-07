@@ -11,17 +11,14 @@ namespace SW.Bitween.Resources.DataSources;
 public class Create(BitweenDbContext dbContext, RequestContext requestContext)
     : ICommandHandler<DataSourceCreate, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(DataSourceCreate model)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.DataSources.Create);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.Create);
 
         EnsureCeilingsAreUsable(model.SoftMemoryLimitMb, model.HardMemoryLimitMb,
             model.CpuPercentLimit, model.CpuLimitSamples);
 
-        var nameTaken = await _dbContext.Set<DataSource>()
+        var nameTaken = await dbContext.Set<DataSource>()
             .AnyAsync(d => d.Name == model.Name);
         if (nameTaken)
             throw new SWException($"A data source named '{model.Name}' already exists.");
@@ -45,8 +42,8 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
             CpuLimitSamples = model.CpuLimitSamples
         };
 
-        _dbContext.Add(entity);
-        await _dbContext.SaveChangesAsync();
+        dbContext.Add(entity);
+        await dbContext.SaveChangesAsync();
         return entity.Id;
     }
 

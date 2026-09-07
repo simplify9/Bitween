@@ -21,15 +21,11 @@ namespace SW.Bitween.Resources.Subscriptions;
 public class RetryUsage(BitweenDbContext dbContext, RequestContext requestContext, RetryUsageReport report)
     : ICommandHandler<int, RetryPolicyUsageRequest, object>
 {
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-    private readonly RetryUsageReport _report = report;
-
     public async Task<object> Handle(int key, RetryPolicyUsageRequest request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
-        var subscription = await _dbContext.Set<Subscription>().AsNoTracking()
+        var subscription = await dbContext.Set<Subscription>().AsNoTracking()
             .Include(s => s.RetryPolicy)
             .FirstOrDefaultAsync(s => s.Id == key);
         if (subscription == null) throw new SWNotFoundException(key.ToString());
@@ -38,7 +34,7 @@ public class RetryUsage(BitweenDbContext dbContext, RequestContext requestContex
         // alert hierarchy simply is not there for it — passed as null, which the resolver expects.
         var groups = subscription.CustomRetryPolicy?.Groups ?? subscription.RetryPolicy?.Groups ?? [];
 
-        return await _report.Build(
+        return await report.Build(
             [(subscription.Id, subscription.Name)], groups, subscription.RetryPolicy);
     }
 }

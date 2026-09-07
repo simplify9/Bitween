@@ -12,18 +12,14 @@ namespace SW.Bitween.Resources.Subscriptions
 public class Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
         : IDeleteHandler<int,object>
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-        private readonly IInfolinkCache _cache = cache;
-
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Delete);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Delete);
 
             await EnsureNothingPointsAtIt(key);
 
-            await _dbContext.DeleteByKeyAsync<Subscription>(key);
-            await _cache.BroadcastRevoke();
+            await dbContext.DeleteByKeyAsync<Subscription>(key);
+            await cache.BroadcastRevoke();
             return null;
         }
 
@@ -41,7 +37,7 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext, I
         {
             var heldBy = new List<string>();
 
-            var routeGateways = await _dbContext.Set<BusGatewayRoute>()
+            var routeGateways = await dbContext.Set<BusGatewayRoute>()
                 .Where(r => r.SubscriptionId == key)
                 .Select(r => r.BusGateway.Name)
                 .Distinct()
@@ -49,7 +45,7 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext, I
             if (routeGateways.Length > 0)
                 heldBy.Add($"a route on {Join(routeGateways)}");
 
-            var attachmentGateways = await _dbContext.Set<ApiGatewayPartner>()
+            var attachmentGateways = await dbContext.Set<ApiGatewayPartner>()
                 .Where(p => p.SubscriptionId == key)
                 .Select(p => p.ApiGateway.Name)
                 .Distinct()
@@ -57,14 +53,14 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext, I
             if (attachmentGateways.Length > 0)
                 heldBy.Add($"a partner attached to {Join(attachmentGateways)}");
 
-            var fedBy = await _dbContext.Set<Subscription>()
+            var fedBy = await dbContext.Set<Subscription>()
                 .Where(s => s.ResponseSubscriptionId == key)
                 .Select(s => s.Name)
                 .ToArrayAsync();
             if (fedBy.Length > 0)
                 heldBy.Add($"the response of {Join(fedBy)}");
 
-            var aggregatedBy = await _dbContext.Set<Subscription>()
+            var aggregatedBy = await dbContext.Set<Subscription>()
                 .Where(s => s.AggregationForId == key)
                 .Select(s => s.Name)
                 .ToArrayAsync();

@@ -10,23 +10,17 @@ namespace SW.Bitween.Resources.Adapters
         NativeAdapterDiscoveryService nativeAdapterDiscovery, BitweenDbContext dbContext,
         RequestContext requestContext) : IQueryHandler<AdapterSearchRequest,object>
     {
-        private readonly ServerlessOptions _serverlessOptions = serverlessOptions;
-        private readonly ICloudFilesService _cloudFilesService = cloudFilesService;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(AdapterSearchRequest request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
             // Get native adapters first
-            var nativeAdapters = _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix).ToList();
+            var nativeAdapters = nativeAdapterDiscovery.GetNativeAdapters(request.Prefix).ToList();
 
             // Get external adapters from storage
             var cloudFilesList =
-                (await _cloudFilesService.ListAsync(
-                    $"{_serverlessOptions.AdapterRemotePath}/infolink6.{request.Prefix}"))
+                (await cloudFilesService.ListAsync(
+                    $"{serverlessOptions.AdapterRemotePath}/infolink6.{request.Prefix}"))
                 .Where(item => item.Size > 0)
                 .Select(i =>
                 {

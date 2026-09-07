@@ -10,26 +10,23 @@ namespace SW.Bitween.Resources.DelayedRetries
 {
     public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext _dbContext = dbContext;
-        private readonly RequestContext _requestContext = requestContext;
-
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {
             // Lookup returns only id/name pairs, which pickers across the app rely on;
             // the full list is the data, so that's what the view permission covers.
             if (!lookup)
-                await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Exchanges.View, Model.Permissions.Dashboard.View);
+                await requestContext.EnsurePermission(dbContext, Model.Permissions.Exchanges.View, Model.Permissions.Dashboard.View);
 
-            var query = from delayedRetry in _dbContext.Set<DelayedRetry>()
-                        join xchange in _dbContext.Set<Xchange>() on delayedRetry.Id equals xchange.Id
-                        join result in _dbContext.Set<XchangeResult>() on xchange.Id equals result.Id into xr
+            var query = from delayedRetry in dbContext.Set<DelayedRetry>()
+                        join xchange in dbContext.Set<Xchange>() on delayedRetry.Id equals xchange.Id
+                        join result in dbContext.Set<XchangeResult>() on xchange.Id equals result.Id into xr
                         from result in xr.DefaultIfEmpty()
                         // Same left-join Xchanges/Search.cs uses — the UI lists a pending retry by
                         // what it carries, not by its id, so the properties have to come along.
-                        join promoted in _dbContext.Set<XchangePromotedProperties>() on xchange.Id equals promoted.Id into xp
+                        join promoted in dbContext.Set<XchangePromotedProperties>() on xchange.Id equals promoted.Id into xp
                         from promoted in xp.DefaultIfEmpty()
-                        join document in _dbContext.Set<Document>() on xchange.DocumentId equals document.Id
-                        join subscriber in _dbContext.Set<Subscription>() on xchange.SubscriptionId equals subscriber.Id into xs
+                        join document in dbContext.Set<Document>() on xchange.DocumentId equals document.Id
+                        join subscriber in dbContext.Set<Subscription>() on xchange.SubscriptionId equals subscriber.Id into xs
                         from subscriber in xs.DefaultIfEmpty()
                         select new DelayedRetryRow
                         {

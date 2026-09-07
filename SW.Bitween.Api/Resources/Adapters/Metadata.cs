@@ -14,15 +14,9 @@ public class Metadata(
     RequestContext requestContext
     ) : IGetHandler<string, object>
 {
-    private readonly ServerlessOptions _serverlessOptions = serverlessOptions;
-    private readonly ICloudFilesService _cloudFilesService = cloudFilesService;
-    private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery = nativeAdapterDiscovery;
-    private readonly BitweenDbContext _dbContext = dbContext;
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(string key)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
         var decodedKey = Uri.UnescapeDataString(key);
 
@@ -30,8 +24,8 @@ public class Metadata(
             return new { };
 
         var cloudFilesList =
-            await _cloudFilesService.GetMetadataAsync(
-                $"{_serverlessOptions.AdapterRemotePath}/{decodedKey}"
+            await cloudFilesService.GetMetadataAsync(
+                $"{serverlessOptions.AdapterRemotePath}/{decodedKey}"
             );
 
         return cloudFilesList;
