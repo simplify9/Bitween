@@ -26,12 +26,21 @@ public static class DocumentMapper
     /// When any rule could not be applied. Every rule is attempted first, so the exception names
     /// all of them rather than stopping at the first.
     /// </exception>
-    public static ObjectNode Map(MappingRules rules, ValueNode? source, MappingContext context)
+    public static ValueNode Map(MappingRules rules, ValueNode? source, MappingContext context)
     {
         var errors = new List<MappingError>();
-        var output = ValueNode.Object();
 
-        MapInto(output, rules.Fields, rules.Loops, source, context, errors, path: "");
+        ValueNode output;
+        if (rules.Root is not null)
+        {
+            output = BuildList(rules.Root, source, context, errors, path: "");
+        }
+        else
+        {
+            var obj = ValueNode.Object();
+            MapInto(obj, rules.Fields, rules.Loops, source, context, errors, path: "");
+            output = obj;
+        }
 
         if (errors.Count > 0) throw new MappingFailedException(errors);
         return output;
@@ -79,34 +88,56 @@ public static class DocumentMapper
                 continue;
             }
 
-            var over = Values.Resolve(scope, loop.Over);
-            var list = ValueNode.List();
+            Values.PlaceAt(output, loop.Target, BuildList(loop, scope, context, errors, path));
+        }
+    }
 
-            // A path that is absent, or holds something that is not a list, produces an empty list
-            // rather than an error. An order with no lines is ordinary; so is an optional section.
-            if (over is ListNode items)
+    /// <summary>
+    /// Walks a loop's source list and builds the list it produces — a row per item, or a single
+    /// value per item when the loop has an <see cref="LoopRule.Item"/> rule.
+    /// </summary>
+    private static ListNode BuildList(
+        LoopRule loop,
+        ValueNode? scope,
+        MappingContext context,
+        List<MappingError> errors,
+        string path)
+    {
+        var target = Describe(path, loop.Target);
+        var list = ValueNode.List();
+        var over = Values.Resolve(scope, loop.Over);
+
+        // A path that is absent, or holds something that is not a list, produces an empty list
+        // rather than an error. An order with no lines is ordinary; so is an optional section.
+        if (over is not ListNode items) return list;
+
+        foreach (var item in items.Items)
+        {
+            if (loop.Where is not null && !Matches(loop.Where, item, out var whereError))
             {
-                foreach (var item in items.Items)
-                {
-                    if (loop.Where is not null &&
-                        !Matches(loop.Where, item, out var whereError))
-                    {
-                        if (whereError is not null)
-                        {
-                            errors.Add(new MappingError(target, whereError));
-                            break;
-                        }
-                        continue;
-                    }
+                if (whereError is null) continue;
 
-                    var row = ValueNode.Object();
-                    MapInto(row, loop.Fields, loop.Loops, item, context, errors, target);
-                    list.Add(row);
-                }
+                // The condition itself is unusable, so every remaining item would report the same
+                // thing. Say it once.
+                errors.Add(new MappingError(target, whereError));
+                break;
             }
 
-            Values.PlaceAt(output, loop.Target, list);
+            if (loop.Item is not null)
+            {
+                if (TryResolveField(loop.Item, item, context, out var value, out var reason))
+                    list.Add(ValueNode.Value(value));
+                else
+                    errors.Add(new MappingError(target, reason!));
+                continue;
+            }
+
+            var row = ValueNode.Object();
+            MapInto(row, loop.Fields, loop.Loops, item, context, errors, target);
+            list.Add(row);
         }
+
+        return list;
     }
 
     private static bool TryResolveField(

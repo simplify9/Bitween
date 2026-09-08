@@ -44,7 +44,10 @@ public class DocumentMapperTests
     private static ValueSource Fixed(object? value) => new() { Kind = ValueSourceKind.Fixed, Value = value };
 
     private static ObjectNode Map(MappingRules rules, string document, MappingContext? context = null) =>
-        DocumentMapper.Map(rules, Json.Read(document), context ?? MappingContext.Empty);
+        (ObjectNode)DocumentMapper.Map(rules, Json.Read(document), context ?? MappingContext.Empty);
+
+    private static ValueNode MapAny(MappingRules rules, string document) =>
+        DocumentMapper.Map(rules, Json.Read(document), MappingContext.Empty);
 
     private static object? Scalar(ObjectNode output, string path) => Values.ResolveScalar(output, path);
 

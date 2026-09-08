@@ -33,6 +33,16 @@ public class MappingRules
     public List<FieldRule> Fields { get; set; } = new();
 
     public List<LoopRule> Loops { get; set; } = new();
+
+    /// <summary>
+    /// When set, the whole output document is this list rather than an object.
+    /// </summary>
+    /// <remarks>
+    /// Some partners expect a bare array — <c>[ {...}, {...} ]</c> — rather than an object with a
+    /// list inside it. <see cref="Fields"/> and <see cref="Loops"/> are ignored when this is set,
+    /// because a document is one thing or the other.
+    /// </remarks>
+    public LoopRule? Root { get; set; }
 }
 
 /// <summary>One output field: where its value comes from, and what it should end up as.</summary>
@@ -159,6 +169,17 @@ public class LoopRule
 
     /// <summary>Optional condition; items that do not match are skipped.</summary>
     public FilterRule? Where { get; set; }
+
+    /// <summary>
+    /// When set, each item produces a single value instead of an object — a list of strings or
+    /// numbers rather than a list of records.
+    /// </summary>
+    /// <remarks>
+    /// <c>{ "skus": ["A1","B7"] }</c> rather than <c>{ "lines": [{"sku":"A1"}] }</c>. Its
+    /// <see cref="FieldRule.Target"/> is unused, since the value has nowhere to be named.
+    /// <see cref="Fields"/> and <see cref="Loops"/> are ignored when this is set.
+    /// </remarks>
+    public FieldRule? Item { get; set; }
 
     public List<FieldRule> Fields { get; set; } = new();
 
