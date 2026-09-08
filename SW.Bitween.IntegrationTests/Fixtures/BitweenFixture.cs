@@ -156,6 +156,9 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<INativeInfolinkMapper, NativeJSONMapper>();
                     services.AddScoped<INativeAdapter, NativeJSONMapper>();
 
+                    services.AddScoped<INativeInfolinkMapper, NativeAdapters.Mapper.NativeMapper>();
+                    services.AddScoped<INativeAdapter, NativeAdapters.Mapper.NativeMapper>();
+
                     // See RecordingScheduleRepository: the create/update handlers need a scheduler
                     // to construct, and a real Quartz store would fire background jobs mid-test.
                     services.AddSingleton<IScheduleRepository, RecordingScheduleRepository>();

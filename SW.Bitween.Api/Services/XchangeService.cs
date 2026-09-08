@@ -219,6 +219,41 @@ public class XchangeService :
     }
 
 
+    /// <summary>
+    /// Collects the partner and global values for a mapper that takes them as context.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same values the enrichment below writes into the payload, gathered into their own object
+    /// instead. That is what lets a document which is not JSON be mapped, and it means a document
+    /// carrying a real <c>__partner__</c> field keeps it.
+    /// </para>
+    /// <para>
+    /// Global values come from the cache, not a fresh query. The enrichment path reads them with
+    /// <c>_dbContext.Set&lt;GlobalAdapterValuesSet&gt;()</c> on every exchange while the rest of this
+    /// service goes through <c>_BitweenCache</c>; that is left alone rather than corrected, because
+    /// changing when existing subscriptions see an edited value is not this change's business.
+    /// </para>
+    /// </remarks>
+    private async Task<string> BuildMappingContextJson(Xchange xchange)
+    {
+        var partner = xchange.PartnerId.HasValue
+            ? await _dbContext.FindAsync<Partner>(xchange.PartnerId.Value)
+            : null;
+
+        var globals = new Dictionary<string, IReadOnlyDictionary<string, string>>();
+        foreach (var set in await _BitweenCache.ListGlobalAdapterValuesSetsAsync())
+            if (set.Values?.Count > 0)
+                globals[set.Id] = set.Values;
+
+        return JsonConvert.SerializeObject(new NativeAdapters.Mapper.MappingContext
+        {
+            Partner = partner?.AdapterProperties ?? new Dictionary<string, string>(),
+            Globals = globals,
+            XchangeId = xchange.Id,
+        });
+    }
+
     private async Task<XchangeFile> RunMapper(Xchange xchange, XchangeFile xchangeFile)
     {
         if (xchange.MapperId == null) return xchangeFile;
@@ -229,7 +264,13 @@ public class XchangeService :
         // detail. Note the JToken.Parse: it runs before anything knows which mapper is configured,
         // and it throws on a payload that is not JSON, which is why a mapper that wants to handle
         // XML or CSV has to be able to opt out of this entire block.
-        if (!_nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
+        string mappingContextJson = null;
+
+        if (_nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
+        {
+            mappingContextJson = await BuildMappingContextJson(xchange);
+        }
+        else
         {
             // Inject __partner__ adapter properties into the input JSON so Scriban templates
             // can reference them as {{ __partner__?.propkey }}
@@ -269,6 +310,9 @@ public class XchangeService :
 
         var mapperProperties = xchange.MapperProperties.ToDictionary();
         mapperProperties["xchangeid"] = xchange.Id;
+
+        if (mappingContextJson != null)
+            mapperProperties[NativeAdapters.Mapper.NativeMapper.ContextKey] = mappingContextJson;
 
         // Check if it's a native adapter
         if (xchange.MapperId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
