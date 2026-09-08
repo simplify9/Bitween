@@ -1,0 +1,478 @@
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Newtonsoft.Json.Linq;
+using SW.Bitween.NativeAdapters.Mapper;
+using SW.Bitween.NativeAdapters.Mapper.Formats;
+using ValueType = SW.Bitween.NativeAdapters.Mapper.ValueType;
+
+namespace SW.Bitween.UnitTests.NativeMapper;
+
+/// <summary>
+/// The engine, tested by asserting on the tree it returns rather than on any document text.
+/// </summary>
+/// <remarks>
+/// That is only possible because <c>Map</c> is a pure function that builds its own neutral tree. Had
+/// it written into a format's builder as it went, these tests would have to assert on a log of calls
+/// instead of a result.
+/// </remarks>
+[TestClass]
+public class DocumentMapperTests
+{
+    private static readonly JsonFormat Json = new();
+
+    private const string Order = """
+        {
+          "order": {
+            "customer": "Ali",
+            "net": 100,
+            "state": "NEW",
+            "line": [
+              { "sku": "A1", "qty": 2 },
+              { "sku": "B7", "qty": 0 },
+              { "sku": "C2", "qty": 5 }
+            ]
+          }
+        }
+        """;
+
+    private static FieldRule Field(string target, ValueSource from, ValueType? type = null,
+        TransformRule? transform = null, LookupRule? lookup = null) =>
+        new() { Target = [target], From = from, Type = type, Transform = transform, Lookup = lookup };
+
+    private static ValueSource Path(string path) => new() { Kind = ValueSourceKind.Path, Path = path };
+    private static ValueSource Fixed(object? value) => new() { Kind = ValueSourceKind.Fixed, Value = value };
+
+    private static ObjectNode Map(MappingRules rules, string document, MappingContext? context = null) =>
+        DocumentMapper.Map(rules, Json.Read(document), context ?? MappingContext.Empty);
+
+    private static object? Scalar(ObjectNode output, string path) => Values.ResolveScalar(output, path);
+
+    // ── the four value sources ──────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PathSource_ReadsTheDocument()
+    {
+        var output = Map(new MappingRules { Fields = [Field("customerName", Path("order.customer"))] }, Order);
+
+        Assert.AreEqual("Ali", Scalar(output, "customerName"));
+    }
+
+    [TestMethod]
+    public void FixedSource_UsesTheLiteral()
+    {
+        var output = Map(new MappingRules { Fields = [Field("channel", Fixed("WEB"))] }, Order);
+
+        Assert.AreEqual("WEB", Scalar(output, "channel"));
+    }
+
+    /// <summary>
+    /// Partner values come from the context, never from the payload — that is the whole point of the
+    /// new mapper being handed its context instead of having it written into the document.
+    /// </summary>
+    [TestMethod]
+    public void PartnerSource_ReadsTheContext()
+    {
+        var context = new MappingContext
+        {
+            Partner = new Dictionary<string, string> { ["region-code"] = "JO" },
+        };
+        var rules = new MappingRules
+        {
+            Fields = [Field("region", new ValueSource { Kind = ValueSourceKind.Partner, Key = "region-code" })],
+        };
+
+        Assert.AreEqual("JO", Scalar(Map(rules, Order, context), "region"));
+    }
+
+    /// <summary>
+    /// A hyphenated key works. In the old mapper this exact case silently produced null inside a
+    /// fixed array item, because the key was spliced into a Scriban expression where the hyphen
+    /// parsed as subtraction.
+    /// </summary>
+    [TestMethod]
+    public void PartnerSource_HandlesAwkwardKeys()
+    {
+        var context = new MappingContext
+        {
+            Partner = new Dictionary<string, string>
+            {
+                ["api-key"] = "abc",
+                ["2fa enabled"] = "yes",
+            },
+        };
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("k", new ValueSource { Kind = ValueSourceKind.Partner, Key = "api-key" }),
+                Field("f", new ValueSource { Kind = ValueSourceKind.Partner, Key = "2fa enabled" }),
+            ],
+        };
+
+        var output = Map(rules, Order, context);
+        Assert.AreEqual("abc", Scalar(output, "k"));
+        Assert.AreEqual("yes", Scalar(output, "f"));
+    }
+
+    [TestMethod]
+    public void GlobalSource_ReadsTheContext()
+    {
+        var context = new MappingContext
+        {
+            Globals = new Dictionary<string, IReadOnlyDictionary<string, string>>
+            {
+                ["fx"] = new Dictionary<string, string> { ["vat"] = "1.16" },
+            },
+        };
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("vat", new ValueSource { Kind = ValueSourceKind.Global, SetId = "fx", Key = "vat" },
+                    ValueType.Number),
+            ],
+        };
+
+        Assert.AreEqual(1.16m, Scalar(Map(rules, Order, context), "vat"));
+    }
+
+    [TestMethod]
+    public void MissingPartnerOrGlobal_IsNull()
+    {
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("a", new ValueSource { Kind = ValueSourceKind.Partner, Key = "nope" }),
+                Field("b", new ValueSource { Kind = ValueSourceKind.Global, SetId = "nope", Key = "nope" }),
+            ],
+        };
+
+        var output = Map(rules, Order);
+        Assert.IsNull(Scalar(output, "a"));
+        Assert.IsNull(Scalar(output, "b"));
+    }
+
+    // ── absence ─────────────────────────────────────────────────────────────────
+
+    /// <summary>An optional field that is not there is null, not a failure.</summary>
+    [TestMethod]
+    public void MissingPath_IsNullNotAnError() =>
+        Assert.IsNull(Scalar(Map(new MappingRules { Fields = [Field("x", Path("order.nope"))] }, Order), "x"));
+
+    // ── nesting and order ───────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void NestedTarget_BuildsTheObjects()
+    {
+        var rules = new MappingRules
+        {
+            Fields = [new FieldRule { Target = ["customer", "name"], From = Path("order.customer") }],
+        };
+
+        Assert.AreEqual("Ali", Scalar(Map(rules, Order), "customer.name"));
+    }
+
+    /// <summary>
+    /// Output order is the order of the rules, not of the source document and not of any sample —
+    /// which is what makes it deterministic and what XML sequences require.
+    /// </summary>
+    [TestMethod]
+    public void OutputOrder_FollowsTheRules()
+    {
+        var rules = new MappingRules
+        {
+            Fields = [Field("zebra", Fixed(1)), Field("apple", Fixed(2)), Field("mango", Fixed(3))],
+        };
+
+        CollectionAssert.AreEqual(new[] { "zebra", "apple", "mango" }, Map(rules, Order).Keys.ToArray());
+    }
+
+    // ── transforms, lookups, types ──────────────────────────────────────────────
+
+    [TestMethod]
+    public void Transform_ThenType_AreBothApplied()
+    {
+        var transform = new TransformRule { Fn = "multiply" };
+        transform.Args["by"] = JToken.FromObject(1.16);
+
+        var rules = new MappingRules
+        {
+            Fields = [Field("total", Path("order.net"), ValueType.Number, transform)],
+        };
+
+        // The reason the mapper uses decimal: in double this is 115.99999999999999.
+        Assert.AreEqual(116m, Scalar(Map(rules, Order), "total"));
+    }
+
+    [TestMethod]
+    public void Lookup_SubstitutesAValue()
+    {
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("state", Path("order.state"), ValueType.Number,
+                    lookup: new LookupRule { Table = new Dictionary<string, object?> { ["NEW"] = 1, ["DONE"] = 2 } }),
+            ],
+        };
+
+        Assert.AreEqual(1m, Scalar(Map(rules, Order), "state"));
+    }
+
+    [TestMethod]
+    public void Lookup_Miss_UsesTheFallback()
+    {
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("state", Path("order.state"),
+                    lookup: new LookupRule
+                    {
+                        Table = new Dictionary<string, object?> { ["OTHER"] = "x" },
+                        Fallback = "UNKNOWN",
+                    }),
+            ],
+        };
+
+        Assert.AreEqual("UNKNOWN", Scalar(Map(rules, Order), "state"));
+    }
+
+    [TestMethod]
+    public void Lookup_MissWithNoFallback_IsNull()
+    {
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("state", Path("order.state"),
+                    lookup: new LookupRule { Table = new Dictionary<string, object?> { ["OTHER"] = "x" } }),
+            ],
+        };
+
+        Assert.IsNull(Scalar(Map(rules, Order), "state"));
+    }
+
+    // ── loops ───────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void Loop_ProducesOneRowPerItem()
+    {
+        var rules = new MappingRules
+        {
+            Loops =
+            [
+                new LoopRule
+                {
+                    Over = "order.line", As = "line", Target = ["lines"],
+                    Fields = [Field("code", Path("sku"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+        Assert.AreEqual(3, lines.Items.Count);
+        CollectionAssert.AreEqual(
+            new[] { "A1", "B7", "C2" },
+            lines.Items.Select(i => Values.ResolveScalar(i, "code")).ToArray());
+    }
+
+    [TestMethod]
+    public void Loop_Filter_SkipsItems()
+    {
+        var rules = new MappingRules
+        {
+            Loops =
+            [
+                new LoopRule
+                {
+                    Over = "order.line", As = "line", Target = ["lines"],
+                    Where = new FilterRule { Field = "qty", Operator = FilterOperator.GreaterThan, Value = 0 },
+                    Fields = [Field("code", Path("sku"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+        CollectionAssert.AreEqual(
+            new[] { "A1", "C2" },
+            lines.Items.Select(i => Values.ResolveScalar(i, "code")).ToArray());
+    }
+
+    [TestMethod]
+    public void Loop_EveryFilterOperator()
+    {
+        var cases = new (FilterOperator Op, object Value, int Expected)[]
+        {
+            (FilterOperator.Equal, 2, 1),
+            (FilterOperator.NotEqual, 2, 2),
+            (FilterOperator.GreaterThan, 0, 2),
+            (FilterOperator.GreaterThanOrEqual, 2, 2),
+            (FilterOperator.LessThan, 5, 2),
+            (FilterOperator.LessThanOrEqual, 2, 2),
+        };
+
+        foreach (var (op, value, expected) in cases)
+        {
+            var rules = new MappingRules
+            {
+                Loops =
+                [
+                    new LoopRule
+                    {
+                        Over = "order.line", Target = ["lines"],
+                        Where = new FilterRule { Field = "qty", Operator = op, Value = value },
+                        Fields = [Field("code", Path("sku"))],
+                    },
+                ],
+            };
+
+            var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+            Assert.AreEqual(expected, lines.Items.Count, $"{op} {value}");
+        }
+    }
+
+    /// <summary>An order with no lines is ordinary, so an absent list is an empty list.</summary>
+    [TestMethod]
+    public void Loop_OverAMissingPath_IsAnEmptyList()
+    {
+        var rules = new MappingRules
+        {
+            Loops = [new LoopRule { Over = "order.nope", Target = ["lines"], Fields = [Field("c", Path("sku"))] }],
+        };
+
+        Assert.AreEqual(0, ((ListNode)Values.Resolve(Map(rules, Order), "lines")!).Items.Count);
+    }
+
+    [TestMethod]
+    public void Loop_ItemFieldsAndRootFieldsTogether()
+    {
+        var rules = new MappingRules
+        {
+            Fields = [Field("customerName", Path("order.customer"))],
+            Loops =
+            [
+                new LoopRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fields = [Field("code", Path("sku")), Field("channel", Fixed("WEB"))],
+                },
+            ],
+        };
+
+        var output = Map(rules, Order);
+        Assert.AreEqual("Ali", Scalar(output, "customerName"));
+        var first = ((ListNode)Values.Resolve(output, "lines")!).Items[0];
+        Assert.AreEqual("A1", Values.ResolveScalar(first, "code"));
+        Assert.AreEqual("WEB", Values.ResolveScalar(first, "channel"));
+    }
+
+    [TestMethod]
+    public void NestedLoops_WalkTheInnerList()
+    {
+        const string document = """
+            { "orders": [
+                { "id": "O1", "lines": [ { "sku": "A" }, { "sku": "B" } ] },
+                { "id": "O2", "lines": [ { "sku": "C" } ] } ] }
+            """;
+
+        var rules = new MappingRules
+        {
+            Loops =
+            [
+                new LoopRule
+                {
+                    Over = "orders", Target = ["orders"],
+                    Fields = [Field("ref", Path("id"))],
+                    Loops =
+                    [
+                        new LoopRule { Over = "lines", Target = ["items"], Fields = [Field("code", Path("sku"))] },
+                    ],
+                },
+            ],
+        };
+
+        var orders = (ListNode)Values.Resolve(Map(rules, document), "orders")!;
+        Assert.AreEqual(2, orders.Items.Count);
+        Assert.AreEqual("O1", Values.ResolveScalar(orders.Items[0], "ref"));
+        Assert.AreEqual(2, ((ListNode)Values.Resolve(orders.Items[0], "items")!).Items.Count);
+        Assert.AreEqual(1, ((ListNode)Values.Resolve(orders.Items[1], "items")!).Items.Count);
+    }
+
+    // ── failure ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The behaviour that was chosen deliberately: fail the exchange rather than write a document
+    /// with a hole in it, and name every rule so it takes one run to fix them all.
+    /// </summary>
+    [TestMethod]
+    public void EveryFailingRuleIsReported()
+    {
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("good", Path("order.customer")),
+                Field("bad1", Path("order.customer"), ValueType.Number),
+                Field("bad2", Path("order.state"), ValueType.Boolean),
+            ],
+        };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        Assert.AreEqual(2, ex.Errors.Count);
+        CollectionAssert.AreEquivalent(new[] { "bad1", "bad2" }, ex.Errors.Select(e => e.Target).ToArray());
+        StringAssert.Contains(ex.Message, "2 rules");
+        StringAssert.Contains(ex.Message, "bad1");
+        StringAssert.Contains(ex.Message, "bad2");
+    }
+
+    [TestMethod]
+    public void OneFailingRule_ReadsAsOne()
+    {
+        var rules = new MappingRules { Fields = [Field("bad", Path("order.customer"), ValueType.Number)] };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        StringAssert.Contains(ex.Message, "1 rule");
+        StringAssert.Contains(ex.Errors[0].Reason, "cannot convert 'Ali' to number");
+    }
+
+    /// <summary>A failing rule inside a loop names the loop it is in.</summary>
+    [TestMethod]
+    public void FailureInsideALoop_NamesItsPath()
+    {
+        var rules = new MappingRules
+        {
+            Loops =
+            [
+                new LoopRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fields = [Field("code", Path("sku"), ValueType.Number)],
+                },
+            ],
+        };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        StringAssert.Contains(ex.Errors[0].Target, "lines");
+        StringAssert.Contains(ex.Errors[0].Target, "code");
+    }
+
+    [TestMethod]
+    public void RuleWithNoTarget_IsReported()
+    {
+        var rules = new MappingRules { Fields = [new FieldRule { From = Fixed("x") }] };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        StringAssert.Contains(ex.Errors[0].Reason, "no target");
+    }
+
+    [TestMethod]
+    public void EmptyRules_ProduceAnEmptyDocument() =>
+        Assert.AreEqual(0, Map(new MappingRules(), Order).Keys.Count);
+}
