@@ -140,6 +140,10 @@ function NodeRow({
         onClick={() => onPick(node.path)}
         onMouseEnter={() => dispatch({ type: "HOVER_PATH", path: node.path })}
         onMouseLeave={() => dispatch({ type: "HOVER_PATH", path: null })}
+        // The row shows only the last segment, because the indentation carries the
+        // rest. That leaves the accessible name as a bare "customer", which is not
+        // enough to tell one field from another — so the name is the full path.
+        aria-label={node.path}
         title={`${node.path} — click to use it in the selected rule`}
         className={`flex w-full items-center gap-2 py-0.5 pr-2 text-left font-mono text-[11px] hover:bg-ink-50 ${
           dim ? "opacity-40" : ""

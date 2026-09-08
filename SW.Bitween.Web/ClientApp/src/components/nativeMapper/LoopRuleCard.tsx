@@ -48,6 +48,10 @@ export function LoopRuleCard({
 
   return (
     <div
+      // A group with a name, so it is possible to tell which list a rule row belongs
+      // to — the nesting is visual otherwise, which says nothing to a screen reader.
+      role="group"
+      aria-label={isRoot ? "Root list rules" : `List ${target || "(unnamed)"} rules`}
       className={`rounded-lg border px-2.5 py-2 ${
         loopError ? "border-danger-300 bg-danger-50" : "border-warn-300 bg-warn-100/40"
       }`}

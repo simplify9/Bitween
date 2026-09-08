@@ -108,9 +108,13 @@ test("builds a mapping, previews it, saves it, and reloads exactly what was buil
   await page.getByRole("combobox", { name: "Filter comparison" }).selectOption("greaterThan");
   await page.getByRole("textbox", { name: "Filter value" }).fill("0");
 
-  await page.getByRole("button", { name: "Field", exact: true }).last().click();
-  await page.getByRole("textbox", { name: "Output field name" }).last().fill("code");
-  await page.getByRole("textbox", { name: "Field path" }).last().fill("sku");
+  // Scoped to the loop's own group. Both the loop and the root have an "Add field"
+  // button, and the root's is later in the document — so `.last()` would put the
+  // rule at the top level instead of inside the list.
+  const linesGroup = page.getByRole("group", { name: "List lines rules" });
+  await linesGroup.getByRole("button", { name: "Field", exact: true }).click();
+  await linesGroup.getByRole("textbox", { name: "Output field name" }).fill("code");
+  await linesGroup.getByRole("textbox", { name: "Field path" }).fill("sku");
 
   // ── The preview comes from the server ──────────────────────────────────────
   const preview = page.locator("pre").first();
@@ -118,8 +122,10 @@ test("builds a mapping, previews it, saves it, and reloads exactly what was buil
   await expect(preview).toContainText('"channel": "WEB"');
 
   // 100 × 1.16. In binary floating point this is 115.99999999999999, which is why
-  // the mapper works in decimal.
-  await expect(preview).toContainText('"total": 116.00');
+  // the mapper works in decimal. It arrives as 116 rather than 116.00 because a
+  // whole number is written as an integer — an order quantity must not pick up a
+  // decimal point the source never had.
+  await expect(preview).toContainText('"total": 116,');
 
   // The filter dropped the entry with qty 0.
   await expect(preview).toContainText('"code": "A1"');
@@ -147,7 +153,7 @@ test("builds a mapping, previews it, saves it, and reloads exactly what was buil
   await expect(page.getByRole("combobox", { name: "Filter comparison" })).toHaveValue("greaterThan");
 
   // And the preview still produces the same document after the round trip.
-  await expect(page.locator("pre").first()).toContainText('"total": 116.00', { timeout: 15000 });
+  await expect(page.locator("pre").first()).toContainText('"total": 116,', { timeout: 15000 });
 });
 
 test("a rule that cannot be applied is named rather than producing an empty field", async ({
@@ -164,7 +170,11 @@ test("a rule that cannot be applied is named rather than producing an empty fiel
   // "Ali" is not a number. The old mapper wrote null into the field and said nothing;
   // this fails the mapping and names the rule.
   await expect(page.getByText(/could not be applied/)).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/cannot convert 'Ali' to number/)).toBeVisible();
+
+  // Reported twice on purpose — once on the rule row that is wrong, and once in the
+  // preview panel's summary of everything that failed.
+  await expect(page.getByText(/cannot convert 'Ali' to number/)).toHaveCount(2);
+  await expect(page.getByRole("alert").filter({ hasText: /cannot convert 'Ali'/ })).toBeVisible();
 });
 
 test("stored rules survive a switch to a list-shaped output and back", async ({ page }) => {
