@@ -100,6 +100,24 @@ namespace SW.Bitween
             return result;
         }
 
+        /// <summary>
+        /// Whether the mapper with this id takes its partner and global values as context instead of
+        /// out of the payload — see <see cref="IReceivesMappingContext"/>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately does not go through <see cref="GetNativeMapper"/>: that initializes the
+        /// adapter's startup values, and this is asked before the settings are assembled. Answers
+        /// <c>false</c> for an unknown id, which is what a serverless mapper is here.
+        /// </remarks>
+        public bool MapperReceivesOwnContext(string adapterId)
+        {
+            if (adapterId == null) return false;
+
+            return nativeMappers.Any(a =>
+                a.GetType().Name.Equals(adapterId, StringComparison.OrdinalIgnoreCase) &&
+                a is IReceivesMappingContext);
+        }
+
         public INativeInfolinkReceiver GetNativeReceiver(string adapterId, IDictionary<string, string> settings)
         {
             var result =

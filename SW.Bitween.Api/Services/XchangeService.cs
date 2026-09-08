@@ -223,39 +223,48 @@ public class XchangeService :
     {
         if (xchange.MapperId == null) return xchangeFile;
 
-        // Inject __partner__ adapter properties into the input JSON so Scriban templates
-        // can reference them as {{ __partner__?.propkey }}
-        // Only applies when the data is a JSON object; skip enrichment for non-object payloads
-        // (e.g. a receiver returning a JSON-encoded string).
-        var jObjEnriched = JToken.Parse(xchangeFile.Data) as JObject;
-        var enriched = false;
-
-        if (jObjEnriched != null)
+        // A mapper that takes its context separately gets the payload exactly as it arrived. Anything
+        // else keeps the enrichment below, unchanged — every template already written reads
+        // __partner__ out of the payload, so this is load-bearing behaviour, not an implementation
+        // detail. Note the JToken.Parse: it runs before anything knows which mapper is configured,
+        // and it throws on a payload that is not JSON, which is why a mapper that wants to handle
+        // XML or CSV has to be able to opt out of this entire block.
+        if (!_nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
         {
-            if (xchange.PartnerId.HasValue)
+            // Inject __partner__ adapter properties into the input JSON so Scriban templates
+            // can reference them as {{ __partner__?.propkey }}
+            // Only applies when the data is a JSON object; skip enrichment for non-object payloads
+            // (e.g. a receiver returning a JSON-encoded string).
+            var jObjEnriched = JToken.Parse(xchangeFile.Data) as JObject;
+            var enriched = false;
+
+            if (jObjEnriched != null)
             {
-                var partner = await _dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
-                if (partner?.AdapterProperties?.Count > 0)
+                if (xchange.PartnerId.HasValue)
                 {
-                    jObjEnriched["__partner__"] = JObject.FromObject(partner.AdapterProperties);
+                    var partner = await _dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
+                    if (partner?.AdapterProperties?.Count > 0)
+                    {
+                        jObjEnriched["__partner__"] = JObject.FromObject(partner.AdapterProperties);
+                        enriched = true;
+                    }
+                }
+
+                // Inject __globals__ — all global adapter values sets
+                // so templates can use {{ __globals__?.setId?.key }}
+                var globalSets = await _dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
+                if (globalSets.Any(s => s.Values?.Count > 0))
+                {
+                    var globalsObj = new JObject();
+                    foreach (var set in globalSets.Where(s => s.Values?.Count > 0))
+                        globalsObj[set.Id] = JObject.FromObject(set.Values);
+                    jObjEnriched["__globals__"] = globalsObj;
                     enriched = true;
                 }
-            }
 
-            // Inject __globals__ — all global adapter values sets
-            // so templates can use {{ __globals__?.setId?.key }}
-            var globalSets = await _dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
-            if (globalSets.Any(s => s.Values?.Count > 0))
-            {
-                var globalsObj = new JObject();
-                foreach (var set in globalSets.Where(s => s.Values?.Count > 0))
-                    globalsObj[set.Id] = JObject.FromObject(set.Values);
-                jObjEnriched["__globals__"] = globalsObj;
-                enriched = true;
+                if (enriched)
+                    xchangeFile = new XchangeFile(jObjEnriched.ToString(Formatting.None), xchangeFile.Filename);
             }
-
-            if (enriched)
-                xchangeFile = new XchangeFile(jObjEnriched.ToString(Formatting.None), xchangeFile.Filename);
         }
 
         var mapperProperties = xchange.MapperProperties.ToDictionary();
