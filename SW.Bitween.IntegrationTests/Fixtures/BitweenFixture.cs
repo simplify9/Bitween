@@ -170,6 +170,7 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<AdapterSecretProperties>();
                     services.AddScoped<RetryUsageReport>();
                     services.AddScoped<AdapterInvoker>();
+                    services.AddScoped<MappingContextFactory>();
                     services.AddScoped<XchangeService>();
                     services.AddScoped<RunFlagUpdater>();
                     services.AddScoped<ReceivingJob>();

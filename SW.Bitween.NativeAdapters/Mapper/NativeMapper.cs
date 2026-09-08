@@ -54,12 +54,6 @@ public class NativeMapper : INativeInfolinkMapper, IReceivesMappingContext
     /// </remarks>
     public const string ContextKey = "__mappingcontext";
 
-    private static readonly IReadOnlyDictionary<string, IDocumentFormat> Formats =
-        new Dictionary<string, IDocumentFormat>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["json"] = new JsonFormat(),
-        };
-
     private MappingRules _rules = new();
     private MappingContext _context = MappingContext.Empty;
 
@@ -142,12 +136,8 @@ public class NativeMapper : INativeInfolinkMapper, IReceivesMappingContext
         }
     }
 
-    private static IDocumentFormat ResolveFormat(string id, string role)
-    {
-        if (Formats.TryGetValue(id ?? "", out var format)) return format;
-
-        throw new InvalidOperationException(
-            $"'{id}' is not a {role} format this mapper supports. Supported: " +
-            string.Join(", ", Formats.Keys.OrderBy(k => k)) + ".");
-    }
+    private static IDocumentFormat ResolveFormat(string id, string role) =>
+        DocumentFormats.TryGet(id, out var format)
+            ? format!
+            : throw new InvalidOperationException(DocumentFormats.Unsupported(id, role));
 }

@@ -237,21 +237,8 @@ public class XchangeService :
     /// </remarks>
     private async Task<string> BuildMappingContextJson(Xchange xchange)
     {
-        var partner = xchange.PartnerId.HasValue
-            ? await _dbContext.FindAsync<Partner>(xchange.PartnerId.Value)
-            : null;
-
-        var globals = new Dictionary<string, IReadOnlyDictionary<string, string>>();
-        foreach (var set in await _BitweenCache.ListGlobalAdapterValuesSetsAsync())
-            if (set.Values?.Count > 0)
-                globals[set.Id] = set.Values;
-
-        return JsonConvert.SerializeObject(new NativeAdapters.Mapper.MappingContext
-        {
-            Partner = partner?.AdapterProperties ?? new Dictionary<string, string>(),
-            Globals = globals,
-            XchangeId = xchange.Id,
-        });
+        var factory = _serviceProvider.GetRequiredService<MappingContextFactory>();
+        return JsonConvert.SerializeObject(await factory.Build(xchange.PartnerId, xchange.Id));
     }
 
     private async Task<XchangeFile> RunMapper(Xchange xchange, XchangeFile xchangeFile)
