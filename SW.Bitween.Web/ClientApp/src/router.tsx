@@ -8,7 +8,7 @@ import { NotFoundPage, PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { AuditPage } from "./pages/audit/AuditPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
-import MappingEditor from "./components/mapper/MappingEditor";
+import MapperEditorRoute from "./components/nativeMapper/MapperEditorRoute";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { ExchangeNewPage } from "./pages/exchanges/ExchangeNewPage";
 import { ExchangesPage } from "./pages/exchanges/ExchangesPage";
@@ -182,7 +182,7 @@ export const router = createBrowserRouter([
             path: "subscriptions/:id/mapper",
             element: (
               <RequirePermission permission="subscriptions.edit">
-                <MappingEditor />
+                <MapperEditorRoute />
               </RequirePermission>
             ),
           },
