@@ -25,12 +25,17 @@ docker exec bw-sample-db psql -U warehouse -d warehouse -f /seed.sql
 ## 2. Publish the database adapter
 
 The provider only appears in the data source form once its package is in cloud storage. Publish it
-through `ICloudFilesService` — **not** by copying files into the local store by hand. The object's
-metadata is what `AdapterInstaller` reads, and a hand-written sidecar reads back inconsistently:
-the adapter appeared to work, then failed later with "missing 'EntryAssembly'" once a cache expired.
+through `ICloudFilesService.WriteAsync`, so the object's METADATA is written in the form
+`AdapterInstaller` reads it back. With `StorageProvider: Local` and no bucket name configured it
+lands under `.../SW.CloudFiles.LocalTests/default/adapters/`.
 
-With `StorageProvider: Local` the bucket resolves from configuration, so an unset bucket name puts
-the object under `.../SW.CloudFiles.LocalTests/default/adapters/`.
+**If the app suddenly reports "metadata ... is missing 'EntryAssembly'", something deleted the
+bucket.** The integration suite used to share it: `BitweenFixture` called
+`AddLocalTestsCloudFiles()` with no bucket override and its teardown calls `Cleanup()`, which
+deletes the bucket outright — so running the tests silently unpublished every adapter the dev
+environment had, and the next thing anyone did failed with an error pointing nowhere near a test
+run. The fixture now uses `bitween-integration-tests`; if you add another host that writes to the
+local store, give it its own bucket too.
 
 ## 3. Repair the seeded subscriptions
 

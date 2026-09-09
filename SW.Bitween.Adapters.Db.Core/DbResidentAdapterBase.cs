@@ -280,8 +280,25 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
             {
                 try
                 {
+                    var sql = statements.Resolve(name, null, false);
+
+                    // A statement meant for Call holds a PROCEDURE NAME, not SQL — that is what
+                    // CommandType.StoredProcedure takes, and on Oracle it is the only form that
+                    // works. Preparing it as text is a syntax error every time, so the check would
+                    // fail on a statement that is perfectly correct. Say what was and was not
+                    // verified instead of quietly passing it.
+                    if (IsBareRoutineName(sql))
+                    {
+                        result.Steps.Add(new DbTestStage
+                        {
+                            Step = $"statement:{name}", Ok = true,
+                            Detail = "procedure name — existence not checked, it is resolved when called"
+                        });
+                        continue;
+                    }
+
                     using var command = connection.CreateCommand();
-                    command.CommandText = statements.Resolve(name, null, false);
+                    command.CommandText = sql;
                     command.CommandTimeout = 10;
 
                     // The placeholders have to be declared before Prepare, because some drivers
@@ -578,6 +595,19 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
             Failed();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Whether a statement is a bare routine name — <c>release_order</c>, <c>SALES.PKG.RELEASE</c> —
+    /// rather than SQL. Identifier characters only, so anything with a space, a parenthesis or a
+    /// keyword is treated as SQL and prepared.
+    /// </summary>
+    static bool IsBareRoutineName(string sql)
+    {
+        var text = (sql ?? "").Trim();
+        return text.Length > 0 &&
+               System.Text.RegularExpressions.Regex.IsMatch(
+                   text, @"^[A-Za-z_][A-Za-z0-9_$#]*(\.[A-Za-z_][A-Za-z0-9_$#]*){0,2}$");
     }
 
     /// <summary>

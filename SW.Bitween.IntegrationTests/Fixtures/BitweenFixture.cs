@@ -214,7 +214,13 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddBusPublish();
 
                     // Real local filesystem cloud files provider
-                    services.AddLocalTestsCloudFiles();
+                    // Its OWN bucket. The default one is shared with whatever else uses the local
+                    // store on this machine — including a developer's running Bitween — and the
+                    // teardown below calls Cleanup(), which deletes the bucket outright. Sharing it
+                    // meant running this suite silently unpublished the dev environment's adapters,
+                    // and the next thing anyone did there failed as "metadata is missing
+                    // 'EntryAssembly'", which points nowhere near a test run.
+                    services.AddLocalTestsCloudFiles(o => o.BucketName = "bitween-integration-tests");
 
                     // Real serverless service pointing to local adapter extraction path
                     services.AddServerless(opts =>
