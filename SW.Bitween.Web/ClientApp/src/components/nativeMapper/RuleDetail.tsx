@@ -1,10 +1,11 @@
 import {
   TRANSFORMS,
+  type TransformArg,
   VALUE_TYPES,
   type EditorFieldRule,
   type TransformRule,
 } from "../../lib/nativeMapper/types";
-import { RowInput, RowSelect } from "./rowControls";
+import { RowInput, RowSelect, RowSuggestInput } from "./rowControls";
 import { LookupFields } from "./LookupFields";
 
 
@@ -22,7 +23,7 @@ import { LookupFields } from "./LookupFields";
  * number would not round-trip to the same characters — the server parses a numeric
  * string for these arguments either way.
  */
-function numericOrText(kind: "text" | "number", text: string): string | number {
+function numericOrText(kind: TransformArg["kind"], text: string): string | number {
   if (kind !== "number") return text;
   const asNumber = Number(text);
   return !isNaN(asNumber) && String(asNumber) === text.trim() ? asNumber : text;
@@ -107,22 +108,58 @@ export function TransformFields({
         ]}
       />
 
-      {chosen?.args.map((arg) => (
-        <RowInput
-          key={arg.name}
-          className="w-28"
-          aria-label={`${chosen.label} — ${arg.label}`}
-          placeholder={arg.label}
-          inputMode={arg.kind === "number" ? "decimal" : undefined}
-          value={String(transform?.[arg.name] ?? "")}
-          onChange={(e) => {
-            const next: TransformRule = { ...(transform ?? { fn: chosen.fn }) };
-            if (e.target.value === "") delete next[arg.name];
-            else next[arg.name] = numericOrText(arg.kind, e.target.value);
-            onChange(next);
-          }}
-        />
-      ))}
+      {chosen?.args.map((arg) => {
+        const value = String(transform?.[arg.name] ?? "");
+        const label = `${chosen.label} — ${arg.label}`;
+
+        const set = (next: string) => {
+          const changed: TransformRule = { ...(transform ?? { fn: chosen.fn }) };
+          if (next === "") delete changed[arg.name];
+          else changed[arg.name] = numericOrText(arg.kind, next);
+          onChange(changed);
+        };
+
+        // A closed list. The one of these that exists — which way round a date is
+        // written — has exactly three answers, and typing it is how it got read wrong.
+        if (arg.kind === "choice")
+          return (
+            <RowSelect
+              key={arg.name}
+              className="w-52"
+              aria-label={label}
+              title={arg.label}
+              value={value}
+              onChange={(e) => set(e.target.value)}
+              options={arg.options ?? []}
+            />
+          );
+
+        if (arg.kind === "suggest")
+          return (
+            <RowSuggestInput
+              key={arg.name}
+              className="w-40 font-mono"
+              aria-label={label}
+              placeholder={arg.label}
+              title={arg.label}
+              suggestions={(arg.options ?? []).map((o) => o.value)}
+              value={value}
+              onChange={(e) => set(e.target.value)}
+            />
+          );
+
+        return (
+          <RowInput
+            key={arg.name}
+            className="w-28"
+            aria-label={label}
+            placeholder={arg.label}
+            inputMode={arg.kind === "number" ? "decimal" : undefined}
+            value={value}
+            onChange={(e) => set(e.target.value)}
+          />
+        );
+      })}
     </div>
   );
 }

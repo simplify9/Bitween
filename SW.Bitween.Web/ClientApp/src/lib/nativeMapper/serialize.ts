@@ -81,7 +81,7 @@ function stripEntryId({ id: _id, ...entry }: EditorListEntry): ListEntry {
 
 /** Drops the editor's ids, leaving exactly what the mapper reads. */
 export function toWire(rules: EditorRules): MappingRules {
-  return {
+  const wire: MappingRules = {
     version: rules.version,
     sourceFormat: rules.sourceFormat,
     targetFormat: rules.targetFormat,
@@ -89,6 +89,14 @@ export function toWire(rules: EditorRules): MappingRules {
     lists: rules.lists.map(stripListId),
     root: rules.root ? stripListId(rules.root) : undefined,
   };
+
+  // Left out when it is the default, the same way an empty set of written entries is:
+  // both sides read absent as year-first, so writing it would make a mapping that never
+  // touched dates differ from the one that was loaded.
+  if (rules.sourceDateOrder && rules.sourceDateOrder !== "yearFirst")
+    wire.sourceDateOrder = rules.sourceDateOrder;
+
+  return wire;
 }
 
 /** Adds the editor's ids to rules that came off the wire. */
@@ -97,6 +105,9 @@ export function fromWire(rules: MappingRules): EditorRules {
     version: rules.version ?? RULES_VERSION,
     sourceFormat: (rules.sourceFormat ?? "json") as DocumentFormatId,
     targetFormat: (rules.targetFormat ?? "json") as DocumentFormatId,
+    // Absent means year-first: a mapping saved before this existed could only ever have
+    // read the unambiguous shapes correctly anyway.
+    sourceDateOrder: rules.sourceDateOrder ?? "yearFirst",
     fields: withFieldIds(rules.fields),
     lists: withListIds(rules.lists),
     root: rules.root ? listWithIds(rules.root) : undefined,
