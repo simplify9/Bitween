@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 using SW.Bitween.Domain.DataSources;
+using SW.Bitween.Services.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
@@ -59,6 +60,19 @@ public class Test(BitweenDbContext dbContext, RequestContext requestContext,
 
         if (endpoints.Count > 0) startupValues["Endpoints"] = string.Join(",", endpoints);
         startupValues["Consume"] = "false";
+
+        // Composed here as well as in the supervisor, because statements are rows rather than a
+        // property on the data source — and without this the test quietly stopped covering them.
+        // Preparing every statement against the live schema is most of what the button is FOR: it
+        // is where a typo or a dropped column is caught, and a test that silently checks nothing
+        // still reports success.
+        var statements = await dbContext.Set<DataSourceStatement>()
+            .Where(s => s.DataSourceId == key && !s.Inactive)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var composed = StatementComposer.Compose(statements, key);
+        if (composed != null) startupValues["Statements"] = composed;
 
         // A key of its own: the running instance, if there is one, is keyed by the data source id
         // and must not be disturbed by someone pressing Test.

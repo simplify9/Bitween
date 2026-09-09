@@ -314,7 +314,7 @@ function StatementForm({
 
       <div className="flex gap-2">
         <Button onClick={() => save.mutate()} disabled={!complete || save.isPending}>
-          {statement ? "Save statement" : "Add statement"}
+          {statement ? "Save changes" : "Create statement"}
         </Button>
         <Button variant="ghost" onClick={onClose}>
           Cancel

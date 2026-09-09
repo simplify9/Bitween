@@ -230,10 +230,22 @@ export function DataSourcePage() {
           )}
         </dl>
 
+        {/* The two placements are opposites, and the wrong explanation directly contradicts the
+            "Held by" value right above it — which is how someone concludes the page is broken. */}
         <p className="mt-3 text-[12px] text-ink-500">
-          A broker connection is exclusive, so exactly one node holds it. The term after the node
-          name is the fencing token — it increases every time ownership moves, and a node whose term
-          is no longer current stops immediately rather than carrying on consuming.
+          {source.data?.kind === "Relational" ? (
+            <>
+              A connection pool is held by every node that runs work, not leased to one: a node
+              without it could not run the exchanges that need it. Nothing here is exclusive, so
+              there is no fencing token and no ownership to move.
+            </>
+          ) : (
+            <>
+              A broker connection is exclusive, so exactly one node holds it. The term after the
+              node name is the fencing token — it increases every time ownership moves, and a node
+              whose term is no longer current stops immediately rather than carrying on consuming.
+            </>
+          )}
         </p>
       </section>
 
@@ -312,8 +324,12 @@ export function DataSourcePage() {
           )}
 
           <p className="mt-2 text-[12px] text-ink-500">
-            The test runs the real adapter against these settings but never consumes: the queues its
-            gateways read are inspected, not drained.
+            {source.data?.kind === "Relational"
+              ? "The test runs the real adapter against these settings on its own throwaway connection, "
+                + "and prepares every statement against the live schema — so a typo or a dropped column "
+                + "fails here rather than on the first message."
+              : "The test runs the real adapter against these settings but never consumes: the queues "
+                + "its gateways read are inspected, not drained."}
           </p>
         </section>
       )}
