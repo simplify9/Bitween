@@ -242,6 +242,15 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<INativeInfolinkHandler, NativeSmtpHandler>();
                     services.AddScoped<INativeAdapter, NativeSmtpHandler>();
 
+                    // The mapper step had no end-to-end coverage at all — every mapper test was a
+                    // unit test against ScribanJsonHelper, so what XchangeService does to a payload
+                    // on the way in was never exercised. See MapperEnrichmentBaselineTests.
+                    services.AddScoped<INativeInfolinkMapper, NativeJSONMapper>();
+                    services.AddScoped<INativeAdapter, NativeJSONMapper>();
+
+                    services.AddScoped<INativeInfolinkMapper, NativeAdapters.Mapper.NativeMapper>();
+                    services.AddScoped<INativeAdapter, NativeAdapters.Mapper.NativeMapper>();
+
                     // See RecordingScheduleRepository: the create/update handlers need a scheduler
                     // to construct, and a real Quartz store would fire background jobs mid-test.
                     services.AddSingleton<IScheduleRepository, RecordingScheduleRepository>();
@@ -260,6 +269,7 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<IAdapterRuntime, ResidentAdapterRuntime>();
                     services.AddScoped<IAdapterRuntime, ClassicAdapterRuntime>();
                     services.AddScoped<IAdapterInvoker, AdapterInvoker>();
+                    services.AddScoped<MappingContextFactory>();
                     services.AddScoped<XchangeService>();
                     services.AddScoped<RunFlagUpdater>();
                     services.AddScoped<ReceivingJob>();

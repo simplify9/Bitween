@@ -82,6 +82,7 @@ namespace SW.Bitween.Web
             services.AddScoped<IAdapterRuntime, ResidentAdapterRuntime>();
             services.AddScoped<IAdapterRuntime, ClassicAdapterRuntime>();
             services.AddScoped<IAdapterInvoker, AdapterInvoker>();
+            services.AddScoped<MappingContextFactory>();
             services.AddScoped<XchangeService>();
             services.AddScoped<Resources.Ops.LaneResolver>();
             services.AddScoped<AdapterRequirements>();

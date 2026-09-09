@@ -6,7 +6,11 @@ import { api } from "../../api";
 import { Button, EmptyState, FormError, LoadingBlock } from "../../components/ui/basics";
 import { Field, TextInput } from "../../components/ui/forms";
 import { Panel } from "../../components/ui/Panel";
-import { AdapterConfig, useAdapterCatalog } from "../../components/config/AdapterConfig";
+import {
+  AdapterConfig,
+  useAdapterCatalog,
+  usesVisualMappingEditor,
+} from "../../components/config/AdapterConfig";
 import { InfoTypePicker } from "../../components/config/pickers";
 import { useSubscriptionsCache } from "../../components/config/shared";
 import { STAGES, stagesFor, type StageId } from "../subscriptions/studio/stages";
@@ -201,7 +205,7 @@ export function NewGatewaySubscriptionPage() {
               disabled={false}
               noneLabel="None — the document passes through unchanged"
             />
-            {draft.mapperId === "NativeJSONMapper" && (
+            {usesVisualMappingEditor(draft.mapperId) && (
               <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-[13px] text-ink-500">
                 The visual mapping editor opens from the subscription's own page, once it exists.
               </p>

@@ -19,7 +19,8 @@ namespace SW.Bitween;
 public class XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
     FilterService filterService,
     ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
-    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache, IAdapterInvoker adapterInvoker) :
+    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
+    IAdapterInvoker adapterInvoker, NativeAdapterDiscoveryService nativeAdapterDiscovery) :
     // IConsume<ApiXchangeCreatedEvent>,
     // IConsume<InternalXchangeCreatedEvent>,
     // IConsume<AggregateXchangeCreatedEvent>,
@@ -194,47 +195,88 @@ public class XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbC
         return Task.CompletedTask;
     }
 
+
+    /// <summary>
+    /// Collects the partner and global values for a mapper that takes them as context.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same values the enrichment below writes into the payload, gathered into their own object
+    /// instead. That is what lets a document which is not JSON be mapped, and it means a document
+    /// carrying a real <c>__partner__</c> field keeps it.
+    /// </para>
+    /// <para>
+    /// Global values come from the cache, not a fresh query. The enrichment path reads them with
+    /// <c>dbContext.Set&lt;GlobalAdapterValuesSet&gt;()</c> on every exchange while the rest of this
+    /// service goes through <c>BitweenCache</c>; that is left alone rather than corrected, because
+    /// changing when existing subscriptions see an edited value is not this change's business.
+    /// </para>
+    /// </remarks>
+    private async Task<string> BuildMappingContextJson(Xchange xchange)
+    {
+        var factory = serviceProvider.GetRequiredService<MappingContextFactory>();
+        return JsonConvert.SerializeObject(await factory.Build(xchange.PartnerId, xchange.Id));
+    }
+
     private async Task<XchangeFile> RunMapper(Xchange xchange, XchangeFile xchangeFile)
     {
         if (xchange.MapperId == null) return xchangeFile;
 
-        // Inject __partner__ adapter properties into the input JSON so Scriban templates
-        // can reference them as {{ __partner__?.propkey }}
-        // Only applies when the data is a JSON object; skip enrichment for non-object payloads
-        // (e.g. a receiver returning a JSON-encoded string).
-        var jObjEnriched = JToken.Parse(xchangeFile.Data) as JObject;
-        var enriched = false;
+        // A mapper that takes its context separately gets the payload exactly as it arrived. Anything
+        // else keeps the enrichment below, unchanged — every template already written reads
+        // __partner__ out of the payload, so this is load-bearing behaviour, not an implementation
+        // detail. Note the JToken.Parse: it runs before anything knows which mapper is configured,
+        // and it throws on a payload that is not JSON, which is why a mapper that wants to handle
+        // XML or CSV has to be able to opt out of this entire block.
+        string mappingContextJson = null;
 
-        if (jObjEnriched != null)
+        if (nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
         {
-            if (xchange.PartnerId.HasValue)
+            mappingContextJson = await BuildMappingContextJson(xchange);
+        }
+        else
+        {
+            // Inject __partner__ adapter properties into the input JSON so Scriban templates
+            // can reference them as {{ __partner__?.propkey }}
+            // Only applies when the data is a JSON object; skip enrichment for non-object payloads
+            // (e.g. a receiver returning a JSON-encoded string).
+            var jObjEnriched = JToken.Parse(xchangeFile.Data) as JObject;
+            var enriched = false;
+
+            if (jObjEnriched != null)
             {
-                var partner = await dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
-                if (partner?.AdapterProperties?.Count > 0)
+                if (xchange.PartnerId.HasValue)
                 {
-                    jObjEnriched["__partner__"] = JObject.FromObject(partner.AdapterProperties);
+                    var partner = await dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
+                    if (partner?.AdapterProperties?.Count > 0)
+                    {
+                        jObjEnriched["__partner__"] = JObject.FromObject(partner.AdapterProperties);
+                        enriched = true;
+                    }
+                }
+
+                // Inject __globals__ — all global adapter values sets
+                // so templates can use {{ __globals__?.setId?.key }}
+                var globalSets = await dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
+                if (globalSets.Any(s => s.Values?.Count > 0))
+                {
+                    var globalsObj = new JObject();
+                    foreach (var set in globalSets.Where(s => s.Values?.Count > 0))
+                        globalsObj[set.Id] = JObject.FromObject(set.Values);
+                    jObjEnriched["__globals__"] = globalsObj;
                     enriched = true;
                 }
-            }
 
-            // Inject __globals__ — all global adapter values sets
-            // so templates can use {{ __globals__?.setId?.key }}
-            var globalSets = await dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
-            if (globalSets.Any(s => s.Values?.Count > 0))
-            {
-                var globalsObj = new JObject();
-                foreach (var set in globalSets.Where(s => s.Values?.Count > 0))
-                    globalsObj[set.Id] = JObject.FromObject(set.Values);
-                jObjEnriched["__globals__"] = globalsObj;
-                enriched = true;
+                if (enriched)
+                    xchangeFile = new XchangeFile(jObjEnriched.ToString(Formatting.None), xchangeFile.Filename);
             }
-
-            if (enriched)
-                xchangeFile = new XchangeFile(jObjEnriched.ToString(Formatting.None), xchangeFile.Filename);
         }
 
         var mapperProperties = xchange.MapperProperties.ToDictionary();
         mapperProperties["xchangeid"] = xchange.Id;
+
+        if (mappingContextJson != null)
+            mapperProperties[NativeAdapters.Mapper.NativeMapper.ContextKey] = mappingContextJson;
 
         // Check if it's a native adapter
         // No branching on the adapter's kind: the invoker decides which of the three runtimes
