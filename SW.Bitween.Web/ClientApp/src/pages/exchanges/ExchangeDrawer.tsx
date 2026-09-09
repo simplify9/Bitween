@@ -6,6 +6,7 @@ import { api, ApiRequestError, type ExchangeDocStage, type ExchangeRow } from ".
 import { useSessionCan } from "../../auth/guards";
 import { Badge, Button } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
+import { HighlightedDocument } from "../../components/ui/HighlightedDocument";
 import { formatDateTime, duration, timeUntil } from "../../lib/dates";
 import { formatDocument } from "../../lib/documentPreview";
 import { useSubscriptionsCache } from "../../components/config/shared";
@@ -151,9 +152,13 @@ function DocumentPreview({
           </div>
         )}
       </div>
-      <pre className="max-h-96 overflow-y-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed wrap-anywhere whitespace-pre-wrap text-ink-100">
-        {body}
-      </pre>
+      {/* Coloured, but only what the toggle is currently showing: Raw means the bytes
+          as they arrived, and colouring those would still be an opinion about them. */}
+      <HighlightedDocument
+        text={body}
+        onInk
+        className="max-h-96 overflow-y-auto px-3 py-2.5 text-[11px] leading-relaxed wrap-anywhere text-ink-100"
+      />
       {clipped && (
         <p className="border-t border-white/10 px-3 py-1.5 text-[11px] text-ink-400">
           Showing the first 256 KB — download the document to read the rest.

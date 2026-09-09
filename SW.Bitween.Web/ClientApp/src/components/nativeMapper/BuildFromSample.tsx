@@ -3,6 +3,7 @@ import { Wand2 } from "lucide-react";
 import { parseSample } from "../../lib/nativeMapper/documentTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
 import type { ScaffoldTally } from "../../lib/nativeMapper/scaffold";
+import { FormatButton } from "../ui/FormatButton";
 import { Popover } from "../ui/Popover";
 import { Button } from "../ui/basics";
 
@@ -49,7 +50,14 @@ export function BuildFromSample() {
           onChange={(e) => dispatch({ type: "SET_TARGET_SAMPLE", text: e.target.value })}
           aria-label="Sample output document"
         />
-        {parsed.error && <p className="text-[11px] text-danger-700">{parsed.error}</p>}
+        <div className="flex items-center gap-2">
+          {parsed.error && <p className="text-[11px] text-danger-700">{parsed.error}</p>}
+          <FormatButton
+            className="ml-auto"
+            value={targetSample}
+            onChange={(text) => dispatch({ type: "SET_TARGET_SAMPLE", text })}
+          />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button

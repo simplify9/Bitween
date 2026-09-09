@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 import { useRules } from "../../lib/nativeMapper/RulesEditorContext";
+import { HighlightedDocument } from "../ui/HighlightedDocument";
 
 /**
  * What a partner would receive.
@@ -10,7 +11,7 @@ import { useRules } from "../../lib/nativeMapper/RulesEditorContext";
  * production the way the old preview did.
  */
 export function PreviewPanel({ isPreviewing }: { isPreviewing: boolean }) {
-  const { previewOutput, previewError, ruleErrors, sourceSample } = useRules();
+  const { previewOutput, previewError, ruleErrors, sourceSample, rules } = useRules();
   const [copied, setCopied] = useState<"no" | "done" | "failed">("no");
 
   const failedCount = Object.keys(ruleErrors).length;
@@ -80,9 +81,11 @@ export function PreviewPanel({ isPreviewing }: { isPreviewing: boolean }) {
             </p>
           </div>
         ) : (
-          <pre className="px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-700">
-            {previewOutput}
-          </pre>
+          <HighlightedDocument
+            text={previewOutput}
+            format={rules.targetFormat}
+            className="px-3 py-2 text-xs leading-5 text-ink-700"
+          />
         )}
       </div>
     </div>
