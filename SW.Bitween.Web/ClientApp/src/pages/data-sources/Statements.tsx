@@ -72,6 +72,23 @@ export function Statements({ dataSourceId }: { dataSourceId: number }) {
     >
       {error && <div className="mx-4 mb-3"><FormError>{error}</FormError></div>}
 
+      {/* Padded to the panel's own gutter: the form is a direct child of Panel, which only pads
+          its header, so without this it sits flush against the border while every row below is
+          inset. */}
+      {adding && canCreate && (
+        <div className="px-4 pb-3">
+          <StatementForm
+            dataSourceId={dataSourceId}
+            onClose={() => setAdding(false)}
+            onSaved={() => {
+              setAdding(false);
+              void invalidate();
+            }}
+            onError={setError}
+          />
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <p className="px-4 pb-4 text-[13px] text-ink-500">
           None yet. Until one exists, a subscription bound to this connection has nothing it is
@@ -94,18 +111,6 @@ export function Statements({ dataSourceId }: { dataSourceId: number }) {
             />
           ))}
         </ul>
-      )}
-
-      {adding && canCreate && (
-        <StatementForm
-          dataSourceId={dataSourceId}
-          onClose={() => setAdding(false)}
-          onSaved={() => {
-            setAdding(false);
-            void invalidate();
-          }}
-          onError={setError}
-        />
       )}
 
       {removing && (

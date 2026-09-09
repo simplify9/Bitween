@@ -204,6 +204,49 @@ export function DataSourcePage() {
         }
       />
 
+      {/* ——— the test's answer ——— */}
+      {result && (
+        <section
+          className={`mb-4 rounded-xl border p-4 ${
+            result.succeeded ? "border-ok-200 bg-ok-50" : "border-danger-200 bg-danger-50"
+          }`}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink-900">
+              {result.succeeded ? "The connection works" : "The connection failed"}
+            </h2>
+            <Badge tone={result.succeeded ? "ok" : "danger"}>{result.succeeded ? "OK" : "Failed"}</Badge>
+          </div>
+
+          <ul className="flex flex-col gap-1">
+            {result.stages.map((stage, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                {stage.succeeded ? (
+                  <Check className="mt-0.5 size-4 shrink-0 text-ok-700" />
+                ) : (
+                  <X className="mt-0.5 size-4 shrink-0 text-danger-700" />
+                )}
+                <span className="w-56 shrink-0 font-medium text-ink-800">{stage.name}</span>
+                <span className="text-ink-600">{stage.detail}</span>
+              </li>
+            ))}
+          </ul>
+
+          {!result.succeeded && result.error && (
+            <p className="mt-2 text-sm text-danger-800">{result.error}</p>
+          )}
+
+          <p className="mt-2 text-[12px] text-ink-500">
+            {source.data?.kind === "Relational"
+              ? "The test runs the real adapter against these settings on its own throwaway connection, "
+                + "and prepares every statement against the live schema — so a typo or a dropped column "
+                + "fails here rather than on the first message."
+              : "The test runs the real adapter against these settings but never consumes: the queues "
+                + "its gateways read are inspected, not drained."}
+          </p>
+        </section>
+      )}
+
       {/* ——— what the last heartbeat said ——— */}
       <section className="mb-4 rounded-xl border border-ink-200 bg-white p-4">
         <div className="mb-3 flex items-center gap-3">
@@ -291,48 +334,6 @@ export function DataSourcePage() {
         </section>
       )}
 
-      {/* ——— the test's answer ——— */}
-      {result && (
-        <section
-          className={`mb-4 rounded-xl border p-4 ${
-            result.succeeded ? "border-ok-200 bg-ok-50" : "border-danger-200 bg-danger-50"
-          }`}
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-ink-900">
-              {result.succeeded ? "The connection works" : "The connection failed"}
-            </h2>
-            <Badge tone={result.succeeded ? "ok" : "danger"}>{result.succeeded ? "OK" : "Failed"}</Badge>
-          </div>
-
-          <ul className="flex flex-col gap-1">
-            {result.stages.map((stage, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                {stage.succeeded ? (
-                  <Check className="mt-0.5 size-4 shrink-0 text-ok-700" />
-                ) : (
-                  <X className="mt-0.5 size-4 shrink-0 text-danger-700" />
-                )}
-                <span className="w-56 shrink-0 font-medium text-ink-800">{stage.name}</span>
-                <span className="text-ink-600">{stage.detail}</span>
-              </li>
-            ))}
-          </ul>
-
-          {!result.succeeded && result.error && (
-            <p className="mt-2 text-sm text-danger-800">{result.error}</p>
-          )}
-
-          <p className="mt-2 text-[12px] text-ink-500">
-            {source.data?.kind === "Relational"
-              ? "The test runs the real adapter against these settings on its own throwaway connection, "
-                + "and prepares every statement against the live schema — so a typo or a dropped column "
-                + "fails here rather than on the first message."
-              : "The test runs the real adapter against these settings but never consumes: the queues "
-                + "its gateways read are inspected, not drained."}
-          </p>
-        </section>
-      )}
 
       {/* ——— settings ——— */}
       <section className="rounded-xl border border-ink-200 bg-white p-5">
