@@ -64,9 +64,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "API gateways", path: "/api-gateways", icon: Webhook, permissions: ["api-gateways.view"] },
       { label: "Bus gateways", path: "/bus-gateways", icon: Cable, permissions: ["bus-gateways.view"] },
-      // Directly under bus gateways: a data source is only ever reached through one, and the
-      // question it answers — "where do these messages come from?" — is a gateway's question.
-      { label: "Data sources", path: "/data-sources", icon: Database, permissions: ["data-sources.view"] },
       { label: "Scheduled jobs", path: "/scheduled-jobs", icon: CalendarClock, permissions: ["subscriptions.view"] },
       // Directly under scheduled jobs: it is the other thing that runs on a schedule,
       // and it collects what one of these produced.
@@ -82,6 +79,11 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Configuration",
     items: [
+      // First in Configuration, and no longer under bus gateways. It sat there while a data
+      // source could only be a broker feeding one; now it is just as often a database a
+      // subscription runs statements against, which no gateway is involved in at all. What it
+      // describes is a connection to something outside Bitween — configuration, not a pipeline.
+      { label: "Data sources", path: "/data-sources", icon: Database, permissions: ["data-sources.view"] },
       { label: "Information types", path: "/information-types", icon: FileText, permissions: ["documents.view"] },
       { label: "Global values", path: "/global-values", icon: SlidersHorizontal, permissions: ["global-values.view"] },
       { label: "Work groups", path: "/work-groups", icon: Layers, permissions: ["workgroups.view"] },
