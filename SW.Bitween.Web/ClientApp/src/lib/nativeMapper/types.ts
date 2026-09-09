@@ -9,7 +9,7 @@
 // nothing is recovered out of anything, so the editor reads back exactly what it
 // wrote.
 
-export type DocumentFormatId = "json";
+export type DocumentFormatId = "json" | "xml";
 
 /**
  * Which of the day and the month comes first in the incoming document's dates.
@@ -219,6 +219,7 @@ export const emptyRules = (): EditorRules => ({
 /** The formats the mapper can read and write, for the dropdowns. */
 export const DOCUMENT_FORMATS: { id: DocumentFormatId; label: string }[] = [
   { id: "json", label: "JSON" },
+  { id: "xml", label: "XML" },
 ];
 
 /**

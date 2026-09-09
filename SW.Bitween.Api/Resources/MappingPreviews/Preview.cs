@@ -103,7 +103,7 @@ public class Preview(MappingContextFactory contextFactory)
 
         try
         {
-            var output = DocumentMapper.Map(rules, input, context);
+            var output = DocumentMapper.Map(rules, input, context, source.SingleValueIsAList);
             return new MappingPreviewResponse
             {
                 OutputDocument = target.Write(output),
@@ -120,6 +120,13 @@ public class Preview(MappingContextFactory contextFactory)
                     .Select(e => new MappingPreviewError { Target = e.Target, Reason = e.Reason })
                     .ToList(),
             };
+        }
+        catch (DocumentFormatException ex)
+        {
+            // The writer can refuse what the rules produced: XML has exactly one root element and
+            // no way to repeat it, where JSON is happy with anything. It belongs to the document
+            // rather than to any one rule, so it is reported the same way a bad sample is.
+            return new MappingPreviewResponse { Error = ex.Message };
         }
     }
 }

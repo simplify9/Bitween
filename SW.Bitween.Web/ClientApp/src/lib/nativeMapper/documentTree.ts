@@ -26,6 +26,17 @@ export interface DocumentNode {
   children: DocumentNode[];
 }
 
+/**
+ * Which end of the mapping a sample is for.
+ *
+ * It changes what an XML tree keeps. Reading a partner's document, a prefix is theirs
+ * to change between one message and the next, so paths match on the local name and
+ * declarations are machinery. Writing one for them, the prefixes and declarations are
+ * the document — their parser may well insist on them — so the tree keeps both and the
+ * rules carry them through to the writer.
+ */
+export type SampleRole = "source" | "target";
+
 export interface ParsedSample {
   /** Null when the text could not be read. */
   root: DocumentNode | null;
@@ -35,12 +46,17 @@ export interface ParsedSample {
 /**
  * Reads a sample document into a tree.
  *
- * Only JSON for now. When another format arrives it parses here — and until then a
- * mapping whose source format is not JSON simply has no tree to show, which is
- * honest rather than showing a JSON one.
+ * A format that has no reader here has no tree to show, which is honest rather than
+ * showing another format's one.
  */
-export function parseSample(text: string, format: string): ParsedSample {
+export function parseSample(
+  text: string,
+  format: string,
+  role: SampleRole = "source",
+): ParsedSample {
   if (!text.trim()) return { root: null, error: null };
+
+  if (format === "xml") return parseXmlSample(text, role);
 
   if (format !== "json") {
     return { root: null, error: `No preview of the document shape for ${format} yet.` };
@@ -84,6 +100,123 @@ function toNode(key: string, path: string, value: unknown): DocumentNode {
 
   return { key, path, kind: "value", sample: value, children: [] };
 }
+
+// ─── XML ─────────────────────────────────────────────────────────────────────
+//
+// These conventions have to match `XmlFormat` on the server exactly, because this
+// tree is what the editor offers and that reader is what the mapping actually gets.
+// A path shown here that resolves to nothing there is the worst kind of bug: the
+// mapping looks right and quietly writes nothing. `XmlSampleTreeTests` and
+// `XmlFormatReadTests` walk the same document on both sides to keep them in step.
+
+const XMLNS = "http://www.w3.org/2000/xmlns/";
+
+/** The key holding an element's own text when it also has attributes or children. */
+const TEXT_KEY = "#text";
+
+function parseXmlSample(text: string, role: SampleRole): ParsedSample {
+  const parsed = new DOMParser().parseFromString(text, "application/xml");
+
+  // How a DOMParser reports a broken document: not by throwing, but by handing back a
+  // document that contains the complaint. Missing it would show a tree of the error.
+  const failure = parsed.getElementsByTagName("parsererror")[0];
+  if (failure) {
+    const detail = (failure.textContent ?? "").trim().split("\n")[0];
+    return { root: null, error: `The sample is not valid XML: ${detail || "it could not be read"}` };
+  }
+
+  const root = parsed.documentElement;
+  if (!root) return { root: null, error: "The sample has no root element." };
+
+  const qualified = role === "target";
+  const name = qualified ? root.tagName : root.localName;
+
+  // The root element is a named key rather than the tree itself, so its name is part
+  // of every path — the same as the server's reader.
+  return {
+    root: {
+      key: "",
+      path: "",
+      kind: "object",
+      children: [xmlNode(name, name, root, qualified)],
+    },
+    error: null,
+  };
+}
+
+function xmlNode(
+  key: string,
+  path: string,
+  element: Element,
+  qualified: boolean,
+): DocumentNode {
+  // Declarations are kept only for a document being written, where they are what makes
+  // the output valid; on the way in they are machinery, and four of them at the top of
+  // a SOAP document would bury the fields anyone is looking for.
+  const attributes = Array.from(element.attributes).filter(
+    (a) => qualified || a.namespaceURI !== XMLNS,
+  );
+  const elements = Array.from(element.children);
+  const nameOf = (e: Element) => (qualified ? e.tagName : e.localName);
+
+  // Nothing but text: the element is its value. An empty element is "" — present and
+  // empty, which is what it says, and different from one that is not there at all.
+  if (attributes.length === 0 && elements.length === 0) {
+    return { key, path, kind: "value", sample: element.textContent ?? "", children: [] };
+  }
+
+  const children: DocumentNode[] = [];
+
+  for (const attribute of attributes) {
+    const name = `@${qualified ? attribute.name : attribute.localName}`;
+    children.push({ key: name, path: under(path, name), kind: "value", sample: attribute.value, children: [] });
+  }
+
+  // Grouped by name — by the local one when reading, because the same namespace turns
+  // up under a different prefix in the very next document.
+  const groups = new Map<string, Element[]>();
+  for (const child of elements) {
+    const group = groups.get(nameOf(child));
+    if (group) group.push(child);
+    else groups.set(nameOf(child), [child]);
+  }
+
+  for (const [name, occurrences] of groups) {
+    if (occurrences.length === 1) {
+      children.push(xmlNode(name, under(path, name), occurrences[0], qualified));
+      continue;
+    }
+
+    // A repeated name is how XML writes a list. Its contents are named relative to one
+    // entry, because that is what a rule inside the list is written against.
+    const first = xmlNode(name, "", occurrences[0], qualified);
+    children.push({
+      key: name,
+      path: under(path, name),
+      kind: "list",
+      count: occurrences.length,
+      children: first.kind === "object" ? first.children : [],
+    });
+  }
+
+  const text = ownText(element);
+  if (text.trim()) {
+    children.push({ key: TEXT_KEY, path: under(path, TEXT_KEY), kind: "value", sample: text, children: [] });
+  }
+
+  return { key, path, kind: "object", children };
+}
+
+/** An element's own text, not its descendants' — which is all mixed content is. */
+function ownText(element: Element): string {
+  let text = "";
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === 3 || node.nodeType === 4) text += node.nodeValue ?? "";
+  }
+  return text;
+}
+
+const under = (path: string, key: string) => (path ? `${path}.${key}` : key);
 
 /**
  * Every path a field rule can read, which is every `value` node not inside a list.

@@ -73,7 +73,7 @@ public class NativeMapper : INativeInfolinkMapper, IReceivesMappingContext
         var target = ResolveFormat(_rules.TargetFormat, "target");
 
         var input = source.Read(xchangeFile.Data);
-        var output = DocumentMapper.Map(_rules, input, _context);
+        var output = DocumentMapper.Map(_rules, input, _context, source.SingleValueIsAList);
 
         return Task.FromResult(new XchangeFile(target.Write(output), xchangeFile.Filename)
         {

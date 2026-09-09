@@ -68,7 +68,7 @@ export async function buildFromSample(page: Page, target: unknown) {
   await page.getByRole("button", { name: "Build from a sample of the output" }).click();
   await page
     .getByRole("textbox", { name: "Sample output document" })
-    .fill(JSON.stringify(target, null, 2));
+    .fill(typeof target === "string" ? target : JSON.stringify(target, null, 2));
   await page.getByRole("button", { name: "Build the rules" }).click();
   await page.keyboard.press("Escape");
 }
