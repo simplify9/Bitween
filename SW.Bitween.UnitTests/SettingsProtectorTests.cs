@@ -62,11 +62,22 @@ public class SettingsProtectorTests
     [TestMethod]
     public void Tampering_is_detected_rather_than_decrypted()
     {
+        const string prefix = "enc.v1:";
         var protector = With("a-passphrase");
         var stored = protector.Protect(Secret);
-        // Flip the last ciphertext character — the authentication tag must reject it.
-        var tampered = stored[..^2] + (stored[^2] == 'A' ? 'B' : 'A') + stored[^1];
 
+        // Flip a bit in the payload rather than in a base64 character. Base64 packs three
+        // bytes into four characters, so the last character of a value carries spare bits
+        // that decode to nothing — changing it left the bytes identical about one run in
+        // six, and the test then failed for having tampered with nothing.
+        //
+        // The middle byte, so this holds whatever the layout is: salt, nonce, ciphertext
+        // and tag all reject a change, though for different reasons.
+        var payload = Convert.FromBase64String(stored[prefix.Length..]);
+        payload[payload.Length / 2] ^= 0x01;
+        var tampered = prefix + Convert.ToBase64String(payload);
+
+        Assert.AreNotEqual(stored, tampered, "the value under test has to actually differ");
         Assert.ThrowsException<AuthenticationTagMismatchException>(() => protector.Unprotect(tampered));
     }
 

@@ -6,6 +6,7 @@ import {
   type DocumentNode,
 } from "../../lib/nativeMapper/documentTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
+import { FormatButton } from "../ui/FormatButton";
 import { TextInput } from "../ui/forms";
 import { RowSelect } from "./rowControls";
 import { DATE_ORDERS, type DateOrderName } from "../../lib/nativeMapper/types";
@@ -68,7 +69,14 @@ export function SourcePanel({
           onChange={(e) => dispatch({ type: "SET_SOURCE_SAMPLE", text: e.target.value })}
           aria-label="Sample source document"
         />
-        {parseError && <p className="mt-1 text-[11px] text-danger-700">{parseError}</p>}
+        <div className="flex items-center gap-2">
+          {parseError && <p className="mt-1 text-[11px] text-danger-700">{parseError}</p>}
+          <FormatButton
+            className="mt-1 ml-auto"
+            value={sourceSample}
+            onChange={(text) => dispatch({ type: "SET_SOURCE_SAMPLE", text })}
+          />
+        </div>
 
         {/* Part of the mapping, unlike the sample above it: how this partner writes
             dates is a fact about their documents, and it is the same for every field —

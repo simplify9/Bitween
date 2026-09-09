@@ -294,7 +294,7 @@ export function rulesEditorReducer(
       // Both samples are parsed here rather than passed in, so the action carries
       // nothing and the button cannot hand the reducer a tree from a stale render.
       case "SCAFFOLD_FROM_TARGET": {
-        const target = parseSample(draft.targetSample, draft.rules.targetFormat);
+        const target = parseSample(draft.targetSample, draft.rules.targetFormat, "target");
         const source = parseSample(draft.sourceSample, draft.rules.sourceFormat);
         draft.scaffold = target.error
           ? { created: 0, matched: 0, problem: target.error }

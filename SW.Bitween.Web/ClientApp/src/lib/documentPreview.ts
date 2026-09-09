@@ -39,10 +39,15 @@ function formatJson(text: string): string | null {
 }
 
 function formatXml(text: string): string | null {
-  // A newline landing inside either of these would change the data rather than
-  // its shape, and a payload someone is reading to diagnose a failure has to
-  // survive being displayed. Neither is common enough to be worth handling.
+  // A newline landing inside any of these would change the data rather than its
+  // shape, and a payload someone is reading to diagnose a failure has to survive
+  // being displayed. None is common enough to be worth handling.
   if (text.includes("<![CDATA[") || text.includes("<!--")) return null;
+
+  // `xml:space="preserve"` is the document saying, in its own words, that the
+  // whitespace inside is content. There is no boundary left that is safe to add a
+  // newline at, so this one is left exactly as it came.
+  if (/\bxml:space\s*=\s*["']preserve["']/.test(text)) return null;
 
   // Split only where one tag butts *literally* against the next, with nothing
   // between them. Whitespace sitting between two tags is a text node — in mixed

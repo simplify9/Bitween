@@ -93,6 +93,16 @@ export function scaffoldFromTarget(
 }
 
 /**
+ * Whether a target names an XML namespace declaration — `@xmlns` or `@xmlns:something`.
+ *
+ * Only ever the last segment, because that is where an attribute sits.
+ */
+function isNamespaceDeclaration(segments: string[]): boolean {
+  const last = segments[segments.length - 1] ?? "";
+  return last === "@xmlns" || last.startsWith("@xmlns:");
+}
+
+/**
  * Adds what is missing from one container.
  *
  * `holder` is the sample node whose contents the container produces: an object's
@@ -116,6 +126,19 @@ function fill(
     const rule = emptyFieldRule(slot.segments);
     const type = typeFromSample(slot.node.sample);
     if (type) rule.type = type;
+
+    // An XML namespace declaration is part of what the document *is*, not something a
+    // partner's data fills in — and a URI is exactly the kind of thing nobody should be
+    // retyping from memory. So the sample supplies it, which is the whole reason
+    // namespaces are ordinary `@xmlns` fields rather than a setting of their own.
+    if (isNamespaceDeclaration(slot.segments)) {
+      rule.from = { kind: "fixed", value: slot.node.sample ?? "" };
+      rule.type = undefined;
+      tally.matched++;
+      container.fields.push(rule);
+      tally.created++;
+      continue;
+    }
 
     const from = matchPath(slot.segments, sourcePaths);
     if (from) {

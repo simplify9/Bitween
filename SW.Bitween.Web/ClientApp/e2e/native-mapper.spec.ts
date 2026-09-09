@@ -9,6 +9,7 @@ import {
   openMapper,
   setSourcePath,
   suggestionsFor,
+  writeMapperProperties,
 } from "./mapperHelpers";
 
 /**
@@ -177,7 +178,7 @@ test("choosing the new mapper offers its editor, and the old mapper keeps its ow
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute(
     "href",
-    new RegExp(`/subscriptions/${subscriptionId}/mapper$`),
+    new RegExp(`/subscriptions/${subscriptionId}/mapper\\?mapper=NativeMapper$`),
   );
 
   // Both mappers are named by the same check, so adding the new one cannot quietly
@@ -190,6 +191,63 @@ test("choosing the new mapper offers its editor, and the old mapper keeps its ow
   await page.getByRole("combobox", { name: "mapper adapter" }).blur();
   await pickOption(page, "mapper adapter", "NativeJSONMapper");
   await expect(link).toBeVisible();
+});
+
+
+test("the editor opens for the mapper you picked, not the one that is saved", async ({ page }) => {
+  // The link used to carry only the subscription, so the editor asked the server which
+  // mapper it used and got the one being replaced. Choosing a mapper and opening its
+  // editor gave you the other one — in both directions — until you saved first, with
+  // nothing on screen to say why.
+  const subscriptionId = await createSubscription(page);
+  await writeMapperProperties(subscriptionId, "NativeJSONMapper", { ScribanTemplate: "{}" });
+
+  await page.goto(`subscriptions/${subscriptionId}`);
+  await page.getByRole("button", { name: /^Transformation/ }).click();
+
+  const link = page.getByRole("link", { name: /Open the visual mapping editor/ });
+
+  // Saved as the old mapper, picking the new one: the new editor, no save in between.
+  await pickOption(page, "mapper adapter", "NativeMapper");
+  await link.click();
+  await expect(page.getByLabel("From format")).toBeVisible({ timeout: 15000 });
+
+  // And back the other way, which is the same bug reversed.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeJSONMapper`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+
+  // A mapper nobody has an editor for is ignored rather than opening one on a guess.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=SomethingElse`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+});
+
+test("saving over the mapping the other mapper already has asks first", async ({ page }) => {
+  const subscriptionId = await createSubscription(page);
+  await writeMapperProperties(subscriptionId, "NativeJSONMapper", {
+    ScribanTemplate: '{ "ref": "{{ order.ref }}" }',
+  });
+
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeMapper`);
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SAMPLE);
+  await addPathRule(page, "customer", "order.customer");
+
+  // Saving here switches the mapper as well as storing the rules, so the template
+  // someone wrote in the other editor goes — and nothing else holds a copy of it.
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(/Replace the mapping this subscription already has/)).toBeVisible();
+
+  // Cancelling leaves the stored mapping exactly where it was.
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeJSONMapper`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+
+  // Going through with it does switch, and there is no second question next time.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeMapper`);
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SAMPLE);
+  await addPathRule(page, "customer", "order.customer");
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Replace the mapping" }).click();
+  await expect(page.getByText("Saved")).toBeVisible({ timeout: 15000 });
 });
 
 test("builds the whole output from a sample of it, and matches the source fields", async ({

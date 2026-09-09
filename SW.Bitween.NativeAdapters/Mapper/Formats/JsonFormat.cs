@@ -20,6 +20,9 @@ public class JsonFormat : IDocumentFormat
 
     public string ContentType => "application/json";
 
+    /// <summary>No: an array is an array, and one element in it is a list of one.</summary>
+    public bool SingleValueIsAList => false;
+
     public ValueNode Read(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check, Eraser, Eye, EyeOff, Link2, Redo2, Undo2 } from "lucide-react";
@@ -19,6 +19,7 @@ import type { MatchTally } from "../../lib/nativeMapper/scaffold";
 import { DOCUMENT_FORMATS, type DocumentFormatId } from "../../lib/nativeMapper/types";
 import { Button, FormError } from "../ui/basics";
 import { ConnectionLines, type Connection } from "../ui/ConnectionLines";
+import { ConfirmDialog } from "../ui/overlays";
 import { Select } from "../ui/forms";
 import { BuildFromSample } from "./BuildFromSample";
 import { OutputPanel } from "./OutputPanel";
@@ -55,8 +56,16 @@ function Editor() {
   // Hiding the preview gives the rules the whole width, which is what a big mapping
   // wants once it is built and being read rather than checked.
   const [showPreview, setShowPreview] = useState(true);
-  const { save, isSaving, justSaved, saveError } = useMappingSave(subscriptionId);
-  useMappingShortcuts(save);
+  const { save, isSaving, justSaved, saveError, replacing } = useMappingSave(subscriptionId);
+
+  // Everything that saves goes through here, so the keyboard cannot slip past the
+  // question the Save button asks.
+  const [confirming, setConfirming] = useState(false);
+  const requestSave = useCallback(
+    () => (replacing ? setConfirming(true) : void save()),
+    [replacing, save],
+  );
+  useMappingShortcuts(requestSave);
 
   const sample = useMemo(
     () => parseSample(sourceSample, rules.sourceFormat),
@@ -217,7 +226,7 @@ function Editor() {
               <Check size={14} /> Saved
             </span>
           ) : (
-            <Button variant="primary" busy={isSaving} disabled={!dirty} onClick={() => void save()}>
+            <Button variant="primary" busy={isSaving} disabled={!dirty} onClick={requestSave}>
               Save
             </Button>
           )}
@@ -272,6 +281,25 @@ function Editor() {
               : "Drag a source field onto a rule — or select a rule first, then click a field."}
         </p>
       </div>
+
+      {confirming && replacing && (
+        <ConfirmDialog
+          title="Replace the mapping this subscription already has?"
+          body={
+            <>
+              This subscription maps with{" "}
+              <strong className="font-medium text-ink-800">{replacing}</strong>, and saving
+              here switches it to the new mapper. The mapping built in the other editor is
+              discarded, and nothing else holds a copy of it.
+            </>
+          }
+          confirmLabel="Replace the mapping"
+          onConfirm={async () => {
+            await save();
+          }}
+          onClose={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 }

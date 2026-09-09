@@ -212,21 +212,27 @@ public class NativeMapperExchangeTests
     /// The whole point of the enrichment guard: before it, <c>JToken.Parse</c> in
     /// <c>RunMapper</c> threw on this payload before any mapper ran.
     /// </summary>
+    /// <remarks>
+    /// It now maps as well as arriving, which makes the same guard easier to check: a payload the
+    /// pipeline had mangled on the way past could not produce the value the document holds.
+    /// </remarks>
     [Fact]
-    public async Task An_xml_payload_reaches_the_mapper_without_the_pipeline_throwing()
+    public async Task An_xml_payload_reaches_the_mapper_and_maps()
     {
         var run = await RunOnce("NM XmlPayload", new
         {
             version = 1,
             sourceFormat = "xml",
-            fields = new object[] { new { target = new[] { "a" }, from = new { kind = "Fixed", value = 1 } } },
+            fields = new object[]
+            {
+                new { target = new[] { "a" }, from = new { kind = "Fixed", value = 1 } },
+                new { target = new[] { "id" }, from = new { kind = "Path", path = "order.id" } },
+            },
         }, "<order><id>5</id></order>");
 
-        // XML is not a supported source format yet, so this fails — but it fails in the mapper,
-        // saying so, rather than in the pipeline's JSON parse before the mapper is reached.
-        Assert.Null(run.Output);
-        Assert.Contains("not a source format this mapper supports", run.Exception);
-        Assert.DoesNotContain("JsonReaderException", run.Exception);
+        Assert.Null(run.Exception);
+        Assert.Equal("5", JObject.Parse(run.Output!)["id"]?.ToString());
+        Assert.Equal("1", JObject.Parse(run.Output!)["a"]?.ToString());
     }
 
     [Fact]

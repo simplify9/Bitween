@@ -16,6 +16,7 @@ public static class DocumentFormats
         new(StringComparer.OrdinalIgnoreCase)
         {
             ["json"] = new JsonFormat(),
+            ["xml"] = new XmlFormat(),
         };
 
     /// <summary>Format ids, for the editor's dropdown and for error messages.</summary>
