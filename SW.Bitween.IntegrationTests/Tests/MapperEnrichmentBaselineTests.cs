@@ -58,7 +58,7 @@ public class MapperEnrichmentBaselineTests
         string testName,
         string scribanTemplate,
         string payload,
-        Dictionary<string, string> partnerProperties = null,
+        Dictionary<string, string>? partnerProperties = null,
         (string SetId, Dictionary<string, string> Values)? globalSet = null)
     {
         await using var scope = _fixture.CreateScope();
@@ -136,7 +136,7 @@ public class MapperEnrichmentBaselineTests
             partnerProperties: new Dictionary<string, string> { ["regionCode"] = "JO" });
 
         Assert.Null(run.Exception);
-        Assert.Equal("JO", JObject.Parse(run.Output)["region"]?.ToString());
+        Assert.Equal("JO", JObject.Parse(run.Output!)["region"]?.ToString());
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class MapperEnrichmentBaselineTests
             globalSet: (setId, new Dictionary<string, string> { ["channel"] = "WEB" }));
 
         Assert.Null(run.Exception);
-        Assert.Equal("WEB", JObject.Parse(run.Output)["channel"]?.ToString());
+        Assert.Equal("WEB", JObject.Parse(run.Output!)["channel"]?.ToString());
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class MapperEnrichmentBaselineTests
             globalSet: (setId, new Dictionary<string, string> { ["channel"] = "WEB" }));
 
         Assert.Null(run.Exception);
-        var result = JObject.Parse(run.Output);
+        var result = JObject.Parse(run.Output!);
         Assert.Equal("JO", result["region"]?.ToString());
         Assert.Equal("WEB", result["channel"]?.ToString());
     }
@@ -234,6 +234,6 @@ public class MapperEnrichmentBaselineTests
             "{\"orderId\":\"A5\"}");
 
         Assert.Null(run.Exception);
-        Assert.Equal("A5", JObject.Parse(run.Output)["id"]?.ToString());
+        Assert.Equal("A5", JObject.Parse(run.Output!)["id"]?.ToString());
     }
 }
