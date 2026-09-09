@@ -831,6 +831,46 @@ export interface DataSourceDetail extends DataSourceRow {
  * What the connection is doing right now, read from the adapter's heartbeat rather than from the
  * data source row — which only carries what the last reconcile wrote back.
  */
+/**
+ * One named piece of SQL a data source may run.
+ *
+ * A record rather than a field on the data source, so that writing a query and changing the
+ * database credentials are different permissions — see the backend entity for why SQL cannot live
+ * on the subscription instead.
+ */
+export interface DataSourceStatement {
+  id: number;
+  dataSourceId: number;
+  name: string;
+  sql: string;
+  description: string | null;
+  workGroupId: number | null;
+  workGroupName: string | null;
+  inactive: boolean;
+  /** How many subscriptions name it. Zero is the number that says it is safe to delete. */
+  usageCount: number;
+  createdOn: string;
+  createdBy: string | null;
+  modifiedOn: string | null;
+  modifiedBy: string | null;
+}
+
+export interface DataSourceStatementUsage {
+  statementId: number;
+  name: string;
+  usedBy: DataSourceStatementUsageEntry[];
+}
+
+export interface DataSourceStatementUsageEntry {
+  subscriptionId: number;
+  subscriptionName: string;
+  /** Handler, Mapper or Receiver — which adapter slot names it. */
+  role: string;
+  /** query, execute or call. */
+  operation: string;
+  inactive: boolean;
+}
+
 export interface DataSourceTelemetry {
   /** False when this node is not the one holding the connection. Not a fault: it is exclusive. */
   runningHere: boolean;

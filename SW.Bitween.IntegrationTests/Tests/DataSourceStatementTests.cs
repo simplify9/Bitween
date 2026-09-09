@@ -259,8 +259,8 @@ public class DataSourceStatementTests(BitweenFixture fixture)
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSourceStatements.Create>(
             scope.ServiceProvider);
 
-        return (int)await handler.Handle(dataSourceId,
-            new DataSourceStatementCreate { Name = name, Sql = sql });
+        return (int)await handler.Handle(
+            new DataSourceStatementCreate { DataSourceId = dataSourceId, Name = name, Sql = sql });
     }
 
     async Task UpdateAsync(int id, DataSourceStatementUpdate model)
@@ -290,7 +290,7 @@ public class DataSourceStatementTests(BitweenFixture fixture)
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSourceStatements.Usage>(
             scope.ServiceProvider);
 
-        return (DataSourceStatementUsage)await handler.Handle(id);
+        return (DataSourceStatementUsage)await handler.Handle(id, new DataSourceStatementUsageRequest());
     }
 
     async Task<int> CreateSubscriptionAsync(int dataSourceId,

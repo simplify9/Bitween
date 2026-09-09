@@ -69,6 +69,14 @@ export const keys = {
     detail: (id: number | string) => ["bus-gateways", "detail", id] as const,
   },
 
+  /** Statements are their own resource, keyed by the data source they belong to. */
+  dataSourceStatements: {
+    all: ["data-source-statements"] as const,
+    forDataSource: (dataSourceId: number | string) =>
+      ["data-source-statements", "for", dataSourceId] as const,
+    usage: (id: number | string) => ["data-source-statements", "usage", id] as const,
+  },
+
   dataSources: {
     all: ["data-sources"] as const,
     /** The provider catalog, described by the adapters themselves. Rarely changes; cached hard. */

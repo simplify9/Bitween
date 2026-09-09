@@ -17,10 +17,12 @@ namespace SW.Bitween.Resources.DataSourceStatements;
 /// different jobs, and before this they needed the same right.
 /// </summary>
 public class Create(BitweenDbContext dbContext, RequestContext requestContext)
-    : ICommandHandler<int, DataSourceStatementCreate, object>
+    : ICommandHandler<DataSourceStatementCreate, object>
 {
-    public async Task<object> Handle(int dataSourceId, DataSourceStatementCreate model)
+    public async Task<object> Handle(DataSourceStatementCreate model)
     {
+        var dataSourceId = model.DataSourceId;
+
         await requestContext.EnsurePermission(dbContext,
             Model.Permissions.DataSourceStatements.Create);
 
@@ -80,6 +82,7 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
     {
         public Validate()
         {
+            RuleFor(i => i.DataSourceId).GreaterThan(0);
             RuleFor(i => i.Name).NotEmpty().MaximumLength(200);
             RuleFor(i => i.Sql).NotEmpty();
             RuleFor(i => i.Description).MaximumLength(1000);

@@ -56,6 +56,7 @@
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.SampleConfigurableAdapter -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.SampleConfigurableAdapter --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Bus.RabbitMq -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Bus.RabbitMq --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Bus.Sqs -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Bus.Sqs --no-self-contained" />
+    <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.PostgreSql -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.PostgreSql --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.Oracle -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.Oracle --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.SampleResidentHandler -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.SampleResidentHandler --no-self-contained" />
   </Target>

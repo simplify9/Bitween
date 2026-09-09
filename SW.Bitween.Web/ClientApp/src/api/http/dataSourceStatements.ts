@@ -1,0 +1,104 @@
+import type { ApiClient } from "../client";
+import type { DataSourceStatement, DataSourceStatementUsage } from "../types";
+import { buildListQuery } from "./searchQuery";
+import { get, post, request } from "./request";
+
+interface SearchyResponse<T> {
+  result: T[];
+  totalCount: number;
+}
+
+interface RawStatement {
+  id: number;
+  dataSourceId: number;
+  name: string;
+  sql: string;
+  description: string | null;
+  workGroupId: number | null;
+  workGroupName: string | null;
+  inactive: boolean;
+  usageCount: number;
+  createdOn: string;
+  createdBy: string | null;
+  modifiedOn: string | null;
+  modifiedBy: string | null;
+}
+
+const toStatement = (raw: RawStatement): DataSourceStatement => ({
+  id: raw.id,
+  dataSourceId: raw.dataSourceId,
+  name: raw.name,
+  sql: raw.sql,
+  description: raw.description,
+  workGroupId: raw.workGroupId,
+  workGroupName: raw.workGroupName,
+  inactive: raw.inactive,
+  usageCount: raw.usageCount,
+  createdOn: raw.createdOn,
+  createdBy: raw.createdBy,
+  modifiedOn: raw.modifiedOn,
+  modifiedBy: raw.modifiedBy,
+});
+
+const EVERYTHING = 1_000_000;
+
+export const dataSourceStatementMethods: Partial<ApiClient> = {
+  async listDataSourceStatements(dataSourceId: number): Promise<DataSourceStatement[]> {
+    // Filtered server-side by data source: a statement is only ever meaningful next to the
+    // connection it runs against, and no screen wants all of them at once. Rule 1 is EqualsTo.
+    const query = buildListQuery({
+      filters: [["DataSourceId", 1, dataSourceId]],
+      sort: ["Name", 1],
+      offset: 0,
+      limit: EVERYTHING,
+    });
+    const res = await get<SearchyResponse<RawStatement>>(`/datasourcestatements?${query}`);
+    return (res.result ?? []).map(toStatement);
+  },
+
+  async createDataSourceStatement(
+    dataSourceId: number,
+    input: { name: string; sql: string; description?: string | null; workGroupId?: number | null },
+  ): Promise<{ id: number }> {
+    // The data source travels in the body, not the route: POST /datasourcestatements/{id} already
+    // means "update that statement", so a keyed create would collide with it.
+    const id = await post<number>(`/datasourcestatements`, {
+      dataSourceId,
+      name: input.name,
+      sql: input.sql,
+      description: input.description ?? null,
+      workGroupId: input.workGroupId ?? null,
+      inactive: false,
+    });
+    return { id };
+  },
+
+  async updateDataSourceStatement(
+    id: number,
+    changes: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      inactive: boolean;
+    },
+  ): Promise<void> {
+    await post(`/datasourcestatements/${id}`, {
+      name: changes.name,
+      sql: changes.sql,
+      description: changes.description ?? null,
+      workGroupId: changes.workGroupId ?? null,
+      inactive: changes.inactive,
+    });
+  },
+
+  async deleteDataSourceStatement(id: number): Promise<void> {
+    await request(`/datasourcestatements/${id}`, { method: "DELETE" });
+  },
+
+  /** Which subscriptions name it, in which slot. What decides whether it can safely change. */
+  async getDataSourceStatementUsage(id: number): Promise<DataSourceStatementUsage> {
+    const raw = await post<DataSourceStatementUsage>(`/datasourcestatements/${id}/usage`, {});
+    return { ...raw, usedBy: raw.usedBy ?? [] };
+  },
+};

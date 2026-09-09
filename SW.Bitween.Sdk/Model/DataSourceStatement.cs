@@ -10,6 +10,13 @@ namespace SW.Bitween.Model;
 /// </summary>
 public class DataSourceStatementCreate : IName
 {
+    /// <summary>
+    /// Which connection it belongs to. In the body rather than the route because the resource is
+    /// addressed as /datasourcestatements — a keyed create would collide with the update handler,
+    /// which is what POST /datasourcestatements/{id} already means.
+    /// </summary>
+    public int DataSourceId { get; set; }
+
     /// <summary>Required; the server rejects a create without it.</summary>
     public string Name { get; set; } = null!;
 
@@ -52,6 +59,14 @@ public class DataSourceStatementRow : DataSourceStatementUpdate
     public string? CreatedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }
     public string? ModifiedBy { get; set; }
+}
+
+/// <summary>
+/// Nothing to send: the statement id in the route is the whole question. It exists because a keyed
+/// command takes a body, and asking what uses a statement supplies nothing.
+/// </summary>
+public class DataSourceStatementUsageRequest
+{
 }
 
 /// <summary>Which subscriptions name a statement, and in which adapter slot.</summary>

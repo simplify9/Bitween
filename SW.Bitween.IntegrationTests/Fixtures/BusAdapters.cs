@@ -11,4 +11,5 @@ public static class BusAdapters
     /// relational data source: same resident lifecycle, same supervision, different Kind.
     /// </summary>
     public const string Oracle = "bitween.db.oracle";
+    public const string PostgreSql = "bitween.db.postgresql";
 }

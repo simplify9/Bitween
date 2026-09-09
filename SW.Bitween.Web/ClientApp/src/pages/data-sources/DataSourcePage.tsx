@@ -19,6 +19,7 @@ import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { isSecretName, providerOf, settingOf, useDataSourceProviders } from "./providers";
 import { LiveConnection } from "./LiveConnection";
+import { Statements } from "./Statements";
 import { draftOf, editableFingerprint, type Draft } from "./draft";
 
 /** A draft is the whole editable surface, so the save bar can compare against what was loaded. */
@@ -238,6 +239,14 @@ export function DataSourcePage() {
 
       {/* ——— what it is doing right now ——— */}
       <LiveConnection dataSourceId={dataSourceId} />
+
+      {/* Only a relational source runs SQL, and the server refuses a statement on anything else —
+          so offering the panel on a broker would be offering a thing that cannot work. */}
+      {source.data?.kind === "Relational" && (
+        <Can permission="data-source-statements.view">
+          <Statements dataSourceId={dataSourceId} />
+        </Can>
+      )}
 
       {/* ——— what the live adapter says about the broker ——— */}
       {inspect && (

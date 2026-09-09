@@ -14,9 +14,9 @@ namespace SW.Bitween.Resources.DataSourceStatements;
 /// </summary>
 [HandlerName("usage")]
 public class Usage(BitweenDbContext dbContext, RequestContext requestContext,
-    StatementUsageReader usage) : IGetHandler<int, object>
+    StatementUsageReader usage) : ICommandHandler<int, DataSourceStatementUsageRequest, object>
 {
-    public async Task<object> Handle(int key)
+    public async Task<object> Handle(int key, DataSourceStatementUsageRequest request)
     {
         await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSourceStatements.View);
 

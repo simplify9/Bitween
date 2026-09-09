@@ -15,6 +15,8 @@ import type {
   DataSourceDetail,
   DataSourceInspectResult,
   DataSourceRow,
+  DataSourceStatement,
+  DataSourceStatementUsage,
   DataSourceTelemetry,
   DataSourceTestResult,
   DashboardData,
@@ -354,6 +356,25 @@ export interface ApiClient {
   getDataSourceTelemetry(id: number): Promise<DataSourceTelemetry>;
   /** Relays a read-only command (Discover, GetStats) to the adapter actually serving traffic. */
   inspectDataSource(id: number, command: string): Promise<DataSourceInspectResult>;
+
+  // ——— data source statements: the SQL a relational data source may run ———
+  listDataSourceStatements(dataSourceId: number): Promise<DataSourceStatement[]>;
+  createDataSourceStatement(
+    dataSourceId: number,
+    input: { name: string; sql: string; description?: string | null; workGroupId?: number | null },
+  ): Promise<{ id: number }>;
+  updateDataSourceStatement(
+    id: number,
+    changes: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      inactive: boolean;
+    },
+  ): Promise<void>;
+  deleteDataSourceStatement(id: number): Promise<void>;
+  getDataSourceStatementUsage(id: number): Promise<DataSourceStatementUsage>;
   /** The subscription is either an existing id or defined inline; the endpoint commits both as one. */
   addBusRoute(id: number, input: AddBusRouteInput): Promise<void>;
   updateBusRoute(
