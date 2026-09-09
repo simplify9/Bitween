@@ -95,6 +95,21 @@ public static class Permissions
         public const string Operate = "data-sources.operate";
     }
 
+    /// <summary>
+    /// Separate from <see cref="DataSources"/> on purpose. Statements have to live on the
+    /// connection — SQL in a subscription's adapter properties would have partner values templated
+    /// into it — but that must not mean editing SQL requires the right that also changes the
+    /// credentials. Someone configuring their own integration gets these; only whoever owns the
+    /// connection gets DataSources.Edit.
+    /// </summary>
+    public static class DataSourceStatements
+    {
+        public const string View = "data-source-statements.view";
+        public const string Create = "data-source-statements.create";
+        public const string Edit = "data-source-statements.edit";
+        public const string Delete = "data-source-statements.delete";
+    }
+
     public static class WorkGroups
     {
         public const string View = "workgroups.view";
@@ -251,6 +266,15 @@ public static class PermissionCatalog
             (Edit, "Change connection settings and credentials."),
             (Delete, "Delete data sources."),
             (Operate, "Test a connection, which reaches out to the broker.")),
+
+        Area("data-source-statements", "SQL statements", "Configuration",
+            "The named SQL a database data source is allowed to run. Held apart from the "
+            + "connection so that writing a query does not require the rights that change "
+            + "credentials.",
+            (View, "Browse statements and see which subscriptions use them."),
+            (Create, "Add a statement to a data source."),
+            (Edit, "Change a statement's SQL."),
+            (Delete, "Delete a statement no subscription uses.")),
 
         Area("workgroups", "Work groups", "Configuration", "Processing lanes that spread load across queues.",
             (View, "See work groups and their throughput."),

@@ -288,6 +288,35 @@ namespace SW.Bitween.MySql.Migrations
                     b.ToTable("ClusterLeases", (string)null);
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.AdapterState", b =>
+                {
+                    b.Property<string>("AdapterId")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("InstanceKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("UpdatedOn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(8000)
+                        .HasColumnType("varchar(8000)");
+
+                    b.HasKey("AdapterId", "InstanceKey", "Name");
+
+                    b.ToTable("AdapterStates", (string)null);
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSource", b =>
                 {
                     b.Property<int>("Id")
@@ -356,6 +385,9 @@ namespace SW.Bitween.MySql.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(200)");
 
+                    b.Property<int>("Placement")
+                        .HasColumnType("int");
+
                     b.Property<string>("Properties")
                         .HasColumnType("longtext");
 
@@ -371,6 +403,59 @@ namespace SW.Bitween.MySql.Migrations
                         .IsUnique();
 
                     b.ToTable("DataSources", (string)null);
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DataSourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<bool>("Inactive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Sql")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("WorkGroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkGroupId");
+
+                    b.HasIndex("DataSourceId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("DataSourceStatements", (string)null);
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
@@ -941,6 +1026,9 @@ namespace SW.Bitween.MySql.Migrations
                     b.Property<string>("CustomRetryPolicy")
                         .HasColumnType("longtext");
 
+                    b.Property<int?>("DataSourceId")
+                        .HasColumnType("int");
+
                     b.Property<string>("DocumentFilter")
                         .HasColumnType("longtext");
 
@@ -1030,6 +1118,8 @@ namespace SW.Bitween.MySql.Migrations
                     b.HasIndex("AggregationForId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("DataSourceId");
 
                     b.HasIndex("DocumentId");
 
@@ -1921,6 +2011,22 @@ namespace SW.Bitween.MySql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", "DataSource")
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SW.Bitween.Domain.WorkGroup", null)
+                        .WithMany()
+                        .HasForeignKey("WorkGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DataSource");
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
@@ -2057,6 +2163,11 @@ namespace SW.Bitween.MySql.Migrations
                     b.HasOne("SW.Bitween.Domain.SubscriptionCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId");
+
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("SW.Bitween.Domain.Document", null)
                         .WithMany()

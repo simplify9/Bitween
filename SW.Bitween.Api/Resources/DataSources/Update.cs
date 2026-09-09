@@ -33,6 +33,7 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
         entity.Name = model.Name;
         entity.AdapterId = model.AdapterId;
         entity.Kind = Create.ParseKind(model.Kind);
+        entity.Placement = Create.ParsePlacement(model.Placement);
         entity.Properties = properties;
         entity.SecretProperties = Secrets.Declare(properties, model.SecretProperties);
         entity.Inactive = model.Inactive;

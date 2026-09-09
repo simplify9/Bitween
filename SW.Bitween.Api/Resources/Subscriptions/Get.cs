@@ -33,6 +33,7 @@ namespace SW.Bitween.Resources.Subscriptions
                     DocumentFilter = subscriber.DocumentFilter.ToKeyAndValueCollection(),
                     DocumentId = subscriber.DocumentId,
                     HandlerId = subscriber.HandlerId,
+                    DataSourceId = subscriber.DataSourceId,
                     Inactive = subscriber.Inactive,
                     MapperId = subscriber.MapperId,
                     ReceiverId = subscriber.ReceiverId,

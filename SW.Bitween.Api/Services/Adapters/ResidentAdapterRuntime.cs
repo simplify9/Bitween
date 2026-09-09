@@ -58,13 +58,60 @@ public class ResidentAdapterRuntime(
                 + "enabled on this node (Bitween:BusProvidersEnabled). It cannot run here.");
 
         var spec = new AdapterSpec { AdapterId = adapterId };
+        string dataSourceId = null;
+
         foreach (var kv in properties ?? new Dictionary<string, string>())
+        {
+            // Reserved and consumed here: it addresses an instance, it is not a setting, and an
+            // adapter that saw it would have to know to ignore it.
+            if (kv.Key == StartupValuesFiller.DataSourceIdKey) { dataSourceId = kv.Value; continue; }
             spec.StartupValues[kv.Key] = kv.Value;
+        }
+
+        // A subscription bound to a data source runs against THAT connection — the instance the
+        // supervisor already keeps up for it, holding the pool the data source exists to provide.
+        // Renting instead would start a second process with a second pool, configured from
+        // subscription properties that do not hold the credentials at all.
+        if (dataSourceId != null)
+        {
+            var running = adapters.Get(adapterId, dataSourceId);
+            if (running == null)
+                throw new BitweenException(
+                    $"Data source {dataSourceId} is not running on this node, so adapter "
+                    + $"'{adapterId}' has no connection to work through. If the data source is "
+                    + "exclusive, another node holds it; if it is per-node, look at its health — "
+                    + "the supervisor could not start it here.");
+
+            // The subscription's own adapter properties travel with each CALL, not with the
+            // process: this instance is shared by every subscription bound to the data source, and
+            // its startup values are the data source's. Without this a subscription could not say
+            // which statement to run — it would be reading whatever the data source was started
+            // with, which is the same answer for all of them.
+            return new RunningInstanceSession(running, spec.StartupValues);
+        }
 
         // Rented, not started: the process is already up, so the call costs a round trip rather
         // than a launch. Returning the lease is what releases it to the next message — and what
         // triggers the reset that clears per-message state between borrowers.
         return new ResidentAdapterSession(await adapters.RentAsync(spec));
+    }
+
+    /// <summary>
+    /// A session against the data source's long-lived instance. Nothing is returned on dispose:
+    /// the instance is not ours to give back, and it must outlive this Xchange to be any use to
+    /// the next one. That also means no per-session reset, so a data source adapter must not keep
+    /// per-message state in a field — which is the same rule any shared connection follows.
+    /// </summary>
+    private sealed class RunningInstanceSession(
+        ResidentAdapterInstance instance, IDictionary<string, string> properties) : IAdapterSession
+    {
+        public Task<TResult> InvokeAsync<TResult>(string method, object argument = null) =>
+            instance.InvokeAsync<TResult>(method, argument, properties: properties);
+
+        public Task InvokeAsync(string method, object argument = null) =>
+            instance.InvokeAsync<object>(method, argument, properties: properties);
+
+        public ValueTask DisposeAsync() => default;
     }
 
     private sealed class ResidentAdapterSession(IAdapterLease lease) : IAdapterSession

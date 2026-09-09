@@ -101,6 +101,14 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        // Composed into the Statements value the adapter has always received. The adapter contract
+        // did not change when these moved out of a JSON field on the data source and into rows —
+        // it still resolves a name and knows nothing about where the SQL is kept.
+        var statements = await dbContext.Set<DataSourceStatement>()
+            .Where(s => !s.Inactive)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         // Revalidate first. A lease that is no longer current must stop its adapter before
         // anything else happens this pass, not after.
         await ReleaseLostLeasesAsync(cancellationToken);
@@ -114,7 +122,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
                 continue;
             }
 
-            var startupValues = BuildStartupValues(dataSource, endpoints);
+            var startupValues = BuildStartupValues(dataSource, endpoints, statements);
             var fingerprint = Fingerprint(dataSource, startupValues);
 
             if (_running.TryGetValue(dataSource.Id, out var current))
@@ -175,11 +183,24 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     }
 
     /// <summary>
-    /// True when this node owns the data source. Acquires the lease if it does not hold one, and
+    /// True when this node may run the data source. Acquires the lease if it does not hold one, and
     /// revalidates the term if it does.
+    ///
+    /// A PER-NODE source skips all of that, and must: a database connection pool is not a thing one
+    /// node holds on everyone else's behalf. Leasing one would leave every other replica unable to
+    /// run the Xchanges that need it, reporting "not running here" as though that were the normal
+    /// answer it is for a broker.
     /// </summary>
     private async Task<bool> EnsureOwnedAsync(DataSource dataSource, CancellationToken cancellationToken)
     {
+        if (dataSource.Resolve() == DataSourcePlacement.PerNode)
+        {
+            // Defensive: a source whose placement changed from Exclusive must not keep the lease it
+            // no longer needs, or the next node to want it as exclusive would wait forever.
+            if (_leases.ContainsKey(dataSource.Id)) await ReleaseAsync(dataSource.Id);
+            return true;
+        }
+
         if (_leases.TryGetValue(dataSource.Id, out var held))
         {
             if (await held.ValidateAsync(cancellationToken)) return true;
@@ -240,7 +261,7 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     /// The adapter decides what to do with them — Bitween does not model any broker's topology.
     /// </summary>
     private static Dictionary<string, string> BuildStartupValues(DataSource dataSource,
-        IEnumerable<BusGateway> gateways)
+        IEnumerable<BusGateway> gateways, IEnumerable<DataSourceStatement> statements)
     {
         var values = new Dictionary<string, string>(dataSource.Properties ?? new Dictionary<string, string>(),
             StringComparer.OrdinalIgnoreCase);
@@ -261,6 +282,12 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
         foreach (var gateway in mine.Where(g => !string.IsNullOrWhiteSpace(g.Endpoint)))
             foreach (var kv in gateway.EndpointProperties ?? new())
                 values[$"Endpoint:{gateway.Endpoint}:{kv.Key}"] = kv.Value;
+
+        // Composed LAST so it wins over any legacy Statements property left on the data source.
+        // Rows are the source of truth now; a stale property silently overriding them would be a
+        // very hard afternoon.
+        var composed = StatementComposer.Compose(statements, dataSource.Id);
+        if (composed != null) values["Statements"] = composed;
 
         return values;
     }
@@ -341,9 +368,15 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
                                 ?? AdapterFailureReader.Summarise(
                                     adapters.Get(row.AdapterId, row.Id.ToString())?.Diagnostics);
             row.ConsecutiveFailures = instance.RestartCount;
-            row.OwnedByNode = _leases.TryGetValue(row.Id, out var lease)
-                ? $"{(election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"
-                : null;
+
+            // A per-node source has no owner and saying "null" would read as nobody running it.
+            // Its row is written by every node, last one wins — which is honest enough for a
+            // summary, and the Telemetry endpoint answers per node for anything more precise.
+            row.OwnedByNode = row.Resolve() == DataSourcePlacement.PerNode
+                ? "every node"
+                : _leases.TryGetValue(row.Id, out var lease)
+                    ? $"{(election as RabbitMqLeaderElection)?.NodeName ?? Environment.MachineName} (term {lease.Term})"
+                    : null;
             changed = true;
         }
 

@@ -19,6 +19,17 @@ public class DataSourceCreate : IName
     public string Kind { get; set; } = "Broker";
 
     /// <summary>
+    /// How many nodes may run this source's adapter: <c>Auto</c>, <c>Exclusive</c> or <c>PerNode</c>.
+    ///
+    /// Auto — the default — follows from <see cref="Kind"/>: a broker connection is exclusive
+    /// because two nodes consuming one queue is duplicate processing, and everything else is
+    /// per-node because a connection pool held by a single node leaves every other node unable to
+    /// use it. Override only for the case that crosses over: a relational source registered for
+    /// change notification pushes, so it needs Exclusive.
+    /// </summary>
+    public string Placement { get; set; } = "Auto";
+
+    /// <summary>
     /// Connection settings, handed to the adapter as startup values. Untyped on purpose: a provider
     /// must not be limited to the subset of a broker's model Bitween happens to have modelled.
     /// </summary>
@@ -222,6 +233,17 @@ public class DataSourceProviderDescriptor
     /// database session is one too, and it must never be offered as a bus gateway's source.
     /// </summary>
     public string Kind { get; set; } = "Broker";
+
+    /// <summary>
+    /// How many nodes may run this source's adapter: <c>Auto</c>, <c>Exclusive</c> or <c>PerNode</c>.
+    ///
+    /// Auto — the default — follows from <see cref="Kind"/>: a broker connection is exclusive
+    /// because two nodes consuming one queue is duplicate processing, and everything else is
+    /// per-node because a connection pool held by a single node leaves every other node unable to
+    /// use it. Override only for the case that crosses over: a relational source registered for
+    /// change notification pushes, so it needs Exclusive.
+    /// </summary>
+    public string Placement { get; set; } = "Auto";
 
     /// <summary>Null when the adapter declares none.</summary>
     public string? Description { get; set; }

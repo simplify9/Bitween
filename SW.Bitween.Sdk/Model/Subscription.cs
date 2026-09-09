@@ -178,6 +178,14 @@ namespace SW.Bitween.Model
         public string? ReceiverId { get; set; }
 
         public string? ValidatorId { get; set; }
+
+        /// <summary>
+        /// Which data source this subscription's adapters connect through — a database connection,
+        /// typically. Null keeps the old behaviour, where an adapter carries its own connection
+        /// settings in its properties.
+        /// </summary>
+        public int? DataSourceId { get; set; }
+
         public int? CategoryId { get; set; }
         public int? WorkGroupId { get; set; }
 

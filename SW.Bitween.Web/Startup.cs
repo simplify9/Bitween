@@ -168,13 +168,16 @@ namespace SW.Bitween.Web
             // them, and describing an adapter never starts one.
             services.AddSingleton<DataSourceProviderCatalog>();
 
+            // Scoped: it reads subscriptions through the request's DbContext.
+            services.AddScoped<StatementUsageReader>();
+
             // External bus providers. Off by default because it is opt-in, not because it is
             // unsafe to run on more than one node: a broker connection is exclusive, and every
             // data source is held through a lease with a database-issued fencing term, so only
             // one node consumes any given source. See BusProviderSupervisor and ILeaderElection.
             if (bitweenOptions.BusProvidersEnabled)
             {
-                services.AddResidentAdapters<BusProviderEventSink>(configure =>
+                services.AddResidentAdapters<BusProviderEventSink, BitweenAdapterStateStore>(configure =>
                 {
                     configure.HeartbeatInterval = TimeSpan.FromSeconds(15);
                     configure.MaxInFlight = bitweenOptions.BusProviderMaxInFlight;

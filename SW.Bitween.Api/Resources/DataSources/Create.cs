@@ -32,6 +32,7 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
             Name = model.Name,
             AdapterId = model.AdapterId,
             Kind = ParseKind(model.Kind),
+            Placement = ParsePlacement(model.Placement),
             Properties = properties,
             SecretProperties = Secrets.Declare(properties, model.SecretProperties),
             Inactive = model.Inactive,
@@ -75,6 +76,16 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
                 $"The soft memory limit ({softMb} MB) has to be at or below the hard limit "
                 + $"({hardMb} MB), or it can never be reached.");
     }
+
+    /// <summary>
+    /// Unparseable falls back to Auto rather than to a guess. Auto is the answer that follows from
+    /// the kind, so a typo lands on the sensible default instead of pinning a database to one node
+    /// or letting two nodes onto one queue.
+    /// </summary>
+    internal static DataSourcePlacement ParsePlacement(string placement) =>
+        Enum.TryParse<DataSourcePlacement>(placement, ignoreCase: true, out var parsed)
+            ? parsed
+            : DataSourcePlacement.Auto;
 
     internal static DataSourceKind ParseKind(string kind) =>
         Enum.TryParse<DataSourceKind>(kind, ignoreCase: true, out var parsed)

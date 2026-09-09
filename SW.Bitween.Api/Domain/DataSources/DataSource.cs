@@ -41,6 +41,12 @@ public class DataSource : BaseEntity, IAudited
     /// </summary>
     public List<string> SecretProperties { get; set; } = new();
 
+    /// <summary>
+    /// How many nodes may run this source's adapter at once. Left <see cref="DataSourcePlacement.Auto"/>
+    /// it follows from <see cref="Kind"/>, which is right almost always — set it only to override.
+    /// </summary>
+    public DataSourcePlacement Placement { get; set; } = DataSourcePlacement.Auto;
+
     /// <summary>Stops the adapter without deleting the configuration, mirroring BusGateway.Inactive.</summary>
     public bool Inactive { get; set; }
 
@@ -125,4 +131,40 @@ public enum DataSourceKind
     Document = 2,
     ObjectStore = 3,
     Http = 4
+}
+
+/// <summary>
+/// How many nodes may hold this connection.
+///
+/// The distinction is not cosmetic and the default is not safe in both directions. A broker queue
+/// consumed by two nodes is duplicate processing — the failure the whole leased design exists to
+/// prevent. A database connection pool held by only one node is the opposite failure: every other
+/// node's Xchanges have nowhere to run, and the health page reports "not running here" as though
+/// that were normal.
+/// </summary>
+public enum DataSourcePlacement
+{
+    /// <summary>Decided from <see cref="DataSourceKind"/>: a broker is exclusive, anything else is per-node.</summary>
+    Auto = 0,
+
+    /// <summary>One node at a time, chosen by lease. Brokers, and anything else that pushes.</summary>
+    Exclusive = 1,
+
+    /// <summary>Every node runs its own instance. Pools, and anything else the host only ever calls.</summary>
+    PerNode = 2
+}
+
+public static class DataSourcePlacementExtensions
+{
+    /// <summary>
+    /// What <see cref="DataSourcePlacement.Auto"/> actually means for this source.
+    ///
+    /// A relational source registered for change notification is the exception that proves the
+    /// rule: it stops being something the host merely calls and starts being something that pushes,
+    /// so it needs the lease back. Set <see cref="DataSource.Placement"/> explicitly for that.
+    /// </summary>
+    public static DataSourcePlacement Resolve(this DataSource dataSource) =>
+        dataSource.Placement != DataSourcePlacement.Auto ? dataSource.Placement
+        : dataSource.Kind == DataSourceKind.Broker ? DataSourcePlacement.Exclusive
+        : DataSourcePlacement.PerNode;
 }

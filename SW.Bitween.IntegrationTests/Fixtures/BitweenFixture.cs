@@ -248,6 +248,7 @@ public sealed class BitweenFixture : IAsyncLifetime
                     services.AddScoped<SubscriptionSchedulerService>();
 
                     services.AddSingleton<DataSourceProviderCatalog>();
+                    services.AddScoped<StatementUsageReader>();
                     services.AddSingleton<FilterService>();
                     services.AddScoped<NativeAdapterDiscoveryService>();
                     services.AddScoped<AdapterRequirements>();
@@ -292,6 +293,10 @@ public sealed class BitweenFixture : IAsyncLifetime
                 await AdapterInstaller.InstallAsync(cloudFiles,
                     "SW.Bitween.Adapters.Bus.Sqs", BusAdapters.Sqs,
                     "SW.Bitween.Adapters.Bus.Sqs.dll",
+                    new Dictionary<string, string> { ["Protocol"] = "2", ["Lifecycle"] = "resident" });
+                await AdapterInstaller.InstallAsync(cloudFiles,
+                    "SW.Bitween.Adapters.Db.Oracle", BusAdapters.Oracle,
+                    "SW.Bitween.Adapters.Db.Oracle.dll",
                     new Dictionary<string, string> { ["Protocol"] = "2", ["Lifecycle"] = "resident" });
             }
 

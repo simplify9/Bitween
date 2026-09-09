@@ -56,7 +56,8 @@ public class ReceivingJob(
         try
         {
             var globals = await dbContext.Set<GlobalAdapterValuesSet>().ToArrayAsync();
-            var startupParameters = rec.ReceiverProperties.ToDictionary().Fill(null, globals);
+            var startupParameters = rec.ReceiverProperties.ToDictionary().Fill(null, globals)
+                .WithDataSource(rec.DataSourceId);
             await RunReceiver(rec.ReceiverId, startupParameters, rec.Id, createdExchangeIds);
             rec.SetHealth();
             RecordAttempt(rec.Id, startedOn,

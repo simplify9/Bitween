@@ -7,6 +7,27 @@ namespace SW.Bitween;
 
 public static class StartupValuesFiller
 {
+    /// <summary>
+    /// How the pipeline tells a runtime that this subscription runs through a data source, without
+    /// every call site along the way having to grow a parameter for it.
+    ///
+    /// Reserved, and stripped before the adapter ever sees it — the adapter's own settings come
+    /// from the data source itself. The double-underscore convention matches the
+    /// <c>__partner__</c> and <c>__globals__</c> injections the mapper already relies on.
+    /// </summary>
+    public const string DataSourceIdKey = "__dataSourceId__";
+
+    /// <summary>
+    /// Stamps the data source id onto a set of adapter properties. A null id leaves them alone, so
+    /// every subscription that does not use one is byte-for-byte what it was.
+    /// </summary>
+    public static Dictionary<string, string> WithDataSource(this Dictionary<string, string> properties,
+        int? dataSourceId)
+    {
+        if (dataSourceId != null) properties[DataSourceIdKey] = dataSourceId.Value.ToString();
+        return properties;
+    }
+
 
     public static Dictionary<string, string> Fill(this IDictionary<string, string> inputTemplated,
         Partner partner, GlobalAdapterValuesSet[] globals)

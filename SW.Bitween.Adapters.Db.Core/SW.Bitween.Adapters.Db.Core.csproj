@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      net8.0 because every adapter is net8.0: the host runs net10.0, but an adapter is published as
+      its own process and the fleet is pinned. Nothing here may use a language or runtime feature
+      newer than that.
+    -->
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SW.Bitween.Adapters.Db</RootNamespace>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SimplyWorks.Serverless.Sdk" Version="8.1.23" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Linked source, not a project reference, for the same reason SW.Bitween.Adapters.Shared is
+      linked into the bus adapters: the host reads these attributes out of the published assembly
+      by NAME through a MetadataLoadContext, so each adapter carries its own copy of the type and
+      no assembly identity has to line up.
+    -->
+    <Compile Include="../SW.Bitween.Adapters.Shared/AdapterSettingAttribute.cs" Link="AdapterSettingAttribute.cs" />
+  </ItemGroup>
+
+</Project>

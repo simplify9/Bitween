@@ -27,6 +27,7 @@ public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IG
             Name = dataSource.Name,
             AdapterId = dataSource.AdapterId,
             Kind = dataSource.Kind.ToString(),
+            Placement = dataSource.Placement.ToString(),
             Inactive = dataSource.Inactive,
             DeduplicationWindowDays = dataSource.DeduplicationWindowDays,
             SoftMemoryLimitMb = dataSource.SoftMemoryLimitMb,

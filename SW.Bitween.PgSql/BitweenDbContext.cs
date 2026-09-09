@@ -141,6 +141,42 @@ public class BitweenDbContext(DbContextOptions options, RequestContext requestCo
                 cl.Property(i => i.OwnerNode).HasMaxLength(200);
             });
 
+            modelBuilder.Entity<DataSourceStatement>(st =>
+            {
+                st.ToTable("data_source_statement");
+                st.HasKey(i => i.Id);
+                st.Property(i => i.Id).ValueGeneratedOnAdd();
+                st.Property(p => p.Name).IsRequired().HasMaxLength(200);
+                st.Property(p => p.Sql).IsRequired();
+                st.Property(p => p.Description).HasMaxLength(1000);
+
+                // The namespacing fix, enforced by the database rather than by a check someone can
+                // forget. Case-insensitivity is handled in the handler, because collation differs
+                // per provider.
+                st.HasIndex(p => new { p.DataSourceId, p.Name }).IsUnique();
+
+                // Cascade, unlike the subscription FK: a statement has no meaning without its
+                // connection.
+                st.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                st.HasOne<WorkGroup>().WithMany().HasForeignKey(p => p.WorkGroupId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AdapterState>(st =>
+            {
+                st.ToTable("adapter_state");
+
+                // Composite key rather than a surrogate: an adapter addresses its state by name
+                // within its instance, and there is exactly one row per address by definition.
+                st.HasKey(p => new { p.AdapterId, p.InstanceKey, p.Name });
+                st.Property(p => p.AdapterId).HasMaxLength(200);
+                st.Property(p => p.InstanceKey).HasMaxLength(200);
+                st.Property(p => p.Name).HasMaxLength(200);
+                st.Property(p => p.Value).HasMaxLength(AdapterState.MaxValueLength);
+            });
+
             modelBuilder.Entity<InboundMessage>(im =>
             {
                 im.ToTable("inbound_message");
@@ -221,6 +257,11 @@ public class BitweenDbContext(DbContextOptions options, RequestContext requestCo
 
                 b.Property(p => p.Type).HasConversion<byte>();
                 b.Property(p => p.AggregationTarget).HasConversion<byte>();
+
+                // Restrict, not cascade: deleting a data source that subscriptions still run
+                // through must fail loudly rather than quietly unhooking them.
+                b.HasOne<DataSource>().WithMany().HasForeignKey(p => p.DataSourceId).IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne<Subscription>().WithMany().HasForeignKey(p => p.ResponseSubscriptionId).IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_subscription_response_subscriber");

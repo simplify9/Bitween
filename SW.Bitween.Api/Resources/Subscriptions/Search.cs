@@ -49,6 +49,7 @@ namespace SW.Bitween.Resources.Subscriptions
                     DocumentId = subscriber.DocumentId,
                     DocumentName = document.Name,
                     HandlerId = subscriber.HandlerId,
+                    DataSourceId = subscriber.DataSourceId,
                     Inactive = subscriber.Inactive,
                     MapperId = subscriber.MapperId,
                     ValidatorId = subscriber.ValidatorId,

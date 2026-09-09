@@ -133,6 +133,42 @@ namespace SW.Bitween
                 ds.HasIndex(p => p.Name).IsUnique();
             });
 
+            modelBuilder.Entity<DataSourceStatement>(st =>
+            {
+                st.ToTable("DataSourceStatements");
+                st.HasKey(i => i.Id);
+                st.Property(i => i.Id).ValueGeneratedOnAdd();
+                st.Property(p => p.Name).IsRequired().HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Sql).IsRequired();
+                st.Property(p => p.Description).HasMaxLength(1000);
+
+                // The namespacing fix, enforced by the database rather than by a check someone can
+                // forget. Case-insensitivity is handled in the handler, because collation differs
+                // per provider and a unique index cannot be relied on to be case-insensitive.
+                st.HasIndex(p => new { p.DataSourceId, p.Name }).IsUnique();
+
+                // Cascade, unlike the subscription FK: a statement has no meaning without its
+                // connection, so deleting the data source takes its statements with it.
+                st.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                st.HasOne<WorkGroup>().WithMany().HasForeignKey(p => p.WorkGroupId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AdapterState>(st =>
+            {
+                st.ToTable("AdapterStates");
+
+                // Composite key rather than a surrogate: the adapter addresses state by name
+                // within its instance, and there is exactly one row per address by definition.
+                st.HasKey(p => new { p.AdapterId, p.InstanceKey, p.Name });
+                st.Property(p => p.AdapterId).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.InstanceKey).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Name).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Value).HasMaxLength(AdapterState.MaxValueLength);
+            });
+
             // Declared here rather than only in the PgSql context: leader election needs this table
             // on every provider Bitween supports, and a node whose database has no cluster_lease
             // cannot fence anything — which means two nodes can consume one queue, silently.
@@ -242,6 +278,11 @@ namespace SW.Bitween
 
                 b.Property(p => p.Type).HasConversion<byte>();
                 b.Property(p => p.AggregationTarget).HasConversion<byte>();
+
+                // Restrict, not cascade: deleting a data source that subscriptions still run
+                // through must fail loudly rather than quietly unhooking them.
+                b.HasOne<DataSource>().WithMany().HasForeignKey(p => p.DataSourceId).IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne<Subscription>().WithMany().HasForeignKey(p => p.ResponseSubscriptionId).IsRequired(false)
                     .HasConstraintName("FK_Subscriptions_RespSub").OnDelete(DeleteBehavior.Restrict);

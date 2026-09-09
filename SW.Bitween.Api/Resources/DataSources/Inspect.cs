@@ -30,7 +30,11 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
     /// adapter also exposes Publish, which writes to the customer's broker, and that is not
     /// something a View-level read should be able to reach by naming it in a request body.
     /// </summary>
-    private static readonly string[] Allowed = ["Discover", "GetStats"];
+    /// A database adapter widens this: Describe says what the engine and this login can do, and
+    /// Discover walks the catalog. Both are read-only. Query, Execute, Call, Batch and BulkLoad are
+    /// deliberately absent and must stay absent — a View-level read must not become a way to run
+    /// SQL against a customer's database by naming it in a request body.
+    private static readonly string[] Allowed = ["Discover", "GetStats", "Describe"];
 
     public async Task<object> Handle(int key, DataSourceInspectRequest request)
     {
