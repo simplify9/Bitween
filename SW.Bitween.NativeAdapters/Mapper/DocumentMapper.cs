@@ -167,10 +167,15 @@ public static class DocumentMapper
         // XML makes a list by repeating a name, so an order with one <line> is the same document as
         // one whose `line` was never a list. Reading that as no lines would drop the only line
         // without a word, so where the format cannot say, a single value walks as a list of one.
+        //
+        // Only for a *named* path, though. A document has exactly one root and it is never a
+        // repeated element, so there is no ambiguity to forgive at `over: ""` — that is a
+        // deliberate claim that the whole document is a list, and a document that is not one has
+        // no entries rather than one entry that is the whole document.
         IReadOnlyList<ValueNode> items = over switch
         {
             ListNode found => found.Items,
-            _ when traits.SingleValueIsAList => [over],
+            _ when traits.SingleValueIsAList && rule.Over.Length > 0 => [over],
             _ => [],
         };
 

@@ -333,6 +333,17 @@ public class XmlSingleEntryListTests
     }
 
     [TestMethod]
+    public void The_document_itself_is_not_a_list_of_one()
+    {
+        // `over: ""` says the whole document is the list, which is a claim about a root array
+        // and never true of XML — a document has exactly one root, and it is not a repeated
+        // element. It is also what a list rule holds before a source list has been chosen, so
+        // forgiving it here made an unconfigured list quietly produce one entry: the document,
+        // with every field inside it resolving to nothing.
+        Assert.AreEqual(0, Lines(Xml, "<order><parcel><sku>A</sku></parcel></order>", "").Items.Count);
+    }
+
+    [TestMethod]
     public void Json_is_unchanged_because_json_says_which()
     {
         // A JSON object at the path is not a list and never was, and the mapper has always read it

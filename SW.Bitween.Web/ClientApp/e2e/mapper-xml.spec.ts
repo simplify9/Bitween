@@ -49,7 +49,7 @@ const SOAP_REQUEST = `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envel
         <shipperCity>LYON</shipperCity>
         <shipperAdress2/>
       </shipperValue>
-      <weight>0.940</weight>
+      <weight unit="kg">0.940</weight>
       <shippingdate>04.09.2026</shippingdate>
     </shipping>
   </s:Body>
@@ -169,4 +169,45 @@ test("a source sample that is not XML says so instead of showing an empty tree",
   await openWithXml(page, "<order><ref>A1</order>");
 
   await expect(page.getByText(/not valid XML/i).first()).toBeVisible({ timeout: 15000 });
+});
+
+test("an element that carries both an attribute and a value maps as two rules", async ({
+  page,
+}) => {
+  // `<weight unit="kg">0.940</weight>` is one element holding two separate things, so it
+  // is two rules: `@unit` for the attribute and `#text` for the element's own value. The
+  // same convention as reading, in reverse.
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+  await page.getByLabel("From format").selectOption("xml");
+  await page.getByLabel("To format").selectOption("xml");
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SOAP_REQUEST);
+
+  // The sample needs a value between the tags, not just the attribute: an element with
+  // no text has no text node to make a rule for.
+  await buildFromSample(page, `<order><weight unit="kg">0</weight></order>`);
+
+  const names = page.getByRole("textbox", { name: "Output field name" });
+  await expect(names).toHaveCount(2);
+
+  const sourceOf = (n: number) => page.getByLabel("Source field", { exact: true }).nth(n);
+  await sourceOf(0).fill("Envelope.Body.shipping.weight.@unit");
+  await sourceOf(1).fill("Envelope.Body.shipping.weight.#text");
+
+  await expectPreview(page, '<weight unit="kg">0.940</weight>');
+});
+
+test("an attribute can be added to an element by hand, without a sample", async ({ page }) => {
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+  await page.getByLabel("From format").selectOption("xml");
+  await page.getByLabel("To format").selectOption("xml");
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SOAP_REQUEST);
+
+  // Dots separate the levels, so `order.weight.@unit` puts the attribute on `weight`
+  // two levels down. Nothing about attributes needs its own control.
+  await addFixedRule(page, "order.weight.@unit", "kg");
+  await addPathRule(page, "order.weight.#text", "Envelope.Body.shipping.weight.#text");
+
+  await expectPreview(page, '<weight unit="kg">0.940</weight>');
 });
