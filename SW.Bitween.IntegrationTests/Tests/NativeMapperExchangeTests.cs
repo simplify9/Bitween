@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
@@ -229,12 +230,12 @@ public class NativeMapperExchangeTests
     }
 
     [Fact]
-    public async Task Loops_and_filters_survive_the_round_trip_through_the_database()
+    public async Task Lists_and_filters_survive_the_round_trip_through_the_database()
     {
-        var run = await RunOnce("NM Loop", new
+        var run = await RunOnce("NM List", new
         {
             version = 1,
-            loops = new object[]
+            lists = new object[]
             {
                 new
                 {
@@ -258,6 +259,88 @@ public class NativeMapperExchangeTests
         Assert.Equal(2, lines.Count);
         Assert.Equal("A1", lines[0]["sku"]?.ToString());
         Assert.Equal("C2", lines[1]["sku"]?.ToString());
+    }
+
+    /// <summary>
+    /// A written entry and the walked ones in one list, through the database and the real
+    /// pipeline. The previous mapper had these as two separate features holding literal JSON;
+    /// here they are entries built from ordinary rules, so a written one can still read the
+    /// document.
+    /// </summary>
+    [Fact]
+    public async Task A_written_entry_comes_before_the_walked_ones()
+    {
+        var run = await RunOnce("NM Written", new
+        {
+            version = 1,
+            lists = new object[]
+            {
+                new
+                {
+                    over = "order.line",
+                    target = new[] { "lines" },
+                    @fixed = new object[]
+                    {
+                        new
+                        {
+                            fields = new object[]
+                            {
+                                new { target = new[] { "sku" }, from = new { kind = "Fixed", value = "HEADER" } },
+                                new { target = new[] { "who" }, from = new { kind = "Path", path = "order.customer" } },
+                            },
+                        },
+                    },
+                    fields = new object[]
+                    {
+                        new { target = new[] { "sku" }, from = new { kind = "Path", path = "sku" } },
+                    },
+                },
+            },
+        },
+        """
+        { "order": { "customer": "Ali", "line": [ { "sku": "A1" }, { "sku": "B7" } ] } }
+        """);
+
+        Assert.Null(run.Exception);
+        var lines = (JArray)JObject.Parse(run.Output!)["lines"]!;
+
+        Assert.Equal(3, lines.Count);
+        Assert.Equal("HEADER", lines[0]["sku"]?.ToString());
+        // A written entry has no entry of its own, so its paths read what the list reads.
+        Assert.Equal("Ali", lines[0]["who"]?.ToString());
+        Assert.Equal("A1", lines[1]["sku"]?.ToString());
+        Assert.Equal("B7", lines[2]["sku"]?.ToString());
+    }
+
+    /// <summary>
+    /// A list that walks nothing is exactly the entries written into it — one slot per rule,
+    /// which is what the previous mapper called a primitive array.
+    /// </summary>
+    [Fact]
+    public async Task A_list_that_walks_nothing_is_its_written_entries()
+    {
+        var run = await RunOnce("NM Slots", new
+        {
+            version = 1,
+            lists = new object[]
+            {
+                new
+                {
+                    target = new[] { "codes" },
+                    @fixed = new object[]
+                    {
+                        new { item = new { from = new { kind = "Path", path = "order.customer" } } },
+                        new { item = new { from = new { kind = "Fixed", value = "WEB" } } },
+                    },
+                },
+            },
+        },
+        """{ "order": { "customer": "Ali", "line": [ { "sku": "A1" } ] } }""");
+
+        Assert.Null(run.Exception);
+        var codes = (JArray)JObject.Parse(run.Output!)["codes"]!;
+
+        Assert.Equal(new[] { "Ali", "WEB" }, codes.Select(c => c.ToString()).ToArray());
     }
 
     /// <summary>Every broken rule is named, so one run is enough to fix them all.</summary>

@@ -41,6 +41,14 @@ public class DocumentMapperTests
         new() { Target = [target], From = from, Type = type, Transform = transform, Lookup = lookup };
 
     private static ValueSource Path(string path) => new() { Kind = ValueSourceKind.Path, Path = path };
+    private static ValueSource RootPath(string path) => new() { Kind = ValueSourceKind.RootPath, Path = path };
+
+    private static TransformRule Transform(string fn, params (string Name, object Value)[] args)
+    {
+        var rule = new TransformRule { Fn = fn };
+        foreach (var (name, value) in args) rule.Args[name] = JToken.FromObject(value);
+        return rule;
+    }
     private static ValueSource Fixed(object? value) => new() { Kind = ValueSourceKind.Fixed, Value = value };
 
     private static ObjectNode Map(MappingRules rules, string document, MappingContext? context = null) =>
@@ -265,9 +273,9 @@ public class DocumentMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "order.line", As = "line", Target = ["lines"],
                     Fields = [Field("code", Path("sku"))],
@@ -279,7 +287,7 @@ public class DocumentMapperTests
         Assert.AreEqual(3, lines.Items.Count);
         CollectionAssert.AreEqual(
             new[] { "A1", "B7", "C2" },
-            lines.Items.Select(i => Values.ResolveScalar(i, "code")).ToArray());
+            lines.Items.Select(i => Values.ResolveScalar((ObjectNode)i, "code")).ToArray());
     }
 
     [TestMethod]
@@ -287,9 +295,9 @@ public class DocumentMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "order.line", As = "line", Target = ["lines"],
                     Where = new FilterRule { Field = "qty", Operator = FilterOperator.GreaterThan, Value = 0 },
@@ -301,7 +309,7 @@ public class DocumentMapperTests
         var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
         CollectionAssert.AreEqual(
             new[] { "A1", "C2" },
-            lines.Items.Select(i => Values.ResolveScalar(i, "code")).ToArray());
+            lines.Items.Select(i => Values.ResolveScalar((ObjectNode)i, "code")).ToArray());
     }
 
     [TestMethod]
@@ -321,9 +329,9 @@ public class DocumentMapperTests
         {
             var rules = new MappingRules
             {
-                Loops =
+                Lists =
                 [
-                    new LoopRule
+                    new ListRule
                     {
                         Over = "order.line", Target = ["lines"],
                         Where = new FilterRule { Field = "qty", Operator = op, Value = value },
@@ -343,7 +351,7 @@ public class DocumentMapperTests
     {
         var rules = new MappingRules
         {
-            Loops = [new LoopRule { Over = "order.nope", Target = ["lines"], Fields = [Field("c", Path("sku"))] }],
+            Lists = [new ListRule { Over = "order.nope", Target = ["lines"], Fields = [Field("c", Path("sku"))] }],
         };
 
         Assert.AreEqual(0, ((ListNode)Values.Resolve(Map(rules, Order), "lines")!).Items.Count);
@@ -355,9 +363,9 @@ public class DocumentMapperTests
         var rules = new MappingRules
         {
             Fields = [Field("customerName", Path("order.customer"))],
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "order.line", Target = ["lines"],
                     Fields = [Field("code", Path("sku")), Field("channel", Fixed("WEB"))],
@@ -383,15 +391,15 @@ public class DocumentMapperTests
 
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "orders", Target = ["orders"],
                     Fields = [Field("ref", Path("id"))],
-                    Loops =
+                    Lists =
                     [
-                        new LoopRule { Over = "lines", Target = ["items"], Fields = [Field("code", Path("sku"))] },
+                        new ListRule { Over = "lines", Target = ["items"], Fields = [Field("code", Path("sku"))] },
                     ],
                 },
             ],
@@ -449,9 +457,9 @@ public class DocumentMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "order.line", Target = ["lines"],
                     Fields = [Field("code", Path("sku"), ValueType.Number)],
@@ -478,4 +486,320 @@ public class DocumentMapperTests
     [TestMethod]
     public void EmptyRules_ProduceAnEmptyDocument() =>
         Assert.AreEqual(0, Map(new MappingRules(), Order).Keys.Count);
+
+    // ── reading from the top of the document ────────────────────────────────────
+
+    /// <summary>
+    /// The reason this kind exists: one value from the order written onto every line.
+    /// A plain path inside a list can only see the line it is on.
+    /// </summary>
+    [TestMethod]
+    public void RootPath_InsideAList_ReadsTheDocumentNotTheEntry()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fields = [Field("code", Path("sku")), Field("customer", RootPath("order.customer"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+
+        CollectionAssert.AreEqual(
+            new[] { "A1", "B7", "C2" },
+            lines.Items.Select(i => Scalar((ObjectNode)i, "code")).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Ali", "Ali", "Ali" },
+            lines.Items.Select(i => Scalar((ObjectNode)i, "customer")).ToArray());
+    }
+
+    /// <summary>A plain path inside a list still reads the entry, which is the common case.</summary>
+    [TestMethod]
+    public void Path_InsideAList_StillReadsTheEntry()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    // `order.customer` means nothing inside a line, and resolves to nothing.
+                    Fields = [Field("customer", Path("order.customer"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+
+        Assert.IsTrue(lines.Items.All(i => Scalar((ObjectNode)i, "customer") is null));
+    }
+
+    /// <summary>At the top level there is no entry to be inside, so the two are the same thing.</summary>
+    [TestMethod]
+    public void RootPath_AtTheTopLevel_IsTheSameAsAPath()
+    {
+        var rules = new MappingRules
+        {
+            Fields = [Field("a", Path("order.customer")), Field("b", RootPath("order.customer"))],
+        };
+
+        var output = Map(rules, Order);
+
+        Assert.AreEqual("Ali", Scalar(output, "a"));
+        Assert.AreEqual("Ali", Scalar(output, "b"));
+    }
+
+    /// <summary>The document stays reachable however deep the lists go.</summary>
+    [TestMethod]
+    public void RootPath_InsideANestedList_StillReachesTheDocument()
+    {
+        const string document = """
+            { "ref": "SO-1", "orders": [ { "lines": [ { "sku": "A" }, { "sku": "B" } ] } ] }
+            """;
+
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "orders", Target = ["orders"],
+                    Lists =
+                    [
+                        new ListRule
+                        {
+                            Over = "lines", Target = ["items"],
+                            Fields = [Field("code", Path("sku")), Field("ref", RootPath("ref"))],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var items = (ListNode)Values.Resolve(
+            ((ListNode)Values.Resolve(Map(rules, document), "orders")!).Items[0], "items")!;
+
+        CollectionAssert.AreEqual(
+            new[] { "SO-1", "SO-1" },
+            items.Items.Select(i => Scalar((ObjectNode)i, "ref")).ToArray());
+    }
+
+    [TestMethod]
+    public void RootPath_ToAMissingField_IsEmptyRatherThanAnError()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fields = [Field("nope", RootPath("order.nothing"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+
+        Assert.IsTrue(lines.Items.All(i => Scalar((ObjectNode)i, "nope") is null));
+    }
+
+    /// <summary>A value read from the document is still transformed and cast like any other.</summary>
+    [TestMethod]
+    public void RootPath_IsTransformedAndCastLikeAnyOtherSource()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fields =
+                    [
+                        Field("total", RootPath("order.net"), ValueType.Number,
+                            Transform("multiply", ("by", 1.16m))),
+                    ],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+
+        Assert.IsTrue(lines.Items.All(i => Equals(Scalar((ObjectNode)i, "total"), 116m)));
+    }
+
+    // ── entries no source list produced ─────────────────────────────────────────
+
+    private static ListEntry Entry(params FieldRule[] fields) =>
+        new() { Fields = fields.ToList() };
+
+    /// <summary>
+    /// A header line a partner expects, in front of the ones the source produced. Same order the
+    /// previous mapper emitted for the same configuration.
+    /// </summary>
+    [TestMethod]
+    public void FixedEntries_ComeBeforeTheWalkedOnes()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fixed = [Entry(Field("sku", Fixed("HEADER")))],
+                    Fields = [Field("sku", Path("sku"))],
+                },
+            ],
+        };
+
+        var lines = (ListNode)Values.Resolve(Map(rules, Order), "lines")!;
+
+        CollectionAssert.AreEqual(
+            new[] { "HEADER", "A1", "B7", "C2" },
+            lines.Items.Select(i => Scalar((ObjectNode)i, "sku")).ToArray());
+    }
+
+    /// <summary>
+    /// A fixed entry has no entry of its own, so its paths read the scope the list sits in —
+    /// which is what lets one carry a value from the document.
+    /// </summary>
+    [TestMethod]
+    public void AFixedEntry_ReadsTheScopeTheListSitsIn()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = "order.line", Target = ["lines"],
+                    Fixed = [Entry(Field("sku", Fixed("HEADER")), Field("who", Path("order.customer")))],
+                    Fields = [Field("sku", Path("sku"))],
+                },
+            ],
+        };
+
+        var first = (ObjectNode)((ListNode)Values.Resolve(Map(rules, Order), "lines")!).Items[0];
+
+        Assert.AreEqual("Ali", Scalar(first, "who"));
+    }
+
+    /// <summary>
+    /// No source list to walk: the list is exactly its fixed entries. This is what the previous
+    /// mapper called a primitive array — one slot per rule rather than one per source entry.
+    /// </summary>
+    [TestMethod]
+    public void NoSourceList_GivesExactlyTheFixedEntries()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = null, Target = ["codes"],
+                    Fixed =
+                    [
+                        new ListEntry { Item = Field("", Path("order.customer")) },
+                        new ListEntry { Item = Field("", Fixed("X")) },
+                    ],
+                },
+            ],
+        };
+
+        var codes = (ListNode)Values.Resolve(Map(rules, Order), "codes")!;
+
+        CollectionAssert.AreEqual(
+            new object?[] { "Ali", "X" },
+            codes.Items.Select(i => ((ScalarNode)i).Value).ToArray());
+    }
+
+    /// <summary>
+    /// The difference between "nothing to walk" and "the document is the list". An absent path is
+    /// not the same as an empty one, and confusing the two would silently change what is produced.
+    /// </summary>
+    [TestMethod]
+    public void AnAbsentSourcePath_IsNotTheSameAsAnEmptyOne()
+    {
+        const string document = """[ { "sku": "A" }, { "sku": "B" } ]""";
+
+        var walksTheDocument = new MappingRules
+        {
+            Root = new ListRule { Over = "", Fields = [Field("code", Path("sku"))] },
+        };
+        var walksNothing = new MappingRules
+        {
+            Root = new ListRule { Over = null, Fields = [Field("code", Path("sku"))] },
+        };
+
+        Assert.AreEqual(2, ((ListNode)MapAny(walksTheDocument, document)).Items.Count);
+        Assert.AreEqual(0, ((ListNode)MapAny(walksNothing, document)).Items.Count);
+    }
+
+    /// <summary>A fixed entry may hold a list of its own, which the old literal JSON could not.</summary>
+    [TestMethod]
+    public void AFixedEntry_MayHoldItsOwnList()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = null, Target = ["lines"],
+                    Fixed =
+                    [
+                        new ListEntry
+                        {
+                            Fields = [Field("sku", Fixed("HEADER"))],
+                            Lists =
+                            [
+                                new ListRule
+                                {
+                                    Over = "order.line", Target = ["all"],
+                                    Item = Field("", Path("sku")),
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var first = (ObjectNode)((ListNode)Values.Resolve(Map(rules, Order), "lines")!).Items[0];
+        var all = (ListNode)Values.Resolve(first, "all")!;
+
+        CollectionAssert.AreEqual(
+            new object?[] { "A1", "B7", "C2" },
+            all.Items.Select(i => ((ScalarNode)i).Value).ToArray());
+    }
+
+    /// <summary>A rule that fails inside a fixed entry is reported like any other.</summary>
+    [TestMethod]
+    public void AFailingRuleInAFixedEntry_IsReported()
+    {
+        var rules = new MappingRules
+        {
+            Lists =
+            [
+                new ListRule
+                {
+                    Over = null, Target = ["lines"],
+                    Fixed = [Entry(Field("qty", Fixed("not a number"), ValueType.Number))],
+                },
+            ],
+        };
+
+        var error = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        Assert.IsTrue(error.Errors.Any(e => e.Reason.Contains("not a number")), error.Message);
+    }
 }

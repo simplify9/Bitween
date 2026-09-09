@@ -355,9 +355,9 @@ public class ParityWithJsonMapperTests
 
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "lines", Target = ["items"],
                     Fields =
@@ -396,9 +396,9 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "lines", Target = ["items"],
                     Where = new FilterRule { Field = "qty", Operator = FilterOperator.GreaterThan, Value = 0 },
@@ -420,9 +420,9 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "lines", Target = ["items"],
                     Fields = [new FieldRule { Target = ["product", "code"], From = Path("sku") }],
@@ -441,7 +441,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Loops = [new LoopRule { Over = "lines", Target = ["items"], Fields = [Field("c", Path("sku"))] }],
+            Lists = [new ListRule { Over = "lines", Target = ["items"], Fields = [Field("c", Path("sku"))] }],
         };
 
         Assert.AreEqual(0, ((JArray)Run(rules, """{ "lines": [] }""")["items"]!).Count);
@@ -453,9 +453,9 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "lines", Target = ["skus"],
                     Item = new FieldRule { From = Path("sku") },
@@ -478,21 +478,21 @@ public class ParityWithJsonMapperTests
 
         var rules = new MappingRules
         {
-            Loops =
+            Lists =
             [
-                new LoopRule
+                new ListRule
                 {
                     Over = "orders", Target = ["orders"],
                     Fields = [Field("ref", Path("id"))],
-                    Loops =
+                    Lists =
                     [
-                        new LoopRule
+                        new ListRule
                         {
                             Over = "lines", Target = ["items"],
                             Fields = [Field("code", Path("sku"))],
-                            Loops =
+                            Lists =
                             [
-                                new LoopRule
+                                new ListRule
                                 {
                                     Over = "tags", Target = ["labels"],
                                     Item = new FieldRule { From = Path("t") },
@@ -520,7 +520,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Root = new LoopRule
+            Root = new ListRule
             {
                 Over = "lines", Target = ["ignored"],
                 Fields = [Field("code", Path("sku")), Field("channel", Fixed("WEB"))],
@@ -542,7 +542,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Root = new LoopRule { Over = "lines", Item = new FieldRule { From = Path("sku") } },
+            Root = new ListRule { Over = "lines", Item = new FieldRule { From = Path("sku") } },
         };
 
         var output = (JArray)Run(rules, """{ "lines": [ { "sku": "A1" }, { "sku": "B7" } ] }""");
@@ -556,7 +556,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Root = new LoopRule { Over = "lines", Fields = [Field("c", Path("sku"))] },
+            Root = new ListRule { Over = "lines", Fields = [Field("c", Path("sku"))] },
         };
 
         Assert.AreEqual(0, ((JArray)Run(rules, """{ "lines": [] }""")).Count);
@@ -571,7 +571,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Root = new LoopRule { Over = "", Fields = [Field("code", Path("sku"))] },
+            Root = new ListRule { Over = "", Fields = [Field("code", Path("sku"))] },
         };
 
         var output = (JArray)Run(rules, """[ { "sku": "A1" }, { "sku": "B7" } ]""");
@@ -587,7 +587,7 @@ public class ParityWithJsonMapperTests
     {
         var rules = new MappingRules
         {
-            Loops = [new LoopRule { Over = "", Target = ["items"], Fields = [Field("code", Path("sku"))] }],
+            Lists = [new ListRule { Over = "", Target = ["items"], Fields = [Field("code", Path("sku"))] }],
         };
 
         var items = (JArray)Run(rules, """[ { "sku": "A1" } ]""")["items"]!;

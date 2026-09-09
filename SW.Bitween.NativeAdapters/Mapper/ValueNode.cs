@@ -94,7 +94,7 @@ public sealed class ObjectNode : ValueNode
     }
 }
 
-/// <summary>An ordered list, one entry per item a loop produced.</summary>
+/// <summary>An ordered list, one entry per entry its rule produced.</summary>
 public sealed class ListNode : ValueNode
 {
     private readonly List<ValueNode> _items = new();

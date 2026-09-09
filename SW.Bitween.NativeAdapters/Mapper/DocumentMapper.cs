@@ -20,6 +20,20 @@ namespace SW.Bitween.NativeAdapters.Mapper;
 public static class DocumentMapper
 {
     /// <summary>
+    /// Where a rule reads from: the entry it sits in, and the document that entry came from.
+    /// </summary>
+    /// <remarks>
+    /// Both are needed because a rule inside a list may want either — <c>sku</c> from the line, or
+    /// the order's reference from the top of the document. Carrying them together keeps the two
+    /// from drifting apart as they are passed down through nested lists.
+    /// </remarks>
+    private readonly record struct Scope(ValueNode? Root, ValueNode? Current)
+    {
+        /// <summary>The same document, now positioned on one entry of a list.</summary>
+        public Scope Enter(ValueNode? item) => new(Root, item);
+    }
+
+    /// <summary>
     /// Maps <paramref name="source"/> according to <paramref name="rules"/>.
     /// </summary>
     /// <exception cref="MappingFailedException">
@@ -30,15 +44,17 @@ public static class DocumentMapper
     {
         var errors = new List<MappingError>();
 
+        var scope = new Scope(source, source);
+
         ValueNode output;
         if (rules.Root is not null)
         {
-            output = BuildList(rules.Root, source, context, errors, path: "");
+            output = BuildList(rules.Root, scope, context, errors, path: "");
         }
         else
         {
             var obj = ValueNode.Object();
-            MapInto(obj, rules.Fields, rules.Loops, source, context, errors, path: "");
+            MapInto(obj, rules.Fields, rules.Lists, scope, context, errors, path: "");
             output = obj;
         }
 
@@ -47,14 +63,13 @@ public static class DocumentMapper
     }
 
     /// <summary>
-    /// Applies one level of fields and loops. <paramref name="scope"/> is the node paths are read
-    /// against — the whole document at the top level, the current item inside a loop.
+    /// Applies one level of fields and lists, reading against <paramref name="scope"/>.
     /// </summary>
     private static void MapInto(
         ObjectNode output,
         List<FieldRule> fields,
-        List<LoopRule> loops,
-        ValueNode? scope,
+        List<ListRule> lists,
+        Scope scope,
         MappingContext context,
         List<MappingError> errors,
         string path)
@@ -78,42 +93,52 @@ public static class DocumentMapper
             Values.PlaceAt(output, field.Target, ValueNode.Value(value));
         }
 
-        foreach (var loop in loops)
+        foreach (var rule in lists)
         {
-            var target = Describe(path, loop.Target);
+            var target = Describe(path, rule.Target);
 
-            if (loop.Target.Count == 0)
+            if (rule.Target.Count == 0)
             {
-                errors.Add(new MappingError(target, "loop has no target"));
+                errors.Add(new MappingError(target, "list has no target"));
                 continue;
             }
 
-            Values.PlaceAt(output, loop.Target, BuildList(loop, scope, context, errors, path));
+            Values.PlaceAt(output, rule.Target, BuildList(rule, scope, context, errors, path));
         }
     }
 
     /// <summary>
-    /// Walks a loop's source list and builds the list it produces — a row per item, or a single
-    /// value per item when the loop has an <see cref="LoopRule.Item"/> rule.
+    /// Builds the list a rule produces: its fixed entries, then one per entry of the source list
+    /// it walks.
     /// </summary>
+    /// <remarks>
+    /// Fixed entries come first because that is where a header line belongs, and because it is
+    /// the order the previous mapper produced for the same configuration.
+    /// </remarks>
     private static ListNode BuildList(
-        LoopRule loop,
-        ValueNode? scope,
+        ListRule rule,
+        Scope scope,
         MappingContext context,
         List<MappingError> errors,
         string path)
     {
-        var target = Describe(path, loop.Target);
+        var target = Describe(path, rule.Target);
         var list = ValueNode.List();
-        var over = Values.Resolve(scope, loop.Over);
 
-        // A path that is absent, or holds something that is not a list, produces an empty list
-        // rather than an error. An order with no lines is ordinary; so is an optional section.
-        if (over is not ListNode items) return list;
+        // Read against the scope the list sits in, since a fixed entry has no entry of its own.
+        foreach (var entry in rule.Fixed)
+            AddEntry(list, entry.Item, entry.Fields, entry.Lists, scope, context, errors, target);
+
+        // No source list to walk: the list is whatever its fixed entries produced.
+        if (rule.Over is null) return list;
+
+        // A path that is absent, or holds something that is not a list, adds nothing rather than
+        // failing. An order with no lines is ordinary; so is an optional section.
+        if (Values.Resolve(scope.Current, rule.Over) is not ListNode items) return list;
 
         foreach (var item in items.Items)
         {
-            if (loop.Where is not null && !Matches(loop.Where, item, out var whereError))
+            if (rule.Where is not null && !Matches(rule.Where, item, out var whereError))
             {
                 if (whereError is null) continue;
 
@@ -123,26 +148,47 @@ public static class DocumentMapper
                 break;
             }
 
-            if (loop.Item is not null)
-            {
-                if (TryResolveField(loop.Item, item, context, out var value, out var reason))
-                    list.Add(ValueNode.Value(value));
-                else
-                    errors.Add(new MappingError(target, reason!));
-                continue;
-            }
-
-            var row = ValueNode.Object();
-            MapInto(row, loop.Fields, loop.Loops, item, context, errors, target);
-            list.Add(row);
+            AddEntry(list, rule.Item, rule.Fields, rule.Lists, scope.Enter(item), context, errors, target);
         }
 
         return list;
     }
 
+    /// <summary>
+    /// Adds one entry to a list: a single value when <paramref name="item"/> is set, otherwise an
+    /// object built from <paramref name="fields"/> and <paramref name="lists"/>.
+    /// </summary>
+    /// <remarks>
+    /// Shared by walked and fixed entries, which is the point — the two differ only in what they
+    /// read against, so anything that works in one works in the other.
+    /// </remarks>
+    private static void AddEntry(
+        ListNode list,
+        FieldRule? item,
+        List<FieldRule> fields,
+        List<ListRule> lists,
+        Scope scope,
+        MappingContext context,
+        List<MappingError> errors,
+        string target)
+    {
+        if (item is not null)
+        {
+            if (TryResolveField(item, scope, context, out var value, out var reason))
+                list.Add(ValueNode.Value(value));
+            else
+                errors.Add(new MappingError(target, reason!));
+            return;
+        }
+
+        var row = ValueNode.Object();
+        MapInto(row, fields, lists, scope, context, errors, target);
+        list.Add(row);
+    }
+
     private static bool TryResolveField(
         FieldRule field,
-        ValueNode? scope,
+        Scope scope,
         MappingContext context,
         out object? value,
         out string? reason)
@@ -152,7 +198,8 @@ public static class DocumentMapper
         value = field.From.Kind switch
         {
             ValueSourceKind.Fixed => field.From.Value,
-            ValueSourceKind.Path => Values.ResolveScalar(scope, field.From.Path),
+            ValueSourceKind.Path => Values.ResolveScalar(scope.Current, field.From.Path),
+            ValueSourceKind.RootPath => Values.ResolveScalar(scope.Root, field.From.Path),
             ValueSourceKind.Partner => context.PartnerValue(field.From.Key),
             ValueSourceKind.Global => context.GlobalValue(field.From.SetId, field.From.Key),
             _ => null,
@@ -196,7 +243,7 @@ public static class DocumentMapper
     }
 
     /// <summary>
-    /// Whether an item satisfies a loop's condition.
+    /// Whether an item satisfies a list's condition.
     /// </summary>
     /// <remarks>
     /// Returns false with a null <paramref name="error"/> for "does not match", and false with an

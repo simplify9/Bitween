@@ -32,17 +32,17 @@ public class MappingRules
 
     public List<FieldRule> Fields { get; set; } = new();
 
-    public List<LoopRule> Loops { get; set; } = new();
+    public List<ListRule> Lists { get; set; } = new();
 
     /// <summary>
     /// When set, the whole output document is this list rather than an object.
     /// </summary>
     /// <remarks>
     /// Some partners expect a bare array — <c>[ {...}, {...} ]</c> — rather than an object with a
-    /// list inside it. <see cref="Fields"/> and <see cref="Loops"/> are ignored when this is set,
+    /// list inside it. <see cref="Fields"/> and <see cref="Lists"/> are ignored when this is set,
     /// because a document is one thing or the other.
     /// </remarks>
-    public LoopRule? Root { get; set; }
+    public ListRule? Root { get; set; }
 }
 
 /// <summary>One output field: where its value comes from, and what it should end up as.</summary>
@@ -109,8 +109,17 @@ public enum ValueSourceKind
     /// <summary>A literal written into the rule.</summary>
     Fixed,
 
-    /// <summary>A path into the source document.</summary>
+    /// <summary>A path into the source document, read from wherever the rule sits.</summary>
     Path,
+
+    /// <summary>
+    /// A path read from the top of the document rather than from the current list entry.
+    /// </summary>
+    /// <remarks>
+    /// Only different from <see cref="Path"/> inside a list: it is how one value from the
+    /// document — an order reference, say — gets written onto every line of that order.
+    /// </remarks>
+    RootPath,
 
     /// <summary>A property of the exchange's partner.</summary>
     Partner,
@@ -155,36 +164,49 @@ public class LookupRule
     public object? Fallback { get; set; }
 }
 
-/// <summary>Produces a list by walking a list in the source document.</summary>
-public class LoopRule
+/// <summary>A list in the output, whose entries come from walking a list in the source.</summary>
+/// <remarks>
+/// Named for what it produces rather than for how — a list, not a loop. Walking a source list is
+/// one way to fill one, and the name leaves room for the others without becoming a lie.
+/// </remarks>
+public class ListRule
 {
-    /// <summary>Path to the list to walk.</summary>
-    public string Over { get; set; } = "";
+    /// <summary>
+    /// Path to the source list to walk.
+    /// </summary>
+    /// <remarks>
+    /// Three states, and the difference between the first two matters: absent means nothing is
+    /// walked and the list is whatever <see cref="Fixed"/> holds; empty means the source document
+    /// is itself the list; anything else is a path to one.
+    /// </remarks>
+    /// No initialiser on purpose: one would turn an absent path into an empty one, and those
+    /// two mean different things.
+    public string? Over { get; set; }
 
-    /// <summary>Name the item is known by inside this loop's paths and condition.</summary>
+    /// <summary>Name the entry is known by inside this list's paths and condition.</summary>
     public string As { get; set; } = "item";
 
     /// <summary>Where the resulting list goes, as path segments.</summary>
     public List<string> Target { get; set; } = new();
 
-    /// <summary>Optional condition; items that do not match are skipped.</summary>
+    /// <summary>Optional condition; entries that do not match are skipped.</summary>
     public FilterRule? Where { get; set; }
 
     /// <summary>
-    /// When set, each item produces a single value instead of an object — a list of strings or
+    /// When set, each entry produces a single value instead of an object — a list of strings or
     /// numbers rather than a list of records.
     /// </summary>
     /// <remarks>
     /// <c>{ "skus": ["A1","B7"] }</c> rather than <c>{ "lines": [{"sku":"A1"}] }</c>. Its
     /// <see cref="FieldRule.Target"/> is unused, since the value has nowhere to be named.
-    /// <see cref="Fields"/> and <see cref="Loops"/> are ignored when this is set.
+    /// <see cref="Fields"/> and <see cref="Lists"/> are ignored when this is set.
     /// </remarks>
     public FieldRule? Item { get; set; }
 
     public List<FieldRule> Fields { get; set; } = new();
 
     /// <summary>
-    /// Loops nested inside this one, each walking a list found on the current item.
+    /// Lists nested inside this one, each walking a list found on the current entry.
     /// </summary>
     /// <remarks>
     /// Nesting is structural rather than a flat list joined by parent ids, which is how the old
@@ -192,7 +214,37 @@ public class LoopRule
     /// target paths, and a rule whose parent had been deleted became unreachable rather than
     /// invalid.
     /// </remarks>
-    public List<LoopRule> Loops { get; set; } = new();
+    public List<ListRule> Lists { get; set; } = new();
+
+    /// <summary>
+    /// Entries put into the list before the walked ones.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a list that is partly or wholly constant: a header line a partner expects, or a list
+    /// whose entries each come from a different field rather than from one source list.
+    /// </para>
+    /// <para>
+    /// Each entry is built from its own rules, so a constant entry may still read the document,
+    /// the partner or a values set, and may contain lists of its own — where the old mapper had
+    /// two separate features holding literal JSON and a flat array of value slots.
+    /// </para>
+    /// </remarks>
+    public List<ListEntry> Fixed { get; set; } = new();
+}
+
+/// <summary>One entry of a list that no source list produced.</summary>
+public class ListEntry
+{
+    /// <summary>
+    /// When set, the entry is a single value rather than an object — the same choice
+    /// <see cref="ListRule.Item"/> makes for a walked entry.
+    /// </summary>
+    public FieldRule? Item { get; set; }
+
+    public List<FieldRule> Fields { get; set; } = new();
+
+    public List<ListRule> Lists { get; set; } = new();
 }
 
 /// <summary>A condition on one field of the current item.</summary>

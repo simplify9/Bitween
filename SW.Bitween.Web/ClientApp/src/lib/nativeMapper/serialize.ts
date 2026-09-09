@@ -7,10 +7,12 @@ import {
   newRuleId,
   type DocumentFormatId,
   type EditorFieldRule,
-  type EditorLoopRule,
+  type EditorListEntry,
+  type EditorListRule,
   type EditorRules,
   type FieldRule,
-  type LoopRule,
+  type ListEntry,
+  type ListRule,
   type MappingRules,
 } from "./types";
 
@@ -26,27 +28,54 @@ import {
 const withFieldIds = (fields: FieldRule[] | undefined): EditorFieldRule[] =>
   (fields ?? []).map((f) => ({ ...f, id: newRuleId() }));
 
-const withLoopIds = (loops: LoopRule[] | undefined): EditorLoopRule[] =>
-  (loops ?? []).map(loopWithIds);
+const withListIds = (lists: ListRule[] | undefined): EditorListRule[] =>
+  (lists ?? []).map(listWithIds);
 
-function loopWithIds(loop: LoopRule): EditorLoopRule {
+function listWithIds(list: ListRule): EditorListRule {
   return {
-    ...loop,
+    ...list,
     id: newRuleId(),
-    item: loop.item ? { ...loop.item, id: newRuleId() } : undefined,
-    fields: withFieldIds(loop.fields),
-    loops: withLoopIds(loop.loops),
+    item: list.item ? { ...list.item, id: newRuleId() } : undefined,
+    fields: withFieldIds(list.fields),
+    lists: withListIds(list.lists),
+    fixed: (list.fixed ?? []).map(entryWithIds),
+  };
+}
+
+function entryWithIds(entry: ListEntry): EditorListEntry {
+  return {
+    ...entry,
+    id: newRuleId(),
+    item: entry.item ? { ...entry.item, id: newRuleId() } : undefined,
+    fields: withFieldIds(entry.fields),
+    lists: withListIds(entry.lists),
   };
 }
 
 const stripFieldId = ({ id: _id, ...rest }: EditorFieldRule): FieldRule => rest;
 
-function stripLoopId({ id: _id, ...loop }: EditorLoopRule): LoopRule {
+// `fixed` comes out of the spread rather than being overwritten after it: spreading
+// the editor's rule would put an empty array in every stored list.
+function stripListId({ id: _id, fixed, ...list }: EditorListRule): ListRule {
+  const wire: ListRule = {
+    ...list,
+    item: list.item ? stripFieldId(list.item) : undefined,
+    fields: list.fields.map(stripFieldId),
+    lists: list.lists.map(stripListId),
+  };
+
+  // Only when there are some: a list that has none reads back identically without
+  // the key, which keeps what was saved equal to what was loaded.
+  if (fixed.length > 0) wire.fixed = fixed.map(stripEntryId);
+  return wire;
+}
+
+function stripEntryId({ id: _id, ...entry }: EditorListEntry): ListEntry {
   return {
-    ...loop,
-    item: loop.item ? stripFieldId(loop.item) : undefined,
-    fields: loop.fields.map(stripFieldId),
-    loops: loop.loops.map(stripLoopId),
+    ...entry,
+    item: entry.item ? stripFieldId(entry.item) : undefined,
+    fields: entry.fields.map(stripFieldId),
+    lists: entry.lists.map(stripListId),
   };
 }
 
@@ -57,8 +86,8 @@ export function toWire(rules: EditorRules): MappingRules {
     sourceFormat: rules.sourceFormat,
     targetFormat: rules.targetFormat,
     fields: rules.fields.map(stripFieldId),
-    loops: rules.loops.map(stripLoopId),
-    root: rules.root ? stripLoopId(rules.root) : undefined,
+    lists: rules.lists.map(stripListId),
+    root: rules.root ? stripListId(rules.root) : undefined,
   };
 }
 
@@ -69,8 +98,8 @@ export function fromWire(rules: MappingRules): EditorRules {
     sourceFormat: (rules.sourceFormat ?? "json") as DocumentFormatId,
     targetFormat: (rules.targetFormat ?? "json") as DocumentFormatId,
     fields: withFieldIds(rules.fields),
-    loops: withLoopIds(rules.loops),
-    root: rules.root ? loopWithIds(rules.root) : undefined,
+    lists: withListIds(rules.lists),
+    root: rules.root ? listWithIds(rules.root) : undefined,
   };
 }
 
@@ -117,6 +146,20 @@ export function loadMapping(properties: Record<string, string> | undefined): Loa
         `These mapping rules are version ${parsed.version}, but this version of Bitween ` +
         `understands up to version ${RULES_VERSION}. Opening them here would lose whatever ` +
         `the newer version added.`,
+    };
+  }
+
+  // `loops` was renamed to `lists` before release, when a list stopped being only a
+  // loop. Reading such a mapping would find no lists and quietly drop every one of
+  // them, and saving from there would destroy it — so refuse instead.
+  if (Object.prototype.hasOwnProperty.call(parsed ?? {}, "loops")) {
+    return {
+      rules: emptyRules(),
+      sourceSample,
+      targetSample,
+      error:
+        "These mapping rules were saved before lists were renamed, and its lists cannot be " +
+        "read here. Rebuild the mapping rather than saving over it.",
     };
   }
 

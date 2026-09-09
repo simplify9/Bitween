@@ -56,14 +56,28 @@ public class RulesSerializationTests
         Assert.AreEqual(ValueSourceKind.Global, rules.Fields[3].From.Kind);
     }
 
+    /// <summary>
+    /// Multi-word kinds arrive camelCased, the same shape as <c>greaterThan</c> on a filter.
+    /// </summary>
+    [TestMethod]
+    public void RootPathKind_AsCamelCase()
+    {
+        var rules = Read("""
+            { "fields": [ { "target": ["a"], "from": { "kind": "rootPath", "path": "order.ref" } } ] }
+            """);
+
+        Assert.AreEqual(ValueSourceKind.RootPath, rules.Fields[0].From.Kind);
+        Assert.AreEqual("order.ref", rules.Fields[0].From.Path);
+    }
+
     [TestMethod]
     public void FilterOperators_AsLowercaseNames()
     {
         var rules = Read("""
-            { "loops": [ { "over": "x", "where": { "field": "q", "operator": "greaterThan", "value": 0 } } ] }
+            { "lists": [ { "over": "x", "where": { "field": "q", "operator": "greaterThan", "value": 0 } } ] }
             """);
 
-        Assert.AreEqual(FilterOperator.GreaterThan, rules.Loops[0].Where!.Operator);
+        Assert.AreEqual(FilterOperator.GreaterThan, rules.Lists[0].Where!.Operator);
     }
 
     [TestMethod]
@@ -88,13 +102,13 @@ public class RulesSerializationTests
     public void NestedLoopsAndItemRules()
     {
         var rules = Read("""
-            { "loops": [ { "over": "orders", "target": ["o"],
-                           "loops": [ { "over": "lines", "target": ["l"],
+            { "lists": [ { "over": "orders", "target": ["o"],
+                           "lists": [ { "over": "lines", "target": ["l"],
                                         "item": { "from": { "kind": "path", "path": "sku" } } } ] } ] }
             """);
 
-        Assert.AreEqual("lines", rules.Loops[0].Loops[0].Over);
-        Assert.AreEqual("sku", rules.Loops[0].Loops[0].Item!.From.Path);
+        Assert.AreEqual("lines", rules.Lists[0].Lists[0].Over);
+        Assert.AreEqual("sku", rules.Lists[0].Lists[0].Item!.From.Path);
     }
 
     [TestMethod]
@@ -124,7 +138,7 @@ public class RulesSerializationTests
             { "version": 1, "sourceFormat": "json", "targetFormat": "json",
               "fields": [ { "target": ["customer","name"], "from": { "kind": "path", "path": "o.c" },
                             "transform": { "fn": "upper" }, "type": "string" } ],
-              "loops": [ { "over": "o.l", "as": "line", "target": ["lines"],
+              "lists": [ { "over": "o.l", "as": "line", "target": ["lines"],
                            "where": { "field": "qty", "operator": "greaterThan", "value": 0 },
                            "fields": [ { "target": ["sku"], "from": { "kind": "path", "path": "sku" } } ] } ] }
             """;
@@ -135,7 +149,43 @@ public class RulesSerializationTests
         Assert.AreEqual(once, twice);
         var rules = Read(once);
         Assert.AreEqual("upper", rules.Fields[0].Transform!.Fn);
-        Assert.AreEqual(FilterOperator.GreaterThan, rules.Loops[0].Where!.Operator);
+        Assert.AreEqual(FilterOperator.GreaterThan, rules.Lists[0].Where!.Operator);
         CollectionAssert.AreEqual(new[] { "customer", "name" }, rules.Fields[0].Target);
+    }
+
+    /// <summary>
+    /// Fixed entries, and the three states of <c>over</c>. Absent and empty mean different things
+    /// — nothing walked, versus the document is the list — so a serialiser that flattened one into
+    /// the other would quietly change what a mapping produces.
+    /// </summary>
+    [TestMethod]
+    public void FixedEntries_AndTheThreeStatesOfOver()
+    {
+        var rules = Read("""
+            { "lists": [
+                { "target": ["lines"],
+                  "fixed": [ { "fields": [ { "target": ["sku"], "from": { "kind": "fixed", "value": "H" } } ] },
+                             { "item": { "from": { "kind": "path", "path": "x" } } } ] },
+                { "over": "", "target": ["a"] },
+                { "over": "order.line", "target": ["b"] } ] }
+            """);
+
+        Assert.IsNull(rules.Lists[0].Over, "absent means nothing is walked");
+        Assert.AreEqual(2, rules.Lists[0].Fixed.Count);
+        Assert.AreEqual("H", rules.Lists[0].Fixed[0].Fields[0].From.Value);
+        Assert.AreEqual("x", rules.Lists[0].Fixed[1].Item!.From.Path);
+
+        Assert.AreEqual("", rules.Lists[1].Over, "empty means the document itself");
+        Assert.AreEqual("order.line", rules.Lists[2].Over);
+    }
+
+    /// <summary>A list with no fixed entries still reads as an empty set rather than null.</summary>
+    [TestMethod]
+    public void FixedEntries_DefaultToNone()
+    {
+        var rules = Read("""{ "lists": [ { "over": "x", "target": ["a"] } ] }""");
+
+        Assert.IsNotNull(rules.Lists[0].Fixed);
+        Assert.AreEqual(0, rules.Lists[0].Fixed.Count);
     }
 }

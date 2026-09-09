@@ -194,7 +194,7 @@ public class MappingPreviewTests
                 new { target = new[] { "region" }, from = new { kind = "Partner", key = "region-code" } },
                 new { target = new[] { "channel" }, from = new { kind = "Fixed", value = "WEB" } },
             },
-            loops = new object[]
+            lists = new object[]
             {
                 new
                 {

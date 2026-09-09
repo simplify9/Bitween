@@ -159,14 +159,14 @@ public static class Values
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Returns the node so the caller can tell a list apart from a value — a loop needs the list, a
+    /// Returns the node so the caller can tell a list apart from a value — a list rule needs the list, a
     /// field needs the value. A path that does not exist gives null, which is an absent value and
     /// not an error: optional fields are ordinary.
     /// </para>
     /// <para>
     /// Deliberately does not step into lists. The old mapper's variable layer made an array behave
     /// as its own first element, so <c>order.line.sku</c> silently meant "the first line's sku" and
-    /// there was no way to say which you meant. A path into a list belongs to a loop.
+    /// there was no way to say which you meant. A path into a list belongs to a list rule.
     /// </para>
     /// </remarks>
     public static ValueNode? Resolve(ValueNode? root, string? path)
