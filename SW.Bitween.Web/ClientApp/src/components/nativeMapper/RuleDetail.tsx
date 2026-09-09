@@ -119,9 +119,19 @@ export function TransformFields({
           onChange(changed);
         };
 
-        // A closed list. The one of these that exists — which way round a date is
-        // written — has exactly three answers, and typing it is how it got read wrong.
-        if (arg.kind === "choice")
+        // A closed list, so there is no format string to look up and nothing to type.
+        //
+        // A stored value the list does not offer is kept as its own option. The engine
+        // formats with any .NET pattern, so a mapping can legitimately hold one that was
+        // set through the API or listed here under a label that has since changed — and a
+        // select with no matching option shows nothing selected, which reads as "no
+        // format chosen" and would be saved back as exactly that.
+        if (arg.kind === "choice") {
+          const options = arg.options ?? [];
+          const shown = options.some((o) => o.value === value)
+            ? options
+            : [...options, { value, label: value }];
+
           return (
             <RowSelect
               key={arg.name}
@@ -130,9 +140,10 @@ export function TransformFields({
               title={arg.label}
               value={value}
               onChange={(e) => set(e.target.value)}
-              options={arg.options ?? []}
+              options={shown}
             />
           );
+        }
 
         if (arg.kind === "suggest")
           return (

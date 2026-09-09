@@ -713,6 +713,44 @@ test("rules the editor cannot read refuse to open rather than starting blank", a
   }
 });
 
+test("a stored date format the dropdown never offered still shows what is saved", async ({
+  page,
+}) => {
+  const subscriptionId = await createSubscription(page);
+
+  // The engine formats with any .NET pattern, so a saved mapping can hold one this
+  // closed list does not offer — set through the API, or offered here under a label
+  // that has since changed. A select with no matching option shows nothing selected,
+  // which reads as "no format chosen".
+  await writeMapperProperties(subscriptionId, "NativeMapper", {
+    MappingRules: JSON.stringify({
+      version: 1,
+      sourceFormat: "json",
+      targetFormat: "json",
+      fields: [
+        {
+          target: ["shipped"],
+          from: { kind: "path", path: "order.date" },
+          transform: { fn: "formatDate", format: "d MMMM" },
+        },
+      ],
+      lists: [],
+    }),
+  });
+
+  await page.goto(`subscriptions/${subscriptionId}/mapper`);
+  await expect(page.getByRole("button", { name: "Save" })).toBeVisible({ timeout: 15000 });
+  await openDetail(page, "shipped");
+
+  await expect(page.getByLabel("Format a date — Format")).toHaveValue("d MMMM");
+
+  // And saving the mapping for some unrelated reason must not quietly replace it.
+  await addFixedRule(page, "channel", "web");
+  await saveAndReload(page);
+  await openDetail(page, "shipped");
+  await expect(page.getByLabel("Format a date — Format")).toHaveValue("d MMMM");
+});
+
 test("the sample document is stored with the mapping, so it is there next time", async ({
   page,
 }) => {
