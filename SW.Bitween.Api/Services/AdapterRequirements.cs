@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using SW.Bitween.Services.Adapters;
 using SW.PrimitiveTypes;
 
 namespace SW.Bitween;
@@ -31,6 +32,18 @@ public class AdapterRequirements(
         {
             required = nativeAdapterDiscovery.GetStartupValues(adapterId)
                 .Where(p => !p.Value.Optional).Select(p => p.Key);
+        }
+        else if (await ResidentAdapters.IsResidentAsync(serviceProvider, adapterId))
+        {
+            // A resident adapter cannot answer this. The probe below spawns it down the CLASSIC
+            // stdio path, and a resident one dials out instead of speaking stdio — so the call
+            // waits for an answer that never comes and fails as "Received null data", which
+            // stopped any subscription naming one from being saved at all.
+            //
+            // Nothing is missing, and that is the right answer rather than a shrug: a resident
+            // adapter's connection settings live on its DATA SOURCE, where the Test button
+            // validates them against the real system. The subscription supplies none of them.
+            return Array.Empty<string>();
         }
         else
         {

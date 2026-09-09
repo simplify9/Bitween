@@ -144,6 +144,8 @@ export function NewGatewaySubscriptionPage() {
     retryPolicyId: null,
     receiverId: null,
     receiverProperties: {},
+    // A new subscription binds no connection until an adapter that needs one is chosen.
+    dataSourceId: null,
     matchExpression: null,
     schedules: [],
   };

@@ -13,6 +13,8 @@ import { ScheduleEditor } from "../../components/config/ScheduleEditor";
 import { AggregationFields } from "../../components/config/AggregationFields";
 import { TypeBadge, scheduleFault, useSubscriptionsCache } from "../../components/config/shared";
 import { STAGES, stagesFor, type StageId } from "./studio/stages";
+import { DataSourceBinding } from "./studio/DataSourceBinding";
+import { providerOf, useDataSourceProviders } from "../data-sources/providers";
 import { StageRail } from "./studio/StageRail";
 import { faceOf } from "./studio/faces";
 import { EntryPointsTable, Overview } from "./studio/Overview";
@@ -53,6 +55,11 @@ export function SubscriptionPage() {
 
   // Shares the scheduled-jobs page's cache entry. The only per-stage fault we
   // can honestly attribute — it comes from the scheduler's own trigger state.
+  // Which adapters are database providers, so the connection controls appear only where they mean
+  // something. Called with the other queries because this component returns early below, and a
+  // hook after that point runs in a different order on the two paths.
+  const dataSourceProviders = useDataSourceProviders();
+
   const scheduleHealth = useQuery({
     queryKey: keys.subscriptions.scheduleHealth,
     queryFn: () => api.listScheduleHealth(),
@@ -169,6 +176,10 @@ export function SubscriptionPage() {
   const entryPoints = entryPointsOf(s);
 
   const stages = stagesFor(s.type);
+  const isRelational = (adapterId: string | null) =>
+    adapterId != null &&
+    providerOf(dataSourceProviders.data, adapterId)?.kind === "Relational";
+
   const stageParam = params.get("stage") as StageId | null;
   const stage = stageParam && stages.includes(stageParam) ? stageParam : null;
   const selectStage = (next: StageId | null) =>
@@ -244,6 +255,20 @@ export function SubscriptionPage() {
               disabled={!canEdit}
               required
             />
+            {isRelational(draft.receiverId) && (
+              <div className="mt-3">
+                <DataSourceBinding
+                  slot="receiver"
+                  dataSourceId={draft.dataSourceId}
+                  properties={draft.receiverProperties}
+                  onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}
+                  onPropertiesChange={(receiverProperties) =>
+                    setDraft((d) => (d ? { ...d, receiverProperties } : d))
+                  }
+                  disabled={!canEdit}
+                />
+              </div>
+            )}
           </Panel>
         );
       case "schedule":
@@ -301,6 +326,20 @@ export function SubscriptionPage() {
               noneLabel="None — the document passes through unchanged"
               mapperEditorHref={`/subscriptions/${s.id}/mapper`}
             />
+            {isRelational(draft.mapperId) && (
+              <div className="mt-3">
+                <DataSourceBinding
+                  slot="mapper"
+                  dataSourceId={draft.dataSourceId}
+                  properties={draft.mapperProperties}
+                  onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}
+                  onPropertiesChange={(mapperProperties) =>
+                    setDraft((d) => (d ? { ...d, mapperProperties } : d))
+                  }
+                  disabled={!canEdit}
+                />
+              </div>
+            )}
           </Panel>
         );
       case "delivery":
@@ -316,6 +355,20 @@ export function SubscriptionPage() {
               disabled={!canEdit}
               noneLabel="None — the document stops here"
             />
+            {isRelational(draft.handlerId) && (
+              <div className="mt-3">
+                <DataSourceBinding
+                  slot="handler"
+                  dataSourceId={draft.dataSourceId}
+                  properties={draft.handlerProperties}
+                  onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}
+                  onPropertiesChange={(handlerProperties) =>
+                    setDraft((d) => (d ? { ...d, handlerProperties } : d))
+                  }
+                  disabled={!canEdit}
+                />
+              </div>
+            )}
           </Panel>
         );
       case "response":

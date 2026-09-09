@@ -483,6 +483,8 @@ export interface InlineSubscriptionDraft {
   mapperProperties: Record<string, string>;
   handlerId: string | null;
   handlerProperties: Record<string, string>;
+  /** Optional here: an inline draft has no connection to bind yet. */
+  dataSourceId?: number | null;
   matchExpression: MatchGroup | null;
   schedules: Schedule[];
   responseSubscriptionId: number | null;
@@ -569,6 +571,8 @@ export interface Subscription {
   mapperProperties: Record<string, string>;
   handlerId: string | null;
   handlerProperties: Record<string, string>;
+  /** Optional here: an inline draft has no connection to bind yet. */
+  dataSourceId: number | null;
   /** Legacy Internal only: which documents this subscription picks up. */
   matchExpression: MatchGroup | null;
   /** Receiving (and Aggregation) only. */

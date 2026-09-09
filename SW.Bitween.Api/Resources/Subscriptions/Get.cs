@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SW.Bitween.Domain;
+using SW.Bitween.Services.Adapters;
 using SW.PrimitiveTypes;
 using SW.EfCoreExtensions;
 using System.Linq;
@@ -82,6 +83,16 @@ namespace SW.Bitween.Resources.Subscriptions
         private async Task<ICollection<KeyAndValue>> MaskPrivateProps(string adapterId, ICollection<KeyAndValue> properties)
         {
             if (string.IsNullOrEmpty(adapterId) || properties == null || !properties.Any())
+                return properties;
+
+            // A RESIDENT adapter cannot be described below: that path spawns it expecting stdio and
+            // a resident one dials out, so the attempt throws and the fail-closed branch masks
+            // EVERY property. On a database subscription that hid which statement it runs behind
+            // "__private__", so the screen could not show it and its dropdown could not match it.
+            //
+            // Nothing here is a secret: a resident adapter's credentials live on its data source,
+            // which masks its own. What a subscription holds is which statement to run.
+            if (await ResidentAdapters.IsResidentAsync(serviceProvider, adapterId))
                 return properties;
 
             IDictionary<string, StartupValue> startupValues;

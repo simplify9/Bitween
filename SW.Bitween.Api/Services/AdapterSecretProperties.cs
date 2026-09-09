@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using SW.Bitween.Model;
+using SW.Bitween.Services.Adapters;
 using SW.PrimitiveTypes;
 
 namespace SW.Bitween;
@@ -48,6 +49,17 @@ public class AdapterSecretProperties(
         // No adapter to ask about: mask nothing rather than guess. There is also nothing to send
         // the properties to, so they cannot be credentials in use.
         if (string.IsNullOrEmpty(adapterId))
+            return properties.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        // A RESIDENT adapter cannot be described this way — Describe spawns it down the classic
+        // stdio path and a resident one dials out, so the attempt throws and the fail-closed branch
+        // below masked every property, Statement and Operation included. The screen then showed
+        // "__private__" where the chosen statement should be, and its dropdown could not match it.
+        //
+        // Masking nothing is correct rather than merely convenient: a resident adapter's credentials
+        // live on its DATA SOURCE, which masks its own secret properties. What a subscription holds
+        // for one of these is which statement to run and what to do with it — routing, not secrets.
+        if (await ResidentAdapters.IsResidentAsync(serviceProvider, adapterId))
             return properties.ToDictionary(kv => kv.Key, kv => kv.Value);
 
         IDictionary<string, StartupValue> startupValues;
