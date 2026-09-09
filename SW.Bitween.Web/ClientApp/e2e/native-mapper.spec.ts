@@ -164,6 +164,14 @@ test("stored rules survive a switch to a list-shaped output and back", async ({ 
 test("choosing the new mapper offers its editor, and the old mapper keeps its own", async ({
   page,
 }) => {
+  // The old mapper is listed only while a subscription somewhere still uses it, so this
+  // test has to put one on it before it can pick it. A separate subscription rather than
+  // the one under test: pinning that one would give it a mapper already, and the first
+  // thing asserted below is that it has none.
+  await writeMapperProperties(await createSubscription(page), "NativeJSONMapper", {
+    ScribanTemplate: "{}",
+  });
+
   const subscriptionId = await createSubscription(page);
 
   await page.goto(`subscriptions/${subscriptionId}`);

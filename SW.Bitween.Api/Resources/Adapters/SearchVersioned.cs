@@ -35,7 +35,8 @@ namespace SW.Bitween.Resources.Adapters
             var index = _serverlessOptions.AdapterRemotePath.Length + 1;
 
             // Get native adapters first (they don't have versions)
-            var nativeAdapters = _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix)
+            var nativeAdapters = (await _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix)
+                    .ExceptRetiring(_dbContext))
                 .Select(key => new
                 {
                     Key = key,
