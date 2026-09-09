@@ -206,3 +206,40 @@ describe("coverageByPath", () => {
     expect(coverageByPath(null, new Set()).size).toBe(0);
   });
 });
+
+describe("a list whose entries are not all the same shape", () => {
+  // Same defect as the XML tree had, in the same function: an optional field present
+  // in a later entry has to be offered, or the editor cannot map a field the document
+  // plainly contains.
+  const MIXED = JSON.stringify({
+    line: [
+      { sku: "A1", note: null },
+      { sku: "B7", discount: 5, note: "gift" },
+    ],
+  });
+
+  it("offers a field only a later entry has", () => {
+    expect(itemShapeAt(parseSample(MIXED, "json").root, "line").map((c) => c.key)).toEqual([
+      "sku",
+      "note",
+      "discount",
+    ]);
+  });
+
+  it("shows a sample from an entry that has one", () => {
+    // `note` is null in the first entry. Showing "null" beside the field would say the
+    // field holds nothing, when the next entry shows exactly what it holds.
+    const note = itemShapeAt(parseSample(MIXED, "json").root, "line").find(
+      (c) => c.key === "note",
+    );
+
+    expect(describeSample(note?.sample)).toBe('"gift"');
+  });
+
+  it("leaves a list of uniform entries exactly as it was", () => {
+    expect(itemShapeAt(parseSample(ORDER, "json").root, "order.line").map((c) => c.key)).toEqual([
+      "sku",
+      "qty",
+    ]);
+  });
+});

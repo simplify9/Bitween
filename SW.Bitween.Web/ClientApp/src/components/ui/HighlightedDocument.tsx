@@ -16,8 +16,11 @@ export function HighlightedDocument({
   className = "",
 }: {
   text: string;
-  /** The declared format, when something declares one. Otherwise it is sniffed. */
-  format?: string;
+  /**
+   * The declared format, when something declares one. Left out, it is sniffed; passed
+   * as `null`, the document is shown plain.
+   */
+  format?: string | null;
   /** Set on a dark ground, where the same token roles need lifting to stay legible. */
   onInk?: boolean;
   className?: string;

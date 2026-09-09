@@ -161,3 +161,32 @@ test("markup inside a document is shown, never run", async ({ page }) => {
   await expect(page.locator(".doc-hl script")).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { __ran?: number }).__ran)).toBeUndefined();
 });
+
+test("Raw shows the bytes as they arrived, uncoloured", async ({ page }) => {
+  // The Raw toggle's whole promise is that nothing has been done to the document.
+  // Colour is a claim about its structure, and the pane was making that claim on both
+  // sides of the toggle — including for a payload that never parsed, where the parts a
+  // grammar still recognises would come out looking fine.
+  await page.goto("exchanges/new");
+  await page.getByRole("combobox", { name: "Pick a subscription…" }).click();
+  await page.getByRole("option").first().click();
+  await page.getByRole("heading", { name: "New exchange" }).click();
+  await page.locator("textarea").fill(MINIFIED_JSON);
+  await page.getByRole("button", { name: "Create exchange" }).click();
+  await expect(page).toHaveURL(/\/exchanges\?ids=/);
+
+  const row = page.getByRole("row").nth(1);
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.locator("td").last().click();
+
+  // Formatted is the default, and it parsed, so it is coloured.
+  const pane = page.locator(".doc-hl-dark");
+  await expect(pane).toContainText('"customer"', { timeout: 15000 });
+  await expect(pane.locator(".hljs-attr").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Raw" }).click();
+
+  // The same document, one line again, and no token spans anywhere in it.
+  await expect(pane).toContainText(MINIFIED_JSON);
+  await expect(pane.locator("span")).toHaveCount(0);
+});

@@ -71,19 +71,15 @@ export function parseSample(
 
 function toNode(key: string, path: string, value: unknown): DocumentNode {
   if (Array.isArray(value)) {
-    // The first entry stands for the shape of every entry, and its children are
-    // named relative to the item — `sku`, not `line[0].sku` — because that is the
-    // path a rule inside the list uses.
-    const first = value.length > 0 ? value[0] : undefined;
+    // Every entry, not just the first: one entry's shape is only the whole list's
+    // shape when nothing in it is optional. Children are named relative to the item —
+    // `sku`, not `line[0].sku` — because that is the path a rule inside the list uses.
     return {
       key,
       path,
       kind: "list",
       count: value.length,
-      children:
-        first !== null && typeof first === "object" && !Array.isArray(first)
-          ? Object.entries(first as Record<string, unknown>).map(([k, v]) => toNode(k, k, v))
-          : [],
+      children: mergeShape(value.flatMap(itemShape)),
     };
   }
 
@@ -101,6 +97,61 @@ function toNode(key: string, path: string, value: unknown): DocumentNode {
   return { key, path, kind: "value", sample: value, children: [] };
 }
 
+/** The fields of one list entry, named relative to it. */
+function itemShape(item: unknown): DocumentNode[] {
+  if (item === null || typeof item !== "object" || Array.isArray(item)) return [];
+  return Object.entries(item as Record<string, unknown>).map(([k, v]) => toNode(k, k, v));
+}
+
+/**
+ * One shape covering every entry of a list.
+ *
+ * An optional field is the whole reason. If the first entry has no `discount` and the
+ * second does, taking the first entry's shape means the editor never offers `discount`
+ * at all — and the field is right there in the document, so nothing looks wrong: the
+ * mapping reads complete and quietly drops it. Merging over the list means a field that
+ * appears in any entry is offered for all of them, which is what the mapper does anyway.
+ *
+ * Entry order is kept, so a list whose entries all have the same shape — nearly all of
+ * them — comes out exactly as it did when only the first was read.
+ */
+function mergeShape(nodes: DocumentNode[]): DocumentNode[] {
+  const merged = new Map<string, DocumentNode>();
+  for (const node of nodes) {
+    const seen = merged.get(node.key);
+    merged.set(node.key, seen === undefined ? node : mergeNode(seen, node));
+  }
+  return [...merged.values()];
+}
+
+/** Two entries' readings of the same field, reconciled towards whichever offers more. */
+function mergeNode(a: DocumentNode, b: DocumentNode): DocumentNode {
+  // A name that repeats in one entry and appears once in another is still a list: that
+  // is the shape a rule has to be written against, and the mapper walks the single
+  // occurrence as a list of one rather than as no entries.
+  if (a.kind === "list" || b.kind === "list") {
+    const list = a.kind === "list" ? a : b;
+    return {
+      ...list,
+      count: Math.max(a.count ?? 1, b.count ?? 1),
+      children: mergeShape([...a.children, ...b.children]),
+    };
+  }
+
+  // An object beats a value: keeping the value would drop every path underneath it,
+  // and those paths do resolve for the entries that have them.
+  if (a.kind === "object" || b.kind === "object") {
+    return {
+      ...(a.kind === "object" ? a : b),
+      children: mergeShape([...a.children, ...b.children]),
+    };
+  }
+
+  // Two values. A null or an empty first entry says nothing about what the field holds,
+  // so the sample shown beside it comes from an entry that has something in it.
+  return a.sample === null || a.sample === undefined || a.sample === "" ? b : a;
+}
+
 // ─── XML ─────────────────────────────────────────────────────────────────────
 //
 // These conventions have to match `XmlFormat` on the server exactly, because this
@@ -111,6 +162,20 @@ function toNode(key: string, path: string, value: unknown): DocumentNode {
 
 const XMLNS = "http://www.w3.org/2000/xmlns/";
 
+/**
+ * Where a browser puts its complaint about a document it could not parse.
+ *
+ * Firefox makes `parsererror` the document element in a namespace of its own; Chromium
+ * and WebKit graft an XHTML one into whatever they recovered. Matching the namespace as
+ * well as the name matters in both directions: a partner's document is free to contain
+ * an element called `parsererror`, and reporting that as a broken sample would refuse a
+ * document that parsed perfectly well.
+ */
+const PARSER_ERROR_NAMESPACES = [
+  "http://www.mozilla.org/newlayout/xml/parsererror.xml",
+  "http://www.w3.org/1999/xhtml",
+];
+
 /** The key holding an element's own text when it also has attributes or children. */
 const TEXT_KEY = "#text";
 
@@ -119,7 +184,9 @@ function parseXmlSample(text: string, role: SampleRole): ParsedSample {
 
   // How a DOMParser reports a broken document: not by throwing, but by handing back a
   // document that contains the complaint. Missing it would show a tree of the error.
-  const failure = parsed.getElementsByTagName("parsererror")[0];
+  const failure = PARSER_ERROR_NAMESPACES.map(
+    (ns) => parsed.getElementsByTagNameNS(ns, "parsererror")[0],
+  ).find(Boolean);
   if (failure) {
     const detail = (failure.textContent ?? "").trim().split("\n")[0];
     return { root: null, error: `The sample is not valid XML: ${detail || "it could not be read"}` };
@@ -188,14 +255,17 @@ function xmlNode(
     }
 
     // A repeated name is how XML writes a list. Its contents are named relative to one
-    // entry, because that is what a rule inside the list is written against.
-    const first = xmlNode(name, "", occurrences[0], qualified);
+    // entry, because that is what a rule inside the list is written against — hence the
+    // empty path — and they are merged over every occurrence, because an element the
+    // first `<line>` happens to leave out is still a field the later ones have.
     children.push({
       key: name,
       path: under(path, name),
       kind: "list",
       count: occurrences.length,
-      children: first.kind === "object" ? first.children : [],
+      children: mergeShape(
+        occurrences.flatMap((o) => xmlNode(name, "", o, qualified).children),
+      ),
     });
   }
 

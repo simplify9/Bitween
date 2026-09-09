@@ -31,6 +31,31 @@ public class XmlFormatReadTests
         return thrown;
     }
 
+    /// <summary><c>&lt;a&gt;&lt;a&gt;…&lt;/a&gt;&lt;/a&gt;</c>, nested <paramref name="depth"/> elements deep.</summary>
+    private static string Nested(int depth) =>
+        string.Concat(Enumerable.Repeat("<a>", depth)) + string.Concat(Enumerable.Repeat("</a>", depth));
+
+    [TestMethod]
+    public void A_document_nested_past_the_limit_is_refused_rather_than_read()
+    {
+        // Not a style preference: the reader recurses once per element, so without this the
+        // document below takes the whole process down with a StackOverflowException, which is the
+        // one failure no catch anywhere can turn into a failed exchange.
+        var thrown = Refuses(Nested(5_000));
+
+        StringAssert.Contains(thrown.Message, "64");
+    }
+
+    [TestMethod]
+    public void A_document_at_the_limit_is_still_read()
+    {
+        // The limit has to sit well past anything real, or a legitimate document is refused for a
+        // problem it does not have. A SOAP envelope carrying an order reaches about ten.
+        var tree = Format.Read(Nested(64));
+
+        Assert.IsNotNull(tree, "64 deep is inside the limit");
+    }
+
     [TestMethod]
     public void The_root_element_is_a_named_key_so_it_appears_in_every_path()
     {
@@ -572,5 +597,26 @@ public class XmlFormatWriteTests
         StringAssert.Contains(written, "<accountNumber>55480501</accountNumber>");
         Assert.IsFalse(written.Contains("xmlns"), "declarations are not data and do not survive");
         Assert.IsFalse(written.Contains("s:"), "nor do prefixes");
+    }
+
+    [TestMethod]
+    public void A_field_name_XML_cannot_hold_is_refused_rather_than_thrown_from_the_writer()
+    {
+        // A space is legal in a JSON key and in the editor's name box, so this is reachable by
+        // typing rather than by anything exotic. Untranslated it leaves the writer as an
+        // XmlException, which the preview does not catch and the pipeline reports as a crash.
+        var message = Refuses(Obj(("order ref", V("A1"))));
+
+        StringAssert.Contains(message, "XML cannot be written from");
+    }
+
+    [TestMethod]
+    public void A_prefix_declared_with_nothing_in_it_is_refused_the_same_way()
+    {
+        // `@xmlns:s` mapped from a source field that turned out empty. XML has no way to bind a
+        // prefix to nothing, and the writer says so with an ArgumentException.
+        var message = Refuses(Obj(("s:Envelope", Obj(("@xmlns:s", V("")), ("ok", V("1"))))));
+
+        StringAssert.Contains(message, "XML cannot be written from");
     }
 }

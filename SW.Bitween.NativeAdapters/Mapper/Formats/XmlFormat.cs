@@ -42,6 +42,16 @@ public class XmlFormat : IDocumentFormat
     /// </remarks>
     public bool SingleValueIsAList => true;
 
+    /// <summary>How deep a document may nest before it is refused.</summary>
+    /// <remarks>
+    /// <see cref="FromElement"/> recurses once per element, and a document nested thousands deep
+    /// would exhaust the stack — which no <c>catch</c> can recover from, so the process goes with
+    /// it. <see cref="XmlReaderSettings"/> has no nesting limit of its own to lean on. 64 is what
+    /// Newtonsoft applies to JSON, so both formats refuse the same shape, and it is far past
+    /// anything a real document reaches: a SOAP envelope carrying an order gets to about ten.
+    /// </remarks>
+    private const int MaxDepth = 64;
+
     public ValueNode Read(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -73,11 +83,34 @@ public class XmlFormat : IDocumentFormat
         // path — `Envelope.Body.shipping.height`. It is the one name in an XML document that says
         // what the document is, and a mapping that never mentions it would be harder to read.
         var root = ValueNode.Object();
-        root.Set(document.Root.Name.LocalName, FromElement(document.Root));
+        root.Set(document.Root.Name.LocalName, FromElement(document.Root, 1));
         return root;
     }
 
-    public string Write(ValueNode root) => new XDocument(RootElement(root)).ToString();
+    /// <summary>
+    /// Writes the tree out, turning what the writer refuses into something the caller can report.
+    /// </summary>
+    /// <remarks>
+    /// The shapes XML cannot hold are caught by name in <see cref="RootElement"/> and
+    /// <see cref="BuildElement"/>, but a <em>name</em> is only checked when it is built: a rule
+    /// writing to a field called <c>order ref</c> reaches <see cref="XName"/>, which objects with an
+    /// <see cref="XmlException"/>, and an <c>@xmlns:x</c> mapped from a field that turned out empty
+    /// reaches an <see cref="ArgumentException"/>. Both are the mapping's fault rather than the
+    /// server's, and the pipeline already knows how to report a
+    /// <see cref="DocumentFormatException"/>.
+    /// </remarks>
+    public string Write(ValueNode root)
+    {
+        try
+        {
+            return new XDocument(RootElement(root)).ToString();
+        }
+        catch (Exception ex) when (ex is XmlException or ArgumentException)
+        {
+            throw new DocumentFormatException(
+                $"The mapping produced something XML cannot be written from: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// The single element an XML document is allowed to have at the top.
@@ -313,8 +346,13 @@ public class XmlFormat : IDocumentFormat
     /// <summary>
     /// Turns one element into a scalar when it is only text, and an object otherwise.
     /// </summary>
-    private static ValueNode FromElement(XElement element)
+    private static ValueNode FromElement(XElement element, int depth)
     {
+        if (depth > MaxDepth)
+            throw new DocumentFormatException(
+                $"The document nests elements more than {MaxDepth} deep, which is further than " +
+                "this mapper will read.");
+
         var attributes = element.Attributes().Where(IsData).ToList();
         var children = element.Elements().ToList();
 
@@ -336,12 +374,12 @@ public class XmlFormat : IDocumentFormat
             var occurrences = group.ToList();
             if (occurrences.Count == 1)
             {
-                node.Set(group.Key, FromElement(occurrences[0]));
+                node.Set(group.Key, FromElement(occurrences[0], depth + 1));
                 continue;
             }
 
             var list = ValueNode.List();
-            foreach (var occurrence in occurrences) list.Add(FromElement(occurrence));
+            foreach (var occurrence in occurrences) list.Add(FromElement(occurrence, depth + 1));
             node.Set(group.Key, list);
         }
 

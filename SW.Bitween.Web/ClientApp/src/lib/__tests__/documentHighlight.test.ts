@@ -20,6 +20,13 @@ describe("choosing a grammar", () => {
     expect(grammarFor("  <order/>")).toBe("xml");
   });
 
+  it("colours nothing when the caller passes null", () => {
+    // How the exchange drawer's Raw view asks for the bytes as they arrived. Different
+    // from leaving the format out, which means sniff for one.
+    expect(grammarFor('{"a":1}', null)).toBeNull();
+    expect(colourDocument("<order/>", null)).toBeNull();
+  });
+
   it("gives up rather than guessing", () => {
     // A CSV, a fixed-width record, a stack trace. Colouring one of those with a
     // grammar it does not follow produces confident nonsense.

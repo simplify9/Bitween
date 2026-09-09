@@ -11,9 +11,14 @@ import { formatDocument } from "../../lib/documentPreview";
  * hand out samples as one long line, and XML arrives that way almost every time.
  *
  * It cannot be undone — a programmatic change is not on the textarea's own undo stack,
- * and a sample is deliberately not on the editor's. That is tolerable only because
- * `formatDocument` adds whitespace and nothing else: the document afterwards is the
- * same document, so the most anyone loses is a layout they arranged by hand.
+ * and a sample is deliberately not on the editor's. What makes that tolerable is how
+ * little `formatDocument` does: it adds whitespace, only between two tags that had
+ * nothing at all between them, and it refuses outright any document whose whitespace
+ * might be content — CDATA, comments, `xml:space="preserve"`. It cannot make that
+ * promise for mixed content, which XML gives it no way to recognise: two inline
+ * elements written flush against each other read differently with a newline between
+ * them. Data-interchange documents do not do that, and this button is for samples and
+ * for a payload someone is composing by hand.
  *
  * Absent when there is nothing to gain: while the text is half-typed and unparseable,
  * and again once it is already laid out. That is `formatDocument`'s own answer, so the

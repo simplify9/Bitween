@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   describeSample,
+  itemShapeAt,
   listPaths,
   parseSample,
   readablePaths,
@@ -208,5 +209,58 @@ describe("building rules from a sample of an XML output", () => {
       kind: "path",
       path: "",
     });
+  });
+
+  it("offers a field the first entry left out but a later one has", () => {
+    // The failure this stops: `discount` is in the document, the editor never offers
+    // it, and the mapping therefore looks complete while dropping it. Optional
+    // elements are the normal case in XML — there is no schema in the sample saying
+    // which ones every entry carries.
+    const root = parseSample(
+      `<order>
+         <line><sku>A1</sku></line>
+         <line><sku>B7</sku><discount>5</discount></line>
+       </order>`,
+      "xml",
+    ).root;
+
+    expect(itemShapeAt(root, "order.line").map((c) => c.key)).toEqual([
+      "sku",
+      "discount",
+    ]);
+  });
+
+  it("treats a name repeated in one entry as a list for every entry", () => {
+    // One `<tag>` in the first entry and two in the second. The server walks the
+    // single occurrence as a list of one, so the shape a rule is written against has
+    // to be the list — offering `tag` as a plain field would be offering a path the
+    // mapper never reads that way.
+    const root = parseSample(
+      `<order>
+         <line><tag>red</tag></line>
+         <line><tag>red</tag><tag>big</tag></line>
+       </order>`,
+      "xml",
+    ).root;
+
+    const tag = itemShapeAt(root, "order.line").find((c) => c.key === "tag");
+    expect(tag?.kind).toBe("list");
+  });
+
+  it("reads a document that contains an element called parsererror", () => {
+    // A browser reports a parse failure by handing back a document holding its own
+    // complaint, so the name alone cannot be the signal: a partner is entitled to an
+    // element called `parsererror`, and refusing it would reject a valid sample.
+    const parsed = parseSample("<order><parsererror>none</parsererror></order>", "xml");
+
+    expect(parsed.error).toBeNull();
+    expect(readablePaths(parsed.root)).toContain("order.parsererror");
+  });
+
+  it("still reports a document that does not parse", () => {
+    const parsed = parseSample("<order><line></order>", "xml");
+
+    expect(parsed.root).toBeNull();
+    expect(parsed.error).toMatch(/not valid XML/);
   });
 });
