@@ -4,7 +4,7 @@
 // own first element, so `order.line.sku` shows up as a leaf you can map — which
 // silently meant "the first line's sku" and had no way to say anything else. The
 // new mapper does not do that: a path stops at a list, and a list is something a
-// loop walks. The tree has to show the same thing, or the editor would offer paths
+// list walks. The tree has to show the same thing, or the editor would offer paths
 // that resolve to null.
 
 export type DocumentNodeKind = "value" | "object" | "list";
@@ -21,7 +21,7 @@ export interface DocumentNode {
   count?: number;
   /**
    * For a list, the shape of its items — the paths inside are relative to the item,
-   * because that is what a loop's field rules are written against.
+   * because that is what a list's field rules are written against.
    */
   children: DocumentNode[];
 }
@@ -57,7 +57,7 @@ function toNode(key: string, path: string, value: unknown): DocumentNode {
   if (Array.isArray(value)) {
     // The first entry stands for the shape of every entry, and its children are
     // named relative to the item — `sku`, not `line[0].sku` — because that is the
-    // path a rule inside the loop uses.
+    // path a rule inside the list uses.
     const first = value.length > 0 ? value[0] : undefined;
     return {
       key,
@@ -88,7 +88,7 @@ function toNode(key: string, path: string, value: unknown): DocumentNode {
 /**
  * Every path a field rule can read, which is every `value` node not inside a list.
  *
- * A path inside a list is reachable only from a loop over that list, so offering it
+ * A path inside a list is reachable only from a list that walks it, so offering it
  * at the top level would offer a mapping that resolves to null.
  */
 export function readablePaths(root: DocumentNode | null): string[] {
@@ -99,20 +99,20 @@ export function readablePaths(root: DocumentNode | null): string[] {
       if (node.path) out.push(node.path);
       return;
     }
-    if (node.kind === "list") return; // its contents belong to a loop
+    if (node.kind === "list") return; // its contents belong to a list
     node.children.forEach(walk);
   };
   walk(root);
   return out;
 }
 
-/** Every path that holds a list, which is what a loop can walk. */
+/** Every path that holds a list, which is what a list can walk. */
 export function listPaths(root: DocumentNode | null): string[] {
   if (!root) return [];
   const out: string[] = [];
   const walk = (node: DocumentNode) => {
     if (node.kind === "list") {
-      // The root itself is a list for a root-array document; a loop says so with an
+      // The root itself is a list for a root-array document; a list says so with an
       // empty `over`, so it is offered as "" rather than skipped.
       out.push(node.path);
       return;
@@ -123,11 +123,23 @@ export function listPaths(root: DocumentNode | null): string[] {
   return out;
 }
 
-/** The item shape of the list at a path, for a loop's field rules. */
+/** The item shape of the list at a path, for a list's field rules. */
 export function itemShapeAt(root: DocumentNode | null, path: string): DocumentNode[] {
   if (!root) return [];
   const found = findNode(root, path);
   return found?.kind === "list" ? found.children : [];
+}
+
+/**
+ * What the rules inside a list read their paths against: one entry of the list at
+ * `over`, wrapped so it can be walked like a document of its own.
+ *
+ * This is the scope the mapper itself uses — `MapInto` hands a list's nested lists the
+ * current item, not the document — so a list nested in another names its list
+ * relative to the entry around it (`tags`), never from the root (`order.line.tags`).
+ */
+export function itemScopeOf(scope: DocumentNode | null, over: string): DocumentNode {
+  return { key: "", path: "", kind: "object", children: itemShapeAt(scope, over) };
 }
 
 export function findNode(root: DocumentNode, path: string): DocumentNode | undefined {

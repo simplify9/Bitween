@@ -1,11 +1,15 @@
 import { produce } from "immer";
+import { parseSample } from "./documentTree";
+import { matchSources, scaffoldFromTarget, type MatchTally, type ScaffoldTally } from "./scaffold";
 import {
   emptyFieldRule,
-  emptyLoopRule,
+  emptyListEntry,
+  emptyListRule,
   emptyRules,
   type DocumentFormatId,
   type EditorFieldRule,
-  type EditorLoopRule,
+  type EditorListEntry,
+  type EditorListRule,
   type EditorRules,
   type RuleId,
 } from "./types";
@@ -28,6 +32,18 @@ export interface RulesEditorState {
   previewOutput: string | null;
   /** Set when stored rules could not be read, which blocks editing. */
   loadError: string | null;
+  /** What the last "build from the sample" did, for the line under the button. */
+  scaffold: ScaffoldTally | null;
+  /** What the last "match the source fields" did, for the line under that button. */
+  match: MatchTally | null;
+  /**
+   * Whose partner values the preview resolves against.
+   *
+   * A question about this preview rather than about the mapping, so it is not in
+   * `rules`, never saved, and never on the undo stack. It lives here anyway because
+   * a rule row deep in the tree needs it to offer that partner's real keys.
+   */
+  testPartnerId: number | null;
   dirty: boolean;
   past: EditorRules[];
   future: EditorRules[];
@@ -45,6 +61,9 @@ export const initialRulesEditorState: RulesEditorState = {
   previewError: null,
   previewOutput: null,
   loadError: null,
+  scaffold: null,
+  match: null,
+  testPartnerId: null,
   dirty: false,
   past: [],
   future: [],
@@ -56,13 +75,24 @@ export type RulesEditorAction =
   | { type: "SET_TARGET_FORMAT"; format: DocumentFormatId }
   | { type: "SET_SOURCE_SAMPLE"; text: string }
   | { type: "SET_TARGET_SAMPLE"; text: string }
-  | { type: "ADD_FIELD"; loopId: RuleId | null; target?: string[] }
+  | { type: "SCAFFOLD_FROM_TARGET" }
+  | { type: "MATCH_SOURCES" }
+  | { type: "CLEAR_RULES" }
+  | { type: "SET_TEST_PARTNER"; partnerId: number | null }
+  | { type: "ADD_FIELD"; listId: RuleId | null; target?: string[] }
   | { type: "UPDATE_FIELD"; id: RuleId; changes: Partial<Omit<EditorFieldRule, "id">> }
   | { type: "REMOVE_FIELD"; id: RuleId }
-  | { type: "ADD_LOOP"; parentLoopId: RuleId | null; target?: string[] }
-  | { type: "UPDATE_LOOP"; id: RuleId; changes: Partial<Omit<EditorLoopRule, "id" | "fields" | "loops">> }
-  | { type: "REMOVE_LOOP"; id: RuleId }
-  | { type: "SET_ROOT_LOOP"; enabled: boolean }
+  | { type: "ADD_LIST"; parentListId: RuleId | null; target?: string[] }
+  | { type: "UPDATE_LIST"; id: RuleId; changes: Partial<Omit<EditorListRule, "id" | "fields" | "lists">> }
+  | { type: "REMOVE_LIST"; id: RuleId }
+  | { type: "ADD_FIXED_ENTRY"; listId: RuleId }
+  | { type: "REMOVE_FIXED_ENTRY"; id: RuleId }
+  | {
+      type: "UPDATE_FIXED_ENTRY";
+      id: RuleId;
+      changes: Partial<Omit<EditorListEntry, "id" | "fields" | "lists">>;
+    }
+  | { type: "SET_ROOT_LIST"; enabled: boolean }
   | { type: "SELECT"; id: RuleId | null }
   | { type: "HOVER_PATH"; path: string | null }
   | { type: "SET_SEARCH_SOURCE"; text: string }
@@ -74,33 +104,68 @@ export type RulesEditorAction =
 
 // ─── Finding a rule ───────────────────────────────────────────────────────────
 //
-// Rules are addressed by id rather than by a path of indices. Loops nest, so an
+// Rules are addressed by id rather than by a path of indices. Lists nest, so an
 // index path would have to be rebuilt every time a row moved — which is the kind
 // of bookkeeping the old model needed three recursive helpers for.
 
-/** Every loop in the tree, outermost first, including the root loop. */
-function allLoops(rules: EditorRules): EditorLoopRule[] {
-  const found: EditorLoopRule[] = [];
-  const walk = (loops: EditorLoopRule[]) => {
-    for (const loop of loops) {
-      found.push(loop);
-      walk(loop.loops);
+/**
+ * Anywhere field and list rules live: the mapping itself, a list, or one of a
+ * list's fixed entries.
+ *
+ * One notion rather than three, so adding a field to a fixed entry is the same
+ * operation as adding one anywhere else.
+ */
+export interface RuleContainer {
+  fields: EditorFieldRule[];
+  lists: EditorListRule[];
+}
+
+/** Every list in the tree, outermost first, including the root and those in fixed entries. */
+function allLists(rules: EditorRules): EditorListRule[] {
+  const found: EditorListRule[] = [];
+  const walk = (lists: EditorListRule[]) => {
+    for (const list of lists) {
+      found.push(list);
+      walk(list.lists);
+      for (const entry of list.fixed) walk(entry.lists);
     }
   };
   if (rules.root) walk([rules.root]);
-  walk(rules.loops);
+  walk(rules.lists);
   return found;
 }
 
-/** The loop a rule lives in, or null when it is a top-level field. */
+/** Every fixed entry in the tree, with the list it belongs to. */
+function allEntries(rules: EditorRules): { entry: EditorListEntry; list: EditorListRule }[] {
+  return allLists(rules).flatMap((list) => list.fixed.map((entry) => ({ entry, list })));
+}
+
+/**
+ * The container with this id, or the mapping itself for null.
+ *
+ * Undefined means the id names nothing — a container removed while something still
+ * referred to it, which is a miss rather than a reason to write into the wrong place.
+ */
+function findContainer(rules: EditorRules, id: RuleId | null): RuleContainer | undefined {
+  if (id === null) return rules;
+  const list = allLists(rules).find((l) => l.id === id);
+  if (list) return list;
+  return allEntries(rules).find((e) => e.entry.id === id)?.entry;
+}
+
+/** The list a rule lives in, or null when it is a top-level field. */
 function findFieldOwner(
   rules: EditorRules,
   id: RuleId,
 ): { fields: EditorFieldRule[] } | null {
   if (rules.fields.some((f) => f.id === id)) return rules;
-  for (const loop of allLoops(rules)) {
-    if (loop.fields.some((f) => f.id === id)) return loop;
-    if (loop.item?.id === id) return null; // item rules are updated through their loop
+  for (const list of allLists(rules)) {
+    if (list.fields.some((f) => f.id === id)) return list;
+    if (list.item?.id === id) return null; // item rules are updated through their list
+  }
+  for (const { entry } of allEntries(rules)) {
+    if (entry.fields.some((f) => f.id === id)) return entry;
+    if (entry.item?.id === id) return null;
   }
   return null;
 }
@@ -109,23 +174,31 @@ function findField(rules: EditorRules, id: RuleId): EditorFieldRule | undefined 
   if (rules.root?.item?.id === id) return rules.root.item;
   const top = rules.fields.find((f) => f.id === id);
   if (top) return top;
-  for (const loop of allLoops(rules)) {
-    const inLoop = loop.fields.find((f) => f.id === id);
-    if (inLoop) return inLoop;
-    if (loop.item?.id === id) return loop.item;
+  for (const list of allLists(rules)) {
+    const inList = list.fields.find((f) => f.id === id);
+    if (inList) return inList;
+    if (list.item?.id === id) return list.item;
+  }
+  for (const { entry } of allEntries(rules)) {
+    const inEntry = entry.fields.find((f) => f.id === id);
+    if (inEntry) return inEntry;
+    if (entry.item?.id === id) return entry.item;
   }
   return undefined;
 }
 
-function findLoop(rules: EditorRules, id: RuleId): EditorLoopRule | undefined {
-  return allLoops(rules).find((l) => l.id === id);
+function findList(rules: EditorRules, id: RuleId): EditorListRule | undefined {
+  return allLists(rules).find((l) => l.id === id);
 }
 
-/** The list a loop lives in, so it can be removed from it. */
-function findLoopSiblings(rules: EditorRules, id: RuleId): EditorLoopRule[] | null {
-  if (rules.loops.some((l) => l.id === id)) return rules.loops;
-  for (const loop of allLoops(rules)) {
-    if (loop.loops.some((l) => l.id === id)) return loop.loops;
+/** The list a list lives in, so it can be removed from it. */
+function findListSiblings(rules: EditorRules, id: RuleId): EditorListRule[] | null {
+  if (rules.lists.some((l) => l.id === id)) return rules.lists;
+  for (const list of allLists(rules)) {
+    if (list.lists.some((l) => l.id === id)) return list.lists;
+  }
+  for (const { entry } of allEntries(rules)) {
+    if (entry.lists.some((l) => l.id === id)) return entry.lists;
   }
   return null;
 }
@@ -142,10 +215,16 @@ function changesTheMapping(action: RulesEditorAction): boolean {
     case "ADD_FIELD":
     case "UPDATE_FIELD":
     case "REMOVE_FIELD":
-    case "ADD_LOOP":
-    case "UPDATE_LOOP":
-    case "REMOVE_LOOP":
-    case "SET_ROOT_LOOP":
+    case "ADD_LIST":
+    case "UPDATE_LIST":
+    case "REMOVE_LIST":
+    case "ADD_FIXED_ENTRY":
+    case "REMOVE_FIXED_ENTRY":
+    case "UPDATE_FIXED_ENTRY":
+    case "SET_ROOT_LIST":
+    case "SCAFFOLD_FROM_TARGET":
+    case "MATCH_SOURCES":
+    case "CLEAR_RULES":
       return true;
     default:
       return false;
@@ -169,6 +248,11 @@ export function rulesEditorReducer(
         draft.sourceSample = action.sourceSample;
         draft.targetSample = action.targetSample;
         draft.loadError = action.error ?? null;
+        draft.scaffold = null;
+        draft.match = null;
+        // A different subscription is a different partner's mapping, so the one
+        // chosen for the last preview says nothing about this one.
+        draft.testPartnerId = null;
         draft.selectedId = null;
         draft.ruleErrors = {};
         draft.previewError = null;
@@ -195,13 +279,48 @@ export function rulesEditorReducer(
 
       case "SET_TARGET_SAMPLE":
         draft.targetSample = action.text;
+        // The old count described the old sample, so it stops being true here.
+        draft.scaffold = null;
         draft.dirty = true;
+        break;
+
+      // Both samples are parsed here rather than passed in, so the action carries
+      // nothing and the button cannot hand the reducer a tree from a stale render.
+      case "SCAFFOLD_FROM_TARGET": {
+        const target = parseSample(draft.targetSample, draft.rules.targetFormat);
+        const source = parseSample(draft.sourceSample, draft.rules.sourceFormat);
+        draft.scaffold = target.error
+          ? { created: 0, matched: 0, problem: target.error }
+          : scaffoldFromTarget(draft.rules, target.root, source.root);
+        break;
+      }
+
+      case "MATCH_SOURCES": {
+        const source = parseSample(draft.sourceSample, draft.rules.sourceFormat);
+        draft.match = matchSources(draft.rules, source.root);
+        break;
+      }
+
+      // The formats are kept: they describe the exchange, not the rules, and
+      // clearing the rules is not a decision to stop speaking JSON.
+      case "CLEAR_RULES":
+        draft.rules = {
+          ...emptyRules(),
+          sourceFormat: draft.rules.sourceFormat,
+          targetFormat: draft.rules.targetFormat,
+        };
+        draft.selectedId = null;
+        draft.scaffold = null;
+        draft.match = null;
+        break;
+
+      case "SET_TEST_PARTNER":
+        draft.testPartnerId = action.partnerId;
         break;
 
       case "ADD_FIELD": {
         const rule = emptyFieldRule(action.target ?? []);
-        if (action.loopId === null) draft.rules.fields.push(rule);
-        else findLoop(draft.rules, action.loopId)?.fields.push(rule);
+        findContainer(draft.rules, action.listId)?.fields.push(rule);
         draft.selectedId = rule.id;
         break;
       }
@@ -219,25 +338,48 @@ export function rulesEditorReducer(
         break;
       }
 
-      case "ADD_LOOP": {
-        const loop = emptyLoopRule(action.target ?? []);
-        if (action.parentLoopId === null) draft.rules.loops.push(loop);
-        else findLoop(draft.rules, action.parentLoopId)?.loops.push(loop);
-        draft.selectedId = loop.id;
+      case "ADD_LIST": {
+        const list = emptyListRule(action.target ?? []);
+        findContainer(draft.rules, action.parentListId)?.lists.push(list);
+        draft.selectedId = list.id;
         break;
       }
 
-      case "UPDATE_LOOP": {
-        const loop = findLoop(draft.rules, action.id);
-        if (loop) Object.assign(loop, action.changes);
+      case "ADD_FIXED_ENTRY": {
+        const list = findList(draft.rules, action.listId);
+        if (!list) break;
+        // Mirrors the list it joins: a list of plain values gets a value, a list of
+        // records gets a record. Each entry keeps its own shape, so switching the
+        // list afterwards leaves the ones already written alone.
+        const entry = emptyListEntry();
+        if (list.item) entry.item = emptyFieldRule();
+        list.fixed.push(entry);
         break;
       }
 
-      case "REMOVE_LOOP": {
+      case "REMOVE_FIXED_ENTRY": {
+        const owner = allEntries(draft.rules).find((e) => e.entry.id === action.id)?.list;
+        if (owner) owner.fixed = owner.fixed.filter((e) => e.id !== action.id);
+        break;
+      }
+
+      case "UPDATE_FIXED_ENTRY": {
+        const entry = allEntries(draft.rules).find((e) => e.entry.id === action.id)?.entry;
+        if (entry) Object.assign(entry, action.changes);
+        break;
+      }
+
+      case "UPDATE_LIST": {
+        const list = findList(draft.rules, action.id);
+        if (list) Object.assign(list, action.changes);
+        break;
+      }
+
+      case "REMOVE_LIST": {
         if (draft.rules.root?.id === action.id) {
           draft.rules.root = undefined;
         } else {
-          const siblings = findLoopSiblings(draft.rules, action.id);
+          const siblings = findListSiblings(draft.rules, action.id);
           if (siblings) {
             const at = siblings.findIndex((l) => l.id === action.id);
             if (at !== -1) siblings.splice(at, 1);
@@ -248,10 +390,10 @@ export function rulesEditorReducer(
       }
 
       // A document is either an object with fields in it or a bare array, so turning
-      // the root into a list puts the field and loop rules aside rather than trying to
+      // the root into a list puts the field and list rules aside rather than trying to
       // keep both — and turning it off brings them back.
-      case "SET_ROOT_LOOP":
-        if (action.enabled && !draft.rules.root) draft.rules.root = emptyLoopRule();
+      case "SET_ROOT_LIST":
+        if (action.enabled && !draft.rules.root) draft.rules.root = emptyListRule();
         else if (!action.enabled) draft.rules.root = undefined;
         break;
 
@@ -309,15 +451,19 @@ export function targetPathOf(target: string[]): string {
   return target.length === 0 ? "(no target)" : target.join(".");
 }
 
-/** Every field rule in the mapping, with the loop it belongs to. */
+/** Every field rule in the mapping, with the list it belongs to. */
 export function everyFieldRule(
   rules: EditorRules,
-): { rule: EditorFieldRule; loop: EditorLoopRule | null }[] {
-  const out: { rule: EditorFieldRule; loop: EditorLoopRule | null }[] = [];
-  for (const rule of rules.fields) out.push({ rule, loop: null });
-  for (const loop of allLoops(rules)) {
-    if (loop.item) out.push({ rule: loop.item, loop });
-    for (const rule of loop.fields) out.push({ rule, loop });
+): { rule: EditorFieldRule; list: EditorListRule | null }[] {
+  const out: { rule: EditorFieldRule; list: EditorListRule | null }[] = [];
+  for (const rule of rules.fields) out.push({ rule, list: null });
+  for (const list of allLists(rules)) {
+    if (list.item) out.push({ rule: list.item, list });
+    for (const rule of list.fields) out.push({ rule, list });
+  }
+  for (const { entry, list } of allEntries(rules)) {
+    if (entry.item) out.push({ rule: entry.item, list });
+    for (const rule of entry.fields) out.push({ rule, list });
   }
   return out;
 }
@@ -326,6 +472,7 @@ export function everyFieldRule(
 export function isAssigned(rule: EditorFieldRule): boolean {
   switch (rule.from.kind) {
     case "path":
+    case "rootPath":
       return Boolean(rule.from.path?.trim());
     case "fixed":
       return rule.from.value !== undefined && rule.from.value !== "";
@@ -338,4 +485,4 @@ export function isAssigned(rule: EditorFieldRule): boolean {
   }
 }
 
-export { allLoops };
+export { allLists };

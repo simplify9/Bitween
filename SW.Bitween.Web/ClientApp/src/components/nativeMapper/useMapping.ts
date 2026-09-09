@@ -134,3 +134,44 @@ export function useMappingSave(subscriptionId: number) {
     saveError: mutation.error ? (mutation.error as Error).message : null,
   };
 }
+
+/**
+ * Undo, redo and save from the keyboard.
+ *
+ * Kept from the old editor, which had them and which people are used to. The one
+ * difference is deliberate: inside a text box, Ctrl+Z is left to the browser so it
+ * undoes what was typed rather than the last change to the mapping. The old editor
+ * took it in both cases, so a mistyped field name could only be fixed by undoing a
+ * rule change somewhere else entirely.
+ */
+export function useMappingShortcuts(save: () => void) {
+  const dispatch = useRulesDispatch();
+
+  useEffect(() => {
+    const handle = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const key = e.key.toLowerCase();
+
+      if (key === "s") {
+        e.preventDefault();
+        save();
+        return;
+      }
+
+      const typing = (e.target as HTMLElement | null)?.closest("input, textarea");
+      if (typing) return;
+
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: "UNDO" });
+      }
+      if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        dispatch({ type: "REDO" });
+      }
+    };
+
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [dispatch, save]);
+}

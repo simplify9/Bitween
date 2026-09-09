@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   describeSample,
+  itemScopeOf,
   itemShapeAt,
   listPaths,
   parseSample,
@@ -50,12 +51,12 @@ describe("reading a sample document", () => {
     expect(paths.some((p) => p.includes("line"))).toBe(false);
   });
 
-  it("offers lists as loop sources", () => {
+  it("offers lists as list sources", () => {
     expect(listPaths(parse(ORDER).root)).toEqual(["order.line"]);
   });
 
   it("names an item's fields relative to the item", () => {
-    // What a rule inside the loop is written against: `sku`, not `order.line.sku`.
+    // What a rule inside the list is written against: `sku`, not `order.line.sku`.
     expect(itemShapeAt(parse(ORDER).root, "order.line").map((n) => n.path)).toEqual(["sku", "qty"]);
   });
 
@@ -66,8 +67,8 @@ describe("reading a sample document", () => {
     expect(line?.count).toBe(2);
   });
 
-  /** A root array is a loop source with an empty path, which is how a loop says "the document". */
-  it("treats a root array as a loop source at the empty path", () => {
+  /** A root array is a list source with an empty path, which is how a list says "the document". */
+  it("treats a root array as a list source at the empty path", () => {
     const { root } = parse('[ { "id": 1 } ]');
 
     expect(root?.kind).toBe("list");
@@ -119,5 +120,40 @@ describe("describing a sample value", () => {
 
   it("shortens long text so it fits on a line", () => {
     expect(describeSample("x".repeat(50))).toMatch(/…"$/);
+  });
+});
+
+// ─── The scope inside a list ──────────────────────────────────────────────────
+
+describe("itemScopeOf", () => {
+  const doc = parseSample(
+    '{ "order": { "line": [{ "sku": "A1", "tags": [{ "code": "fragile" }] }] } }',
+    "json",
+  ).root;
+
+  it("hands back one entry's shape, named relative to the entry", () => {
+    const scope = itemScopeOf(doc, "order.line");
+
+    expect(readablePaths(scope)).toEqual(["sku"]);
+    expect(listPaths(scope)).toEqual(["tags"]);
+  });
+
+  /** Which is what lets a list inside a list resolve its own list. */
+  it("narrows again from that entry", () => {
+    const inner = itemScopeOf(itemScopeOf(doc, "order.line"), "tags");
+
+    expect(readablePaths(inner)).toEqual(["code"]);
+  });
+
+  it("is empty for a path that holds no list", () => {
+    expect(readablePaths(itemScopeOf(doc, "order"))).toEqual([]);
+    expect(readablePaths(itemScopeOf(null, "anything"))).toEqual([]);
+  });
+
+  /** An empty path means the document itself, for a source that is a bare array. */
+  it("reads the document itself when the path is empty", () => {
+    const array = parseSample('[{ "code": "A" }]', "json").root;
+
+    expect(readablePaths(itemScopeOf(array, ""))).toEqual(["code"]);
   });
 });

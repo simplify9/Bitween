@@ -13,6 +13,9 @@ import {
   RULES_VERSION,
   SOURCE_SAMPLE_KEY,
   TRANSFORMS,
+  emptyFieldRule,
+  emptyListEntry,
+  emptyListRule,
   emptyRules,
   type EditorRules,
   type MappingRules,
@@ -51,15 +54,15 @@ describe("saving and loading", () => {
           type: "number",
         },
       ],
-      loops: [
+      lists: [
         {
           over: "order.line",
           as: "line",
           target: ["lines"],
           where: { field: "qty", operator: "greaterThan", value: 0 },
           fields: [{ target: ["sku"], from: { kind: "path", path: "sku" } }],
-          loops: [
-            { over: "tags", target: ["labels"], item: { target: [], from: { kind: "path", path: "t" } }, fields: [], loops: [] },
+          lists: [
+            { over: "tags", target: ["labels"], item: { target: [], from: { kind: "path", path: "t" } }, fields: [], lists: [] },
           ],
         },
       ],
@@ -74,7 +77,7 @@ describe("saving and loading", () => {
       sourceFormat: "json",
       targetFormat: "json",
       fields: [{ target: ["a"], from: { kind: "fixed", value: "WEB" } }],
-      loops: [],
+      lists: [],
     });
 
     const stored = saveMapping(original, '{"x":1}', "{}");
@@ -92,7 +95,7 @@ describe("saving and loading", () => {
         sourceFormat: "json",
         targetFormat: "json",
         fields: [{ target: ["file.txt"], from: { kind: "fixed", value: 1 } }],
-        loops: [],
+        lists: [],
       }),
       "",
       "",
@@ -108,8 +111,8 @@ describe("saving and loading", () => {
         sourceFormat: "json",
         targetFormat: "json",
         fields: [{ target: ["a"], from: { kind: "fixed", value: 1 } }],
-        loops: [
-          { over: "x", target: ["y"], fields: [{ target: ["b"], from: { kind: "fixed", value: 2 } }], loops: [] },
+        lists: [
+          { over: "x", target: ["y"], fields: [{ target: ["b"], from: { kind: "fixed", value: 2 } }], lists: [] },
         ],
       }),
     );
@@ -126,7 +129,7 @@ describe("saving and loading", () => {
         { target: ["a"], from: { kind: "fixed", value: 1 } },
         { target: ["b"], from: { kind: "fixed", value: 2 } },
       ],
-      loops: [],
+      lists: [],
     });
 
     expect(rules.fields[0].id).not.toBe(rules.fields[1].id);
@@ -172,7 +175,7 @@ describe("saving and loading", () => {
 
 describe("editing rules", () => {
   it("adds a top-level field and selects it", () => {
-    const state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    const state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
 
     expect(state.rules.fields).toHaveLength(1);
     expect(state.selectedId).toBe(state.rules.fields[0].id);
@@ -180,7 +183,7 @@ describe("editing rules", () => {
   });
 
   it("updates a field by id", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     const id = state.rules.fields[0].id;
 
     state = rulesEditorReducer(state, {
@@ -199,7 +202,7 @@ describe("editing rules", () => {
    * whichever happened to be filled, which is what its mode-switching bugs were.
    */
   it("switching source kind leaves nothing behind", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     const id = state.rules.fields[0].id;
 
     state = rulesEditorReducer(state, {
@@ -218,7 +221,7 @@ describe("editing rules", () => {
   });
 
   it("removes a field and clears the selection", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     const id = state.rules.fields[0].id;
 
     state = rulesEditorReducer(state, { type: "REMOVE_FIELD", id });
@@ -227,53 +230,53 @@ describe("editing rules", () => {
     expect(state.selectedId).toBeNull();
   });
 
-  it("adds a field inside a loop", () => {
-    let state = run([{ type: "ADD_LOOP", parentLoopId: null, target: ["lines"] }]);
-    const loopId = state.rules.loops[0].id;
+  it("adds a field inside a list", () => {
+    let state = run([{ type: "ADD_LIST", parentListId: null, target: ["lines"] }]);
+    const listId = state.rules.lists[0].id;
 
-    state = rulesEditorReducer(state, { type: "ADD_FIELD", loopId, target: ["sku"] });
+    state = rulesEditorReducer(state, { type: "ADD_FIELD", listId, target: ["sku"] });
 
-    expect(state.rules.loops[0].fields).toHaveLength(1);
+    expect(state.rules.lists[0].fields).toHaveLength(1);
     expect(state.rules.fields).toHaveLength(0);
   });
 
-  it("nests a loop inside a loop and updates the inner one", () => {
-    let state = run([{ type: "ADD_LOOP", parentLoopId: null, target: ["orders"] }]);
-    const outer = state.rules.loops[0].id;
+  it("nests a list inside a list and updates the inner one", () => {
+    let state = run([{ type: "ADD_LIST", parentListId: null, target: ["orders"] }]);
+    const outer = state.rules.lists[0].id;
 
-    state = rulesEditorReducer(state, { type: "ADD_LOOP", parentLoopId: outer, target: ["items"] });
-    const inner = state.rules.loops[0].loops[0].id;
+    state = rulesEditorReducer(state, { type: "ADD_LIST", parentListId: outer, target: ["items"] });
+    const inner = state.rules.lists[0].lists[0].id;
 
-    state = rulesEditorReducer(state, { type: "UPDATE_LOOP", id: inner, changes: { over: "lines" } });
+    state = rulesEditorReducer(state, { type: "UPDATE_LIST", id: inner, changes: { over: "lines" } });
 
-    expect(state.rules.loops[0].loops[0].over).toBe("lines");
+    expect(state.rules.lists[0].lists[0].over).toBe("lines");
   });
 
-  it("removes a nested loop without touching its parent", () => {
-    let state = run([{ type: "ADD_LOOP", parentLoopId: null, target: ["orders"] }]);
-    const outer = state.rules.loops[0].id;
-    state = rulesEditorReducer(state, { type: "ADD_LOOP", parentLoopId: outer, target: ["items"] });
-    const inner = state.rules.loops[0].loops[0].id;
+  it("removes a nested list without touching its parent", () => {
+    let state = run([{ type: "ADD_LIST", parentListId: null, target: ["orders"] }]);
+    const outer = state.rules.lists[0].id;
+    state = rulesEditorReducer(state, { type: "ADD_LIST", parentListId: outer, target: ["items"] });
+    const inner = state.rules.lists[0].lists[0].id;
 
-    state = rulesEditorReducer(state, { type: "REMOVE_LOOP", id: inner });
+    state = rulesEditorReducer(state, { type: "REMOVE_LIST", id: inner });
 
-    expect(state.rules.loops).toHaveLength(1);
-    expect(state.rules.loops[0].loops).toHaveLength(0);
+    expect(state.rules.lists).toHaveLength(1);
+    expect(state.rules.lists[0].lists).toHaveLength(0);
   });
 
   it("turns the root into a list and back", () => {
-    let state = run([{ type: "SET_ROOT_LOOP", enabled: true }]);
+    let state = run([{ type: "SET_ROOT_LIST", enabled: true }]);
     expect(state.rules.root).toBeDefined();
 
-    state = rulesEditorReducer(state, { type: "SET_ROOT_LOOP", enabled: false });
+    state = rulesEditorReducer(state, { type: "SET_ROOT_LIST", enabled: false });
     expect(state.rules.root).toBeUndefined();
   });
 
-  it("finds a field inside the root loop", () => {
-    let state = run([{ type: "SET_ROOT_LOOP", enabled: true }]);
+  it("finds a field inside the root list", () => {
+    let state = run([{ type: "SET_ROOT_LIST", enabled: true }]);
     const rootId = state.rules.root!.id;
 
-    state = rulesEditorReducer(state, { type: "ADD_FIELD", loopId: rootId, target: ["code"] });
+    state = rulesEditorReducer(state, { type: "ADD_FIELD", listId: rootId, target: ["code"] });
     const fieldId = state.rules.root!.fields[0].id;
 
     state = rulesEditorReducer(state, {
@@ -290,14 +293,14 @@ describe("editing rules", () => {
 
 describe("undo and redo", () => {
   it("undoes a change to the mapping", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     state = rulesEditorReducer(state, { type: "UNDO" });
 
     expect(state.rules.fields).toHaveLength(0);
   });
 
   it("redoes it", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     state = rulesEditorReducer(state, { type: "UNDO" });
     state = rulesEditorReducer(state, { type: "REDO" });
 
@@ -306,7 +309,7 @@ describe("undo and redo", () => {
 
   /** Selecting a row is not an edit, so it must not consume an undo step. */
   it("selection does not go on the undo stack", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     const before = state.past.length;
 
     state = rulesEditorReducer(state, { type: "SELECT", id: null });
@@ -319,7 +322,7 @@ describe("undo and redo", () => {
   });
 
   it("loading clears the history", () => {
-    let state = run([{ type: "ADD_FIELD", loopId: null, target: ["a"] }]);
+    let state = run([{ type: "ADD_FIELD", listId: null, target: ["a"] }]);
     state = rulesEditorReducer(state, {
       type: "LOAD",
       rules: emptyRules(),
@@ -335,24 +338,24 @@ describe("undo and redo", () => {
 // ─── Reading the state ────────────────────────────────────────────────────────
 
 describe("reading the state", () => {
-  it("lists every field rule including ones inside nested loops", () => {
+  it("lists every field rule including ones inside nested lists", () => {
     const rules = fromWire({
       version: RULES_VERSION,
       sourceFormat: "json",
       targetFormat: "json",
       fields: [{ target: ["a"], from: { kind: "fixed", value: 1 } }],
-      loops: [
+      lists: [
         {
           over: "x",
           target: ["y"],
           fields: [{ target: ["b"], from: { kind: "fixed", value: 2 } }],
-          loops: [
+          lists: [
             {
               over: "z",
               target: ["w"],
               item: { target: [], from: { kind: "path", path: "t" } },
               fields: [],
-              loops: [],
+              lists: [],
             },
           ],
         },
@@ -380,7 +383,7 @@ describe("reading the state", () => {
           { target: ["e"], from: { kind: "global", setId: "s", key: "k" } },
           { target: ["f"], from: { kind: "global", setId: "s" } },
         ],
-        loops: [],
+        lists: [],
       }),
     );
 
@@ -435,5 +438,153 @@ describe("transforms offered to the user", () => {
         expect(arg.label).toBeTruthy();
       }
     }
+  });
+});
+
+// ─── The pre-release rename ───────────────────────────────────────────────────
+
+describe("rules saved before lists were renamed", () => {
+  /**
+   * `loops` became `lists`. Such a mapping parses fine and simply has no lists,
+   * so reading it would drop every one of them and saving would then destroy it.
+   */
+  it("refuses to open rather than dropping the lists", () => {
+    const stored = JSON.stringify({
+      version: 1,
+      sourceFormat: "json",
+      targetFormat: "json",
+      fields: [{ target: ["ref"], from: { kind: "path", path: "order.ref" } }],
+      loops: [{ over: "order.line", target: ["lines"], fields: [], loops: [] }],
+    });
+
+    const loaded = loadMapping({ [MAPPING_RULES_KEY]: stored });
+
+    expect(loaded.error).toMatch(/before lists were renamed/);
+    expect(loaded.rules.fields).toHaveLength(0);
+  });
+
+  it("opens rules that use the current name", () => {
+    const stored = JSON.stringify({
+      version: 1,
+      sourceFormat: "json",
+      targetFormat: "json",
+      fields: [],
+      lists: [{ over: "order.line", target: ["lines"], fields: [], lists: [] }],
+    });
+
+    const loaded = loadMapping({ [MAPPING_RULES_KEY]: stored });
+
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.rules.lists).toHaveLength(1);
+  });
+});
+
+// ─── Entries written into a list ──────────────────────────────────────────────
+
+describe("fixed entries", () => {
+  const runFrom = (state: RulesEditorState, actions: RulesEditorAction[]) =>
+    actions.reduce(rulesEditorReducer, state);
+
+  const withOneList = (): RulesEditorState => {
+    const rules = emptyRules();
+    rules.lists.push(emptyListRule(["lines"]));
+    return loaded(rules);
+  };
+
+  const theList = (state: RulesEditorState) => state.rules.lists[0];
+
+  it("adds an entry to a list", () => {
+    const start = withOneList();
+
+    const after = runFrom(start, [{ type: "ADD_FIXED_ENTRY", listId: start.rules.lists[0].id }]);
+
+    expect(theList(after).fixed).toHaveLength(1);
+  });
+
+  it("adds nothing for a list id that names no list", () => {
+    const after = runFrom(withOneList(), [{ type: "ADD_FIXED_ENTRY", listId: "not-a-list" }]);
+
+    expect(theList(after).fixed).toHaveLength(0);
+  });
+
+  /** A fixed entry is a container like any other, so a field goes into it the same way. */
+  it("puts a field inside an entry rather than in the list's per-entry rules", () => {
+    const start = withOneList();
+    const withEntry = runFrom(start, [
+      { type: "ADD_FIXED_ENTRY", listId: start.rules.lists[0].id },
+    ]);
+    const entryId = theList(withEntry).fixed[0].id;
+
+    const after = runFrom(withEntry, [{ type: "ADD_FIELD", listId: entryId, target: ["sku"] }]);
+
+    expect(theList(after).fixed[0].fields.map((f) => f.target)).toEqual([["sku"]]);
+    expect(theList(after).fields).toHaveLength(0);
+  });
+
+  it("removes one without touching the others", () => {
+    const start = withOneList();
+    const listId = start.rules.lists[0].id;
+    const two = runFrom(start, [
+      { type: "ADD_FIXED_ENTRY", listId },
+      { type: "ADD_FIXED_ENTRY", listId },
+    ]);
+    const first = theList(two).fixed[0].id;
+
+    const after = runFrom(two, [{ type: "REMOVE_FIXED_ENTRY", id: first }]);
+
+    expect(theList(after).fixed).toHaveLength(1);
+    expect(theList(after).fixed[0].id).not.toBe(first);
+  });
+
+  /** Adding one is a change to the mapping, so it goes on the undo stack. */
+  it("is undone in one step", () => {
+    const start = withOneList();
+    const after = runFrom(start, [
+      { type: "ADD_FIXED_ENTRY", listId: start.rules.lists[0].id },
+      { type: "UNDO" },
+    ]);
+
+    expect(theList(after).fixed).toHaveLength(0);
+  });
+
+  it("mirrors a list of plain values, so its entry is a value too", () => {
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+    const start = loaded(rules);
+
+    const after = runFrom(start, [
+      { type: "ADD_FIXED_ENTRY", listId: start.rules.lists[0].id },
+    ]);
+
+    expect(theList(after).fixed[0].item).toBeDefined();
+  });
+
+  it("counts a rule inside an entry in the assigned total", () => {
+    const start = withOneList();
+    const listId = start.rules.lists[0].id;
+    const withEntry = runFrom(start, [{ type: "ADD_FIXED_ENTRY", listId }]);
+    const entryId = theList(withEntry).fixed[0].id;
+    const after = runFrom(withEntry, [{ type: "ADD_FIELD", listId: entryId, target: ["sku"] }]);
+
+    expect(everyFieldRule(after.rules)).toHaveLength(1);
+  });
+
+  it("survives the round trip, and stays out of the wire when there are none", () => {
+    const rules = emptyRules();
+    const list = emptyListRule(["lines"]);
+    const entry = emptyListEntry();
+    entry.fields.push(emptyFieldRule(["sku"]));
+    list.fixed.push(entry);
+    rules.lists.push(list, emptyListRule(["other"]));
+
+    const wire = toWire(rules);
+
+    expect(wire.lists[0].fixed).toHaveLength(1);
+    expect(wire.lists[0].fixed![0].fields[0].target).toEqual(["sku"]);
+    // A list with none carries no key at all, so what was saved equals what loads.
+    expect("fixed" in wire.lists[1]).toBe(false);
+    expect(toWire(fromWire(wire))).toEqual(wire);
   });
 });

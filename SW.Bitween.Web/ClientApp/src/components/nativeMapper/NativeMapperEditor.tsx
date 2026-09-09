@@ -1,20 +1,31 @@
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Check, Redo2, Undo2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Check, Eraser, Eye, EyeOff, Link2, Redo2, Undo2 } from "lucide-react";
+import { api } from "../../api";
+import { keys } from "../../api/queryKeys";
 import {
   RulesEditorProvider,
   useRules,
   useRulesDispatch,
 } from "../../lib/nativeMapper/RulesEditorContext";
-import { listPaths, parseSample, readablePaths } from "../../lib/nativeMapper/documentTree";
+import { parseSample, readablePaths } from "../../lib/nativeMapper/documentTree";
 import { everyFieldRule } from "../../lib/nativeMapper/rulesReducer";
+import type { MatchTally } from "../../lib/nativeMapper/scaffold";
 import { DOCUMENT_FORMATS, type DocumentFormatId } from "../../lib/nativeMapper/types";
 import { Button, FormError } from "../ui/basics";
+import { ConnectionLines, type Connection } from "../ui/ConnectionLines";
 import { Select } from "../ui/forms";
+import { BuildFromSample } from "./BuildFromSample";
 import { OutputPanel } from "./OutputPanel";
 import { PreviewPanel } from "./PreviewPanel";
 import { SourcePanel } from "./SourcePanel";
-import { useMappingLoader, useMappingPreview, useMappingSave } from "./useMapping";
+import {
+  useMappingLoader,
+  useMappingPreview,
+  useMappingSave,
+  useMappingShortcuts,
+} from "./useMapping";
 
 export default function NativeMapperEditor() {
   return (
@@ -29,19 +40,25 @@ function Editor() {
   const subscriptionId = Number(id);
   const navigate = useNavigate();
 
-  const { rules, sourceSample, selectedId, loadError, dirty } = useRules();
+  const { rules, sourceSample, selectedId, hoveredPath, loadError, dirty, match, testPartnerId } =
+    useRules();
   const dispatch = useRulesDispatch();
 
   const { partnerId } = useMappingLoader(subscriptionId);
-  const { isPreviewing } = useMappingPreview(partnerId);
+
+  const { isPreviewing } = useMappingPreview(testPartnerId ?? partnerId);
+
+  // Hiding the preview gives the rules the whole width, which is what a big mapping
+  // wants once it is built and being read rather than checked.
+  const [showPreview, setShowPreview] = useState(true);
   const { save, isSaving, justSaved, saveError } = useMappingSave(subscriptionId);
+  useMappingShortcuts(save);
 
   const sample = useMemo(
     () => parseSample(sourceSample, rules.sourceFormat),
     [sourceSample, rules.sourceFormat],
   );
   const sourcePaths = useMemo(() => readablePaths(sample.root), [sample.root]);
-  const listPathOptions = useMemo(() => listPaths(sample.root), [sample.root]);
 
   /** Which source paths a rule already reads, for the dot beside each field. */
   const assignedPaths = useMemo(() => {
@@ -50,6 +67,27 @@ function Editor() {
       if (rule.from.kind === "path" && rule.from.path) paths.add(rule.from.path);
     return paths;
   }, [rules]);
+
+  /**
+   * One curve per rule that reads a field of the document.
+   *
+   * A rule inside a list reads a path relative to its entry, and the source panel
+   * only lists what is readable at the top level — so those have no source row to
+   * join and simply draw nothing, rather than joining the wrong one.
+   */
+  const connections = useMemo(() => {
+    const out: Connection[] = [];
+    for (const { rule } of everyFieldRule(rules)) {
+      if (rule.from.kind !== "path" || !rule.from.path) continue;
+      out.push({
+        id: rule.id,
+        source: rule.from.path,
+        target: rule.id,
+        emphasis: rule.id === selectedId || rule.from.path === hoveredPath,
+      });
+    }
+    return out;
+  }, [rules, selectedId, hoveredPath]);
 
   /** Clicking a source field fills whichever rule is selected. */
   const pickSourcePath = (path: string) => {
@@ -102,7 +140,42 @@ function Editor() {
           />
         </div>
 
+        <div className="ml-2">
+          <BuildFromSample />
+        </div>
+
+        <TestPartnerSelect
+          value={testPartnerId}
+          onChange={(partner) => dispatch({ type: "SET_TEST_PARTNER", partnerId: partner })}
+        />
+
+        <ToolbarButton
+          label="Match the source fields"
+          title="Point every rule that reads nothing at the source field of the same name"
+          icon={<Link2 size={12} aria-hidden />}
+          onClick={() => dispatch({ type: "MATCH_SOURCES" })}
+        />
+        {match && <MatchNote tally={match} />}
+
+        <ToolbarButton
+          label="Clear all the rules"
+          title="Remove every rule. Undo puts them back."
+          icon={<Eraser size={12} aria-hidden />}
+          onClick={() => dispatch({ type: "CLEAR_RULES" })}
+        />
+
         <div className="ml-auto flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowPreview((shown) => !shown)}
+            aria-pressed={showPreview}
+            aria-label={showPreview ? "Hide the preview" : "Show the preview"}
+            title={showPreview ? "Hide the preview" : "Show the preview"}
+            className="rounded p-1.5 text-ink-500 hover:bg-ink-50"
+          >
+            {showPreview ? <Eye size={14} /> : <EyeOff size={14} />}
+          </button>
+
           <button
             type="button"
             onClick={() => dispatch({ type: "UNDO" })}
@@ -149,11 +222,24 @@ function Editor() {
           onPick={pickSourcePath}
         />
 
+        {/* Narrow on purpose: the curves are drawn with overflow visible, so they
+            reach the rows on either side without a wide empty column. */}
+        <div className="relative w-20 flex-shrink-0 border-r border-ink-200 bg-ink-50/40">
+          <ConnectionLines
+            connections={connections}
+            sourceAttribute="data-source-path"
+            targetAttribute="data-rule-id"
+            watchSelector="[data-mapper-scroll]"
+          />
+        </div>
+
         <div className="flex flex-1 divide-x divide-ink-200 overflow-hidden">
-          <OutputPanel listPathOptions={listPathOptions} />
-          <div className="w-[38%] min-w-[280px] overflow-hidden">
-            <PreviewPanel isPreviewing={isPreviewing} />
-          </div>
+          <OutputPanel sourceRoot={sample.root} />
+          {showPreview && (
+            <div className="w-[38%] min-w-[280px] overflow-hidden">
+              <PreviewPanel isPreviewing={isPreviewing} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -161,14 +247,100 @@ function Editor() {
           rather than letting the click appear to do nothing. */}
       <div className="flex-shrink-0 border-t border-ink-200 bg-ink-50 px-3 py-1.5">
         <p className="text-[11px] text-ink-500">
-          {selectedId
-            ? "Click a source field on the left to use it in the selected rule."
-            : sourcePaths.length > 0
-              ? "Select a rule on the right, then click a source field to fill it."
-              : "Paste a sample document to see the fields you can map."}
+          {sourcePaths.length === 0
+            ? "Paste a sample document to see the fields you can map."
+            : selectedId
+              ? "Drag a source field onto a rule, or click one to fill the selected rule."
+              : "Drag a source field onto a rule — or select a rule first, then click a field."}
         </p>
       </div>
     </div>
+  );
+}
+
+/** A toolbar action that looks like the "Build from a sample" trigger beside it. */
+function ToolbarButton({
+  label,
+  title,
+  icon,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title}
+      className="flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2 py-1 text-xs font-medium text-ink-600 hover:border-ink-300 hover:bg-ink-50"
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+/** What the last press of "Match the source fields" did. */
+function MatchNote({ tally }: { tally: MatchTally }) {
+  if (tally.matched === 0 && tally.unmatched === 0)
+    return <span className="text-[11px] text-ink-500">Every rule already reads something.</span>;
+
+  return (
+    <span className="text-[11px] text-ink-600">
+      <span className={tally.matched > 0 ? "text-ok-700" : ""}>
+        {tally.matched} matched
+      </span>
+      {tally.unmatched > 0 && (
+        <span
+          className="text-ink-500"
+          title="Nothing in the sample clearly fitted, or two fields fitted equally well"
+        >
+          {" · "}
+          {tally.unmatched} left empty
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Which partner's values to preview with.
+ *
+ * The property count is on each option because an empty partner and a wrong key
+ * both show as a blank field, and this tells the two apart without leaving the page.
+ */
+function TestPartnerSelect({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const { data: partners } = useQuery({
+    queryKey: keys.partners.list,
+    queryFn: () => api.listPartners(),
+  });
+
+  return (
+    <label className="ml-2 flex items-center gap-1 text-[11px] text-ink-500">
+      Preview as
+      <Select
+        className="h-8 w-44 text-xs"
+        aria-label="Preview as partner"
+        value={value === null ? "" : String(value)}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        options={[
+          { value: "", label: "no partner" },
+          ...(partners ?? []).map((p) => ({
+            value: String(p.id),
+            label: `${p.name} · ${p.propertyKeys.length} properties`,
+          })),
+        ]}
+      />
+    </label>
   );
 }
 
