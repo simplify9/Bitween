@@ -6,6 +6,7 @@ import {
   emptyListEntry,
   emptyListRule,
   emptyRules,
+  type DateOrderName,
   type DocumentFormatId,
   type EditorFieldRule,
   type EditorListEntry,
@@ -73,6 +74,7 @@ export type RulesEditorAction =
   | { type: "LOAD"; rules: EditorRules; sourceSample: string; targetSample: string; error?: string }
   | { type: "SET_SOURCE_FORMAT"; format: DocumentFormatId }
   | { type: "SET_TARGET_FORMAT"; format: DocumentFormatId }
+  | { type: "SET_DATE_ORDER"; order: DateOrderName }
   | { type: "SET_SOURCE_SAMPLE"; text: string }
   | { type: "SET_TARGET_SAMPLE"; text: string }
   | { type: "SCAFFOLD_FROM_TARGET" }
@@ -212,6 +214,7 @@ function changesTheMapping(action: RulesEditorAction): boolean {
   switch (action.type) {
     case "SET_SOURCE_FORMAT":
     case "SET_TARGET_FORMAT":
+    case "SET_DATE_ORDER":
     case "ADD_FIELD":
     case "UPDATE_FIELD":
     case "REMOVE_FIELD":
@@ -268,6 +271,10 @@ export function rulesEditorReducer(
 
       case "SET_TARGET_FORMAT":
         draft.rules.targetFormat = action.format;
+        break;
+
+      case "SET_DATE_ORDER":
+        draft.rules.sourceDateOrder = action.order;
         break;
 
       // Samples are an editor convenience — runtime never reads them — so changing

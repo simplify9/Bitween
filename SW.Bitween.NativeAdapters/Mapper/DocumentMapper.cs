@@ -57,12 +57,12 @@ public static class DocumentMapper
                 errors.Add(new MappingError("(root)",
                     "the whole output is a list, so the top-level fields and lists cannot be written"));
 
-            output = BuildList(rules.Root, scope, context, errors, path: "");
+            output = BuildList(rules.Root, scope, context, rules.SourceDateOrder, errors, path: "");
         }
         else
         {
             var obj = ValueNode.Object();
-            MapInto(obj, rules.Fields, rules.Lists, scope, context, errors, path: "");
+            MapInto(obj, rules.Fields, rules.Lists, scope, context, rules.SourceDateOrder, errors, path: "");
             output = obj;
         }
 
@@ -79,6 +79,7 @@ public static class DocumentMapper
         List<ListRule> lists,
         Scope scope,
         MappingContext context,
+        DateOrder dateOrder,
         List<MappingError> errors,
         string path)
     {
@@ -92,7 +93,7 @@ public static class DocumentMapper
                 continue;
             }
 
-            if (!TryResolveField(field, scope, context, out var value, out var reason))
+            if (!TryResolveField(field, scope, context, dateOrder, out var value, out var reason))
             {
                 errors.Add(new MappingError(target, reason!));
                 continue;
@@ -111,7 +112,7 @@ public static class DocumentMapper
                 continue;
             }
 
-            Values.PlaceAt(output, rule.Target, BuildList(rule, scope, context, errors, path));
+            Values.PlaceAt(output, rule.Target, BuildList(rule, scope, context, dateOrder, errors, path));
         }
     }
 
@@ -127,6 +128,7 @@ public static class DocumentMapper
         ListRule rule,
         Scope scope,
         MappingContext context,
+        DateOrder dateOrder,
         List<MappingError> errors,
         string path)
     {
@@ -135,7 +137,7 @@ public static class DocumentMapper
 
         // Read against the scope the list sits in, since a fixed entry has no entry of its own.
         foreach (var entry in rule.Fixed)
-            AddEntry(list, entry.Item, entry.Fields, entry.Lists, scope, context, errors, target);
+            AddEntry(list, entry.Item, entry.Fields, entry.Lists, scope, context, dateOrder, errors, target);
 
         // No source list to walk: the list is whatever its fixed entries produced.
         if (rule.Over is null) return list;
@@ -156,7 +158,7 @@ public static class DocumentMapper
                 break;
             }
 
-            AddEntry(list, rule.Item, rule.Fields, rule.Lists, scope.Enter(item), context, errors, target);
+            AddEntry(list, rule.Item, rule.Fields, rule.Lists, scope.Enter(item), context, dateOrder, errors, target);
         }
 
         return list;
@@ -177,12 +179,13 @@ public static class DocumentMapper
         List<ListRule> lists,
         Scope scope,
         MappingContext context,
+        DateOrder dateOrder,
         List<MappingError> errors,
         string target)
     {
         if (item is not null)
         {
-            if (TryResolveField(item, scope, context, out var value, out var reason))
+            if (TryResolveField(item, scope, context, dateOrder, out var value, out var reason))
                 list.Add(ValueNode.Value(value));
             else
                 errors.Add(new MappingError(target, reason!));
@@ -190,7 +193,7 @@ public static class DocumentMapper
         }
 
         var row = ValueNode.Object();
-        MapInto(row, fields, lists, scope, context, errors, target);
+        MapInto(row, fields, lists, scope, context, dateOrder, errors, target);
         list.Add(row);
     }
 
@@ -198,6 +201,7 @@ public static class DocumentMapper
         FieldRule field,
         Scope scope,
         MappingContext context,
+        DateOrder dateOrder,
         out object? value,
         out string? reason)
     {
@@ -214,7 +218,7 @@ public static class DocumentMapper
         };
 
         if (field.Transform is not null &&
-            !Transforms.TryApply(field.Transform, value, out value, out reason))
+            !Transforms.TryApply(field.Transform, value, dateOrder, out value, out reason))
             return false;
 
         if (field.Lookup is not null)

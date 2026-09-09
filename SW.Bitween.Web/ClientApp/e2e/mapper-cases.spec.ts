@@ -254,8 +254,8 @@ const TRANSFORM_CASES: {
     field: "when",
     path: "date",
     fn: "formatDate",
-    args: [["Format a date — Format", "yyyy/MM/dd"]],
-    expect: '"when": "2026/03/04"',
+    args: [["Format a date — Format", "dd MMM yyyy"]],
+    expect: '"when": "04 Mar 2026"',
   },
   {
     field: "filled",
@@ -287,8 +287,16 @@ test("every transform has the argument boxes it needs, and produces its value", 
 
     // The boxes are named from the function, so a function whose arguments the
     // editor spells differently to the server would show up right here.
-    for (const [label, value] of testCase.args ?? [])
-      await page.getByRole("textbox", { name: label, exact: true }).fill(value);
+    //
+    // By label rather than by role: an argument box may be a plain input, or one
+    // carrying a suggestion list — and an `<input list=…>` reports as a combobox, not
+    // a textbox. The name is what identifies it either way.
+    for (const [label, value] of testCase.args ?? []) {
+      const box = page.getByLabel(label, { exact: true });
+      // Some arguments are a closed list now, so the gesture depends on the control.
+      if ((await box.evaluate((el) => el.tagName)) === "SELECT") await box.selectOption(value);
+      else await box.fill(value);
+    }
 
     await openDetail(page, testCase.field);
   }
@@ -705,6 +713,44 @@ test("rules the editor cannot read refuse to open rather than starting blank", a
   }
 });
 
+test("a stored date format the dropdown never offered still shows what is saved", async ({
+  page,
+}) => {
+  const subscriptionId = await createSubscription(page);
+
+  // The engine formats with any .NET pattern, so a saved mapping can hold one this
+  // closed list does not offer — set through the API, or offered here under a label
+  // that has since changed. A select with no matching option shows nothing selected,
+  // which reads as "no format chosen".
+  await writeMapperProperties(subscriptionId, "NativeMapper", {
+    MappingRules: JSON.stringify({
+      version: 1,
+      sourceFormat: "json",
+      targetFormat: "json",
+      fields: [
+        {
+          target: ["shipped"],
+          from: { kind: "path", path: "order.date" },
+          transform: { fn: "formatDate", format: "d MMMM" },
+        },
+      ],
+      lists: [],
+    }),
+  });
+
+  await page.goto(`subscriptions/${subscriptionId}/mapper`);
+  await expect(page.getByRole("button", { name: "Save" })).toBeVisible({ timeout: 15000 });
+  await openDetail(page, "shipped");
+
+  await expect(page.getByLabel("Format a date — Format")).toHaveValue("d MMMM");
+
+  // And saving the mapping for some unrelated reason must not quietly replace it.
+  await addFixedRule(page, "channel", "web");
+  await saveAndReload(page);
+  await openDetail(page, "shipped");
+  await expect(page.getByLabel("Format a date — Format")).toHaveValue("d MMMM");
+});
+
 test("the sample document is stored with the mapping, so it is there next time", async ({
   page,
 }) => {
@@ -973,4 +1019,47 @@ test("a checkbox in a rule's detail can be ticked by its text", async ({ page })
   await page.getByRole("textbox", { name: "Becomes 1" }).fill("Jordan");
 
   await expectPreview(page, '"countryName": "Jordan"');
+});
+
+test("a date that could be read two ways has to say which", async ({ page }) => {
+  // A real CargoNet shipping date: the 4th of September, French style.
+  await openWithSample(page, { order: { shippingdate: "04.09.2026" } });
+
+  await addPathRule(page, "shipDate", "order.shippingdate");
+  await openDetail(page, "shipDate");
+  await page.getByRole("combobox", { name: "Transform" }).selectOption("formatDate");
+
+  // One control on the row, and it is a closed list: what the date should look like on
+  // the way out, shown as the date itself rather than as yyyy-MM-dd letters.
+  const format = page.getByRole("combobox", { name: "Format a date — Format" });
+  await expect(format.locator("option")).toContainText(["Format…", "2026-09-04", "04/09/2026"]);
+  await format.selectOption("yyyy-MM-dd");
+
+  // Refused rather than guessed. The invariant parser reads this as the 9th of April
+  // perfectly happily, which would date a shipment five months out with nothing said.
+  await expect(page.getByText(/could not read '04\.09\.2026'/).first()).toBeVisible({
+    timeout: 15000,
+  });
+
+  // Answered once for the document, under the sample it describes — a partner writes
+  // dates one way throughout, so this is not a per-rule question.
+  const dates = page.getByRole("combobox", { name: "Dates in the incoming document" });
+  await expect(dates.locator("option")).toHaveText([
+    "Year first — 2026-09-04",
+    "Day first — 04.09.2026",
+    "Month first — 09.04.2026",
+  ]);
+
+  await dates.selectOption("dayFirst");
+  await expectPreview(page, '"shipDate": "2026-09-04"');
+
+  // And the other way round, from the same characters.
+  await dates.selectOption("monthFirst");
+  await expectPreview(page, '"shipDate": "2026-04-09"');
+
+  // It is part of the mapping, so it comes back with it.
+  await saveAndReload(page);
+  await expect(page.getByRole("combobox", { name: "Dates in the incoming document" })).toHaveValue(
+    "monthFirst",
+  );
 });

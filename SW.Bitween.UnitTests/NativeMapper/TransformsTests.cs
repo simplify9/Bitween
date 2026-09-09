@@ -21,17 +21,19 @@ public class TransformsTests
         return rule;
     }
 
-    private static object? Apply(TransformRule rule, object? value)
+    private static object? Apply(TransformRule rule, object? value,
+        DateOrder dateOrder = DateOrder.YearFirst)
     {
-        Assert.IsTrue(Transforms.TryApply(rule, value, out var result, out var error),
+        Assert.IsTrue(Transforms.TryApply(rule, value, dateOrder, out var result, out var error),
             $"expected '{rule.Fn}' to succeed, got: {error}");
         Assert.IsNull(error);
         return result;
     }
 
-    private static string AssertFails(TransformRule rule, object? value)
+    private static string AssertFails(TransformRule rule, object? value,
+        DateOrder dateOrder = DateOrder.YearFirst)
     {
-        Assert.IsFalse(Transforms.TryApply(rule, value, out _, out var error),
+        Assert.IsFalse(Transforms.TryApply(rule, value, dateOrder, out _, out var error),
             $"expected '{rule.Fn}' to fail for '{value}'");
         Assert.IsNotNull(error, "a failure must explain itself");
         return error!;
@@ -47,7 +49,7 @@ public class TransformsTests
     {
         foreach (var name in Transforms.Names)
         {
-            var error = Transforms.TryApply(Rule(name), "x", out _, out var reason) ? null : reason;
+            var error = Transforms.TryApply(Rule(name), "x", DateOrder.YearFirst, out _, out var reason) ? null : reason;
             Assert.IsFalse(error?.StartsWith("unknown transform") == true,
                 $"'{name}' is listed but not implemented");
         }
@@ -199,6 +201,92 @@ public class TransformsTests
     public void FormatDate_UnreadableDate_Fails() =>
         StringAssert.Contains(AssertFails(Rule("formatDate", ("format", "yyyy")), "not a date"), "as a date");
 
+    /// <summary>
+    /// A real CargoNet shipping date. It is the 4th of September, and the invariant parser
+    /// reads it as the 9th of April without complaining — so a date that is not year-first
+    /// is refused until the rule says which way round it is.
+    /// </summary>
+    [TestMethod]
+    public void FormatDate_AnAmbiguousDate_IsRefusedRatherThanGuessed()
+    {
+        var error = AssertFails(Rule("formatDate", ("format", "yyyy-MM-dd")), "04.09.2026");
+
+        StringAssert.Contains(error, "04.09.2026");
+        // The message has to name the way out, not just the failure.
+        StringAssert.Contains(error, "the day or the month comes first");
+    }
+
+    [TestMethod]
+    public void FormatDate_DayFirst_ReadsTheDayFirst() =>
+        Assert.AreEqual("2026-09-04",
+            Apply(Rule("formatDate", ("format", "yyyy-MM-dd")), "04.09.2026", DateOrder.DayFirst));
+
+    [TestMethod]
+    public void FormatDate_MonthFirst_ReadsTheMonthFirst() =>
+        Assert.AreEqual("2026-04-09",
+            Apply(Rule("formatDate", ("format", "yyyy-MM-dd")), "04.09.2026", DateOrder.MonthFirst));
+
+    /// <summary>
+    /// The same two characters, one document, opposite answers. This is the whole reason the
+    /// argument exists, and the test that would have caught the bug.
+    /// </summary>
+    [TestMethod]
+    public void FormatDate_TheSameTextReadsBothWays()
+    {
+        var rule = Rule("formatDate", ("format", "d MMMM"));
+        var dayFirst = Apply(rule, "04.09.2026", DateOrder.DayFirst);
+        var monthFirst = Apply(rule, "04.09.2026", DateOrder.MonthFirst);
+
+        Assert.AreEqual("4 September", dayFirst);
+        Assert.AreEqual("9 April", monthFirst);
+    }
+
+    /// <summary>
+    /// Year-first needs no telling — there is nothing to get wrong — so existing mappings and
+    /// every ISO timestamp keep working untouched.
+    /// </summary>
+    [TestMethod]
+    public void FormatDate_YearFirst_NeedsNoOrder()
+    {
+        Assert.AreEqual("08/09/2026", Apply(Rule("formatDate", ("format", "dd/MM/yyyy")), "2026-09-08"));
+        // The Chronopost timestamp, offset and all.
+        Assert.AreEqual("08/09/2026",
+            Apply(Rule("formatDate", ("format", "dd/MM/yyyy")), "2026-09-08T00:00:00+00:00"));
+    }
+
+    /// <summary>
+    /// A partner mostly sending dd/MM/yyyy may still send one ISO field, so each order accepts
+    /// the unambiguous shapes as well as its own.
+    /// </summary>
+    [TestMethod]
+    public void FormatDate_AnOrderStillAcceptsAnIsoValue() =>
+        Assert.AreEqual("2026-09-08",
+            Apply(Rule("formatDate", ("format", "yyyy-MM-dd")), "2026-09-08T00:00:00+00:00",
+                DateOrder.DayFirst));
+
+    /// <summary>
+    /// 13 cannot be a month, so this one is not actually ambiguous — but accepting it while
+    /// refusing 04.09.2026 would mean the same format worked for some of a partner's rows and
+    /// not others. One rule, whatever the values happen to be.
+    /// </summary>
+    [TestMethod]
+    public void FormatDate_ADateOnlyAHumanCouldDisambiguate_IsStillRefused() =>
+        StringAssert.Contains(
+            AssertFails(Rule("formatDate", ("format", "yyyy-MM-dd")), "13.09.2026"),
+            "the day or the month comes first");
+
+    [TestMethod]
+    public void FormatDate_DayFirstWithATime() =>
+        Assert.AreEqual("2026-09-04 13:45",
+            Apply(Rule("formatDate", ("format", "yyyy-MM-dd HH:mm")), "04.09.2026 13:45",
+                DateOrder.DayFirst));
+
+    /// <summary>A value arriving with the whitespace an XML element often carries.</summary>
+    [TestMethod]
+    public void FormatDate_SurroundingWhitespace_IsIgnored() =>
+        Assert.AreEqual("2026-09-04",
+            Apply(Rule("formatDate", ("format", "yyyy-MM-dd")), "  04.09.2026  ", DateOrder.DayFirst));
+
     // ── defaultIfEmpty ──────────────────────────────────────────────────────────
 
     /// <summary>The one function whose job is to replace an absent value.</summary>
@@ -232,7 +320,7 @@ public class TransformsTests
         var rule = new TransformRule { Fn = "substring" };
         rule.Args["start"] = JToken.FromObject(99999999999999m);
 
-        Assert.IsFalse(Transforms.TryApply(rule, "hello", out _, out var error));
+        Assert.IsFalse(Transforms.TryApply(rule, "hello", DateOrder.YearFirst, out _, out var error));
         StringAssert.Contains(error!, "substring");
     }
 
@@ -242,7 +330,7 @@ public class TransformsTests
         var rule = new TransformRule { Fn = "multiply" };
         rule.Args["by"] = JToken.FromObject(decimal.MaxValue);
 
-        Assert.IsFalse(Transforms.TryApply(rule, decimal.MaxValue, out _, out var error));
+        Assert.IsFalse(Transforms.TryApply(rule, decimal.MaxValue, DateOrder.YearFirst, out _, out var error));
         StringAssert.Contains(error!, "multiply");
     }
 
@@ -252,7 +340,7 @@ public class TransformsTests
         var rule = new TransformRule { Fn = "formatDate" };
         rule.Args["format"] = JToken.FromObject("%");
 
-        Assert.IsFalse(Transforms.TryApply(rule, "2026-03-04", out _, out var error));
+        Assert.IsFalse(Transforms.TryApply(rule, "2026-03-04", DateOrder.YearFirst, out _, out var error));
         StringAssert.Contains(error!, "formatDate");
     }
 }
