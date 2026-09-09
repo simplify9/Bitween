@@ -90,9 +90,16 @@ export async function setSourcePath(
   await scope.getByRole("combobox", { name: "Source field" }).last().fill(path);
 }
 
-/** What the source box offers from the sample, which is a hint and not a limit. */
+/**
+ * What a suggest box offers, which is a hint and not a limit.
+ *
+ * Focused first: only the box being typed in carries a suggestion list, so that a big
+ * mapping does not put every row's copy of every path into the page at once.
+ */
 export async function suggestionsFor(page: Page, field: Locator): Promise<string[]> {
+  await field.focus();
   const listId = await field.getAttribute("list");
+  if (!listId) return [];
   return page
     .locator(`datalist[id="${listId}"] option`)
     .evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
@@ -174,6 +181,10 @@ async function adminApi(): Promise<APIRequestContext> {
   const login = await api.post(`${API}/accounts/login`, {
     data: { Username: ADMIN_EMAIL, Password: ADMIN_PASSWORD },
   });
+  // Without this the token becomes the string "undefined", and every later call fails
+  // as "could not read subscription <id>" — which blames the subscription, not the login.
+  if (!login.ok())
+    throw new Error(`could not sign in as ${ADMIN_EMAIL}: ${login.status()} ${await login.text()}`);
   token = (await login.json()).jwt;
   return api;
 }

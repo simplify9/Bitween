@@ -9,7 +9,11 @@ import {
   useRules,
   useRulesDispatch,
 } from "../../lib/nativeMapper/RulesEditorContext";
-import { parseSample, readablePaths } from "../../lib/nativeMapper/documentTree";
+import {
+  coverageByPath,
+  parseSample,
+  readablePaths,
+} from "../../lib/nativeMapper/documentTree";
 import { everyFieldRule } from "../../lib/nativeMapper/rulesReducer";
 import type { MatchTally } from "../../lib/nativeMapper/scaffold";
 import { DOCUMENT_FORMATS, type DocumentFormatId } from "../../lib/nativeMapper/types";
@@ -68,6 +72,12 @@ function Editor() {
     return paths;
   }, [rules]);
 
+  /** Built once for the whole tree: every source row re-renders on hover. */
+  const coverage = useMemo(
+    () => coverageByPath(sample.root, assignedPaths),
+    [sample.root, assignedPaths],
+  );
+
   /**
    * One curve per rule that reads a field of the document.
    *
@@ -110,13 +120,20 @@ function Editor() {
     );
   }
 
+  /** Leaving with rules that were never saved throws them away, so it is asked first. */
+  const leave = () => {
+    if (dirty && !window.confirm("This mapping has changes that have not been saved. Leave anyway?"))
+      return;
+    navigate(`/subscriptions/${subscriptionId}`);
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white">
       {/* ── Toolbar ───────────────────────────────────────────────────────────── */}
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-ink-200 px-3 py-2">
         <button
           type="button"
-          onClick={() => navigate(`/subscriptions/${subscriptionId}`)}
+          onClick={leave}
           className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-ink-600 hover:bg-ink-50"
         >
           <ArrowLeft size={14} /> Back
@@ -219,6 +236,7 @@ function Editor() {
           root={sample.root}
           parseError={sample.error}
           assignedPaths={assignedPaths}
+          coverage={coverage}
           onPick={pickSourcePath}
         />
 

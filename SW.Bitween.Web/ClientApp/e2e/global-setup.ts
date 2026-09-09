@@ -131,7 +131,7 @@ export default async function purgeTestData() {
   await purge("partners", (id) => api.delete(`${API}/partners/${id}`, { headers: auth() }));
 
   // Values sets are keyed by a string id rather than a number, so `purge` cannot do them.
-  const sets = await api.get(`${API}/globaladaptervaluessets`, { headers: auth() });
+  const sets = await api.get(`${API}/globaladaptervaluessets?size=500&limit=500`, { headers: auth() });
   if (sets.ok())
     for (const set of ((await sets.json()).result ?? []) as { id: string; name: string }[])
       if (TEST_NAME.test(set.name ?? ""))
@@ -141,14 +141,24 @@ export default async function purgeTestData() {
         });
 
   // ── Then put back the two the mapping tests need ───────────────────────────
-  await api.post(`${API}/partners`, {
+  // Checked, unlike a purge: a failed delete leaves the old row and the re-create then
+  // collides by name. Ignoring that would surface much later as the test partner simply
+  // missing from the preview picker, which says nothing about what actually went wrong.
+  const partner = await api.post(`${API}/partners`, {
     headers: auth(),
     data: { name: MAPPER_PARTNER, adapterProperties: MAPPER_PARTNER_PROPS },
   });
-  await api.post(`${API}/globaladaptervaluessets`, {
+  if (!partner.ok())
+    throw new Error(`could not seed ${MAPPER_PARTNER}: ${partner.status()} ${await partner.text()}`);
+
+  const values = await api.post(`${API}/globaladaptervaluessets`, {
     headers: auth(),
     data: { ...MAPPER_VALUES_SET, values: MAPPER_VALUES },
   });
+  if (!values.ok())
+    throw new Error(
+      `could not seed the ${MAPPER_VALUES_SET.id} values set: ${values.status()} ${await values.text()}`,
+    );
 
   await api.dispose();
 }

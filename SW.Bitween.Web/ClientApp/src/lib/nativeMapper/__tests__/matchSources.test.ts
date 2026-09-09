@@ -137,6 +137,25 @@ describe("matchSources", () => {
     });
   });
 
+  it("matches the written entries of a root list", () => {
+    const rules = emptyRules();
+    const root = emptyListRule([]);
+    root.over = "order.line";
+    const entry = emptyListEntry();
+    entry.fields.push(field("customer"));
+    root.fixed.push(entry);
+    rules.root = root;
+
+    matchSources(rules, tree(SOURCE));
+
+    // The root list is not inside any container, so the walk that reaches a nested
+    // list's written entries never reached these — they were skipped in silence.
+    expect(rules.root!.fixed[0].fields[0].from).toEqual({
+      kind: "path",
+      path: "order.customer",
+    });
+  });
+
   it("counts a rule it could not place rather than guessing", () => {
     const rules = emptyRules();
     rules.fields.push(field("somethingElse"));

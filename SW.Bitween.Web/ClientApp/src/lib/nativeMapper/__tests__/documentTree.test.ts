@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  coverageByPath,
   describeSample,
   itemScopeOf,
   itemShapeAt,
@@ -155,5 +156,53 @@ describe("itemScopeOf", () => {
     const array = parseSample('[{ "code": "A" }]', "json").root;
 
     expect(readablePaths(itemScopeOf(array, ""))).toEqual(["code"]);
+  });
+});
+
+describe("findNode stays inside one namespace", () => {
+  it("does not answer a top-level path with a node from inside a list", () => {
+    // `tag` at the top of the document, and a `tag` inside an entry of `line`. A list's
+    // children are named relative to one entry, so the two are different namespaces that
+    // happen to share a spelling.
+    const root = parseSample(
+      JSON.stringify({
+        line: [{ sku: "A1", tag: [{ code: "inner" }] }],
+        tag: [{ code: "outer" }],
+      }),
+      "json",
+    ).root!;
+
+    // The one meant is the top-level list, whose entries carry `code: "outer"`.
+    expect(itemShapeAt(root, "tag").map((n) => n.sample)).toEqual(["outer"]);
+
+    // And the nested one is reachable from the entry scope, where it belongs.
+    const entry = itemScopeOf(root, "line");
+    expect(itemShapeAt(entry, "tag").map((n) => n.sample)).toEqual(["inner"]);
+  });
+});
+
+describe("coverageByPath", () => {
+  it("counts what is read under each object and list", () => {
+    const root = parseSample(
+      JSON.stringify({
+        order: {
+          customer: "Ali",
+          net: 100,
+          line: [{ sku: "A1", qty: 2 }],
+        },
+      }),
+      "json",
+    ).root!;
+
+    // A rule inside a list reads `sku`, which is how the list's own contents are named
+    // here — so both halves agree on what "read" means.
+    const coverage = coverageByPath(root, new Set(["order.customer", "sku"]));
+
+    expect(coverage.get("order")).toEqual({ mapped: 2, total: 4 });
+    expect(coverage.get("order.line")).toEqual({ mapped: 1, total: 2 });
+  });
+
+  it("has nothing to say about an empty document", () => {
+    expect(coverageByPath(null, new Set()).size).toBe(0);
   });
 });

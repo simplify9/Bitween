@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace SW.Bitween.NativeAdapters.Mapper.Formats;
 
 /// <summary>
@@ -19,7 +21,7 @@ public static class DocumentFormats
     /// <summary>Format ids, for the editor's dropdown and for error messages.</summary>
     public static IReadOnlyList<string> Ids { get; } = ById.Keys.OrderBy(k => k).ToList();
 
-    public static bool TryGet(string? id, out IDocumentFormat? format)
+    public static bool TryGet(string? id, [NotNullWhen(true)] out IDocumentFormat? format)
     {
         format = null;
         return id is not null && ById.TryGetValue(id, out format);

@@ -58,6 +58,9 @@ export function useMappingPreview(partnerId: number | null) {
     if (timer.current) clearTimeout(timer.current);
 
     if (!sourceSample.trim()) {
+      // Bumped so a request already on its way is retired: without this, clearing the
+      // sample cleared the preview and then the older response put a document back.
+      runId.current++;
       dispatch({ type: "PREVIEW_RESULT", output: null, ruleErrors: {}, error: null });
       return;
     }
@@ -125,7 +128,15 @@ export function useMappingSave(subscriptionId: number) {
     },
   });
 
-  const save = useCallback(() => mutation.mutateAsync(), [mutation]);
+  // Resolves either way. The failure is shown from `saveError`, so a rejection here
+  // would only ever become an unhandled one — every caller fires this and moves on.
+  const save = useCallback(
+    () => mutation.mutateAsync().then(
+      () => undefined,
+      () => undefined,
+    ),
+    [mutation],
+  );
 
   return {
     save,

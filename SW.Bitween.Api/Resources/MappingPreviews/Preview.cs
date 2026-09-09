@@ -92,7 +92,7 @@ public class Preview(MappingContextFactory contextFactory)
         ValueNode input;
         try
         {
-            input = source!.Read(request.SourceDocument ?? "");
+            input = source.Read(request.SourceDocument ?? "");
         }
         catch (DocumentFormatException ex)
         {
@@ -106,7 +106,7 @@ public class Preview(MappingContextFactory contextFactory)
             var output = DocumentMapper.Map(rules, input, context);
             return new MappingPreviewResponse
             {
-                OutputDocument = target!.Write(output),
+                OutputDocument = target.Write(output),
                 ContentType = target.ContentType,
             };
         }

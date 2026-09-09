@@ -3,14 +3,19 @@ import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
 import { isAssigned } from "../../lib/nativeMapper/rulesReducer";
 import type { OutputFieldNode } from "../../lib/nativeMapper/outputTree";
-import { SOURCE_KINDS, freshSource } from "../../lib/nativeMapper/types";
+import { SOURCE_KINDS, freshSource, type ValueTypeName } from "../../lib/nativeMapper/types";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { RuleDetail } from "./RuleDetail";
 import { RowInput } from "./rowControls";
 import { ValueCell, type SourcePaths } from "./ValueCell";
 
-/** Short enough for the row; "boo" is not a word anyone wants to read. */
-const TYPE_BADGES: Record<string, string> = {
+/**
+ * Short enough for the row; "boo" is not a word anyone wants to read.
+ *
+ * Keyed by the type union rather than by `string`, so adding a value type is a
+ * compile error here instead of a badge that silently renders as nothing.
+ */
+const TYPE_BADGES: Record<ValueTypeName, string> = {
   string: "txt",
   number: "num",
   boolean: "y/n",

@@ -227,7 +227,12 @@ public class ParityWithJsonMapperTests
                     ValueType.Number)],
             }, "{}", context));
 
-        StringAssert.Contains(ex.Message, "cannot convert 'Acme' to number");
+        // The rule is named and the failure is reported, which is the parity this test is about.
+        // The value itself is no longer quoted: a partner property is configuration, and this
+        // message reaches the stored exchange and the preview API.
+        Assert.AreEqual("n", ex.Errors.Single().Target);
+        StringAssert.Contains(ex.Message, "cannot convert the configured value");
+        Assert.IsFalse(ex.Message.Contains("Acme"), ex.Message);
     }
 
     // ── lookups ─────────────────────────────────────────────────────────────────

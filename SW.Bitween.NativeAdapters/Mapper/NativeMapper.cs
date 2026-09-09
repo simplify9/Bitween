@@ -138,6 +138,6 @@ public class NativeMapper : INativeInfolinkMapper, IReceivesMappingContext
 
     private static IDocumentFormat ResolveFormat(string id, string role) =>
         DocumentFormats.TryGet(id, out var format)
-            ? format!
+            ? format
             : throw new InvalidOperationException(DocumentFormats.Unsupported(id, role));
 }

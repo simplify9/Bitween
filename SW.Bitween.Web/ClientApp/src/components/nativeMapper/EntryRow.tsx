@@ -87,6 +87,14 @@ export function EntryRow({
           <Trash2 size={12} />
         </button>
       </div>
+
+      {/* A colour is not a message. The reason is rendered here as a list's is, so it
+          reaches a reader who cannot tell the two borders apart. */}
+      {error && (
+        <p role="alert" className="px-1.5 pb-1 font-mono text-[10px] text-danger-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

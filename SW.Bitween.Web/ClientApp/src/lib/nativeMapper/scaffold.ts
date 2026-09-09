@@ -276,8 +276,16 @@ export function matchSources(rules: EditorRules, source: DocumentNode | null): M
     }
   };
 
-  if (rules.root) walk(rules.root, itemScopeOf(source, rules.root.over ?? ""));
-  else walk(rules, source);
+  if (rules.root) {
+    // Its written entries read from where the list sits, which for the root list is the
+    // document itself — and they are reached here rather than by `walk`, which only sees
+    // the `fixed` of lists nested inside a container.
+    for (const entry of rules.root.fixed) walk(entry, source);
+    if (rules.root.item === undefined)
+      walk(rules.root, itemScopeOf(source, rules.root.over ?? ""));
+  } else {
+    walk(rules, source);
+  }
 
   return tally;
 }

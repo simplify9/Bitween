@@ -125,7 +125,7 @@ public static class Values
         decimal => value,
         byte or sbyte or short or ushort or int or uint or long or ulong =>
             Convert.ToDecimal(value, CultureInfo.InvariantCulture),
-        float f => (decimal)f,
+        float f when f is >= (float)decimal.MinValue and <= (float)decimal.MaxValue => (decimal)f,
         double d when d is >= (double)decimal.MinValue and <= (double)decimal.MaxValue => (decimal)d,
         _ => value,
     };

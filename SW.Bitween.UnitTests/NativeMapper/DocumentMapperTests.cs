@@ -802,4 +802,78 @@ public class DocumentMapperTests
 
         Assert.IsTrue(error.Errors.Any(e => e.Reason.Contains("not a number")), error.Message);
     }
+
+    // ─── Rules the mapping cannot honour ─────────────────────────────────────
+
+    [TestMethod]
+    public void RootList_AlongsideTopLevelRules_IsReported()
+    {
+        // A document is a list or an object. Rules for the shape it is not will never take
+        // effect, and producing a document that quietly lacks them is the worst of both.
+        var rules = new MappingRules
+        {
+            Root = new ListRule { Over = "order.line", Fields = [Field("code", Path("sku"))] },
+            Fields = [Field("customer", Path("order.customer"))],
+        };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => MapAny(rules, Order));
+
+        Assert.IsTrue(ex.Errors.Any(e => e.Target == "(root)"), ex.Message);
+        StringAssert.Contains(ex.Message, "the whole output is a list");
+    }
+
+    [TestMethod]
+    public void RootList_OnItsOwn_IsNotReported()
+    {
+        var rules = new MappingRules
+        {
+            Root = new ListRule { Over = "order.line", Fields = [Field("code", Path("sku"))] },
+        };
+
+        Assert.IsInstanceOfType<ListNode>(MapAny(rules, Order));
+    }
+
+    [TestMethod]
+    public void ACoercionError_QuotesADocumentValue()
+    {
+        var rules = new MappingRules { Fields = [Field("n", Path("order.customer"), ValueType.Number)] };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order));
+
+        // Worth quoting: it came out of the document being mapped, and seeing it is most of
+        // what makes the message useful.
+        StringAssert.Contains(ex.Message, "'Ali'");
+    }
+
+    [TestMethod]
+    public void ACoercionError_DoesNotQuoteAPartnerOrGlobalValue()
+    {
+        var context = new MappingContext
+        {
+            Partner = new Dictionary<string, string> { ["password"] = "s3cr3t-value" },
+            Globals = new Dictionary<string, IReadOnlyDictionary<string, string>>
+            {
+                ["set"] = new Dictionary<string, string> { ["key"] = "also-secret" },
+            },
+        };
+        var rules = new MappingRules
+        {
+            Fields =
+            [
+                Field("a", new ValueSource { Kind = ValueSourceKind.Partner, Key = "password" },
+                    ValueType.Number),
+                Field("b", new ValueSource { Kind = ValueSourceKind.Global, SetId = "set", Key = "key" },
+                    ValueType.Number),
+            ],
+        };
+
+        var ex = Assert.ThrowsException<MappingFailedException>(() => Map(rules, Order, context));
+
+        // The message is stored on the exchange and returned by the preview API, and an adapter
+        // password is configuration rather than payload — so its length is said, not its value.
+        Assert.IsFalse(ex.Message.Contains("s3cr3t-value"), ex.Message);
+        Assert.IsFalse(ex.Message.Contains("also-secret"), ex.Message);
+        StringAssert.Contains(ex.Message, "12 characters");
+        StringAssert.Contains(ex.Message, "11 characters");
+    }
 }

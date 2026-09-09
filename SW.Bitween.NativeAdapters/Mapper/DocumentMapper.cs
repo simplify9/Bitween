@@ -49,6 +49,14 @@ public static class DocumentMapper
         ValueNode output;
         if (rules.Root is not null)
         {
+            // A document is a list or an object, never both — so rules for the other shape are
+            // not merely unused, they are configuration nobody will ever see take effect. The
+            // editor puts them aside when the shape is switched; rules written by hand can carry
+            // both, and dropping them silently is the kind of missing data nobody goes looking for.
+            if (rules.Fields.Count > 0 || rules.Lists.Count > 0)
+                errors.Add(new MappingError("(root)",
+                    "the whole output is a list, so the top-level fields and lists cannot be written"));
+
             output = BuildList(rules.Root, scope, context, errors, path: "");
         }
         else
@@ -216,13 +224,29 @@ public static class DocumentMapper
         // off `value` would report "cannot convert 'null'" and hide what the value actually was.
         if (!Values.TryCoerce(value, field.Type, out var coerced))
         {
-            reason = $"cannot convert '{Display(value)}' to {field.Type.ToString()!.ToLowerInvariant()}";
+            reason = $"cannot convert {DescribeValue(value, field.From.Kind)} to " +
+                     field.Type.ToString()!.ToLowerInvariant();
             return false;
         }
 
         value = coerced;
         return true;
     }
+
+    /// <summary>
+    /// A value in an error message, with configured values described rather than quoted.
+    /// </summary>
+    /// <remarks>
+    /// A value out of the document being mapped is safe to quote, and quoting it is most of what
+    /// makes the message useful. A partner property or a values-set entry is configuration, and
+    /// some of it is secret — an adapter password reaching a number field would otherwise be
+    /// written into <c>XchangeResult.Exception</c>, which is stored and shown on the exchange, and
+    /// returned by the preview API. So those are described by length instead.
+    /// </remarks>
+    private static string DescribeValue(object? value, ValueSourceKind kind) =>
+        (kind is ValueSourceKind.Partner or ValueSourceKind.Global) && value is not null
+            ? $"the configured value ({Display(value).Length} characters)"
+            : $"'{Display(value)}'";
 
     /// <summary>
     /// Substitutes a value using the rule's table.

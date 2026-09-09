@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useId, useState, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
 
 /**
  * The inputs a dense row is made of.
@@ -27,17 +27,38 @@ export function RowInput({ className = "", ...props }: InputHTMLAttributes<HTMLI
 export function RowSuggestInput({
   suggestions,
   className = "",
+  onFocus,
+  onBlur,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, "list"> & { suggestions: string[] }) {
   const listId = useId();
+  // Only the focused box's list is populated. A mapping of a hundred rules against a
+  // document of two hundred paths would otherwise put twenty thousand <option>
+  // elements in the page, all but one set of them for a box nobody is typing in.
+  //
+  // The `list` attribute itself stays put. It is what makes this input a combobox
+  // rather than a plain text box, and a control that changes what it is depending on
+  // whether it has focus is announced differently every time focus moves.
+  const [active, setActive] = useState(false);
 
   return (
     <>
-      <input {...props} list={listId} className={`${base} ${className}`} />
+      <input
+        {...props}
+        list={listId}
+        onFocus={(e) => {
+          setActive(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setActive(false);
+          onBlur?.(e);
+        }}
+        className={`${base} ${className}`}
+      />
       <datalist id={listId}>
-        {suggestions.map((s) => (
-          <option key={s} value={s} />
-        ))}
+        {active &&
+          suggestions.map((s) => <option key={s} value={s} />)}
       </datalist>
     </>
   );

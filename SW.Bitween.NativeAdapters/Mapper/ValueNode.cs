@@ -12,7 +12,7 @@ namespace SW.Bitween.NativeAdapters.Mapper;
 /// either format. A reader turns a document into one of these; a writer turns one back into text.
 /// </para>
 /// <para>
-/// Values stay as <see cref="string"/>, <see cref="double"/>, <see cref="bool"/> or null right up
+/// Values stay as <see cref="string"/>, <see cref="decimal"/>, <see cref="bool"/> or null right up
 /// until a writer serialises them — never as text. That is the whole reason this type exists: the
 /// old mapper rendered a text template and then had to quote, escape and repair the result, and
 /// escaping is only a problem for something that has already become text.
@@ -40,7 +40,7 @@ public sealed class ScalarNode(object? value) : ValueNode
 {
     public override ValueNodeKind Kind => ValueNodeKind.Scalar;
 
-    /// <summary>Always null, a <see cref="string"/>, a <see cref="double"/> or a <see cref="bool"/>.</summary>
+    /// <summary>Always null, a <see cref="string"/>, a <see cref="decimal"/> or a <see cref="bool"/>.</summary>
     public object? Value { get; } = value;
 }
 

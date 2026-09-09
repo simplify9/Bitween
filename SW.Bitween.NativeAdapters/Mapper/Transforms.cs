@@ -36,6 +36,29 @@ public static class Transforms
     /// </remarks>
     public static bool TryApply(TransformRule rule, object? value, out object? result, out string? error)
     {
+        // Every failure this class knows about is reported through `error`, and DocumentMapper
+        // collects those so one mapping run names every rule that is wrong. An exception escapes
+        // that: it aborts the run at the first bad rule and surfaces as a stack trace instead.
+        //
+        // Arguments come from a saved rule and are not validated on the way in, so a few of them
+        // throw rather than return — an out-of-range decimal cast for a substring index, a decimal
+        // multiplication that overflows, a date format string the framework rejects. Those become
+        // ordinary failures here.
+        try
+        {
+            return Apply(rule, value, out result, out error);
+        }
+        catch (Exception ex) when (ex is OverflowException or FormatException or ArgumentException
+                                       or InvalidCastException or Newtonsoft.Json.JsonException)
+        {
+            result = null;
+            error = $"{rule.Fn} could not be applied: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool Apply(TransformRule rule, object? value, out object? result, out string? error)
+    {
         result = value;
         error = null;
 

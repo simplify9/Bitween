@@ -221,4 +221,38 @@ public class TransformsTests
         Assert.AreEqual(0m, Apply(Rule("defaultIfEmpty", ("value", "UNKNOWN")), 0m));
         Assert.AreEqual(false, Apply(Rule("defaultIfEmpty", ("value", "UNKNOWN")), false));
     }
+
+    [TestMethod]
+    public void AnArgumentThatThrows_IsReportedRatherThanEscaping()
+    {
+        // A substring index far outside int range, saved in a rule nobody validated on the way
+        // in. The cast to int overflows; every other failure in this class comes back through
+        // `error`, and DocumentMapper only aggregates the ones that do — an exception here would
+        // abort the whole mapping at the first bad rule and surface as a stack trace.
+        var rule = new TransformRule { Fn = "substring" };
+        rule.Args["start"] = JToken.FromObject(99999999999999m);
+
+        Assert.IsFalse(Transforms.TryApply(rule, "hello", out _, out var error));
+        StringAssert.Contains(error!, "substring");
+    }
+
+    [TestMethod]
+    public void ArithmeticThatOverflows_IsReportedRatherThanEscaping()
+    {
+        var rule = new TransformRule { Fn = "multiply" };
+        rule.Args["by"] = JToken.FromObject(decimal.MaxValue);
+
+        Assert.IsFalse(Transforms.TryApply(rule, decimal.MaxValue, out _, out var error));
+        StringAssert.Contains(error!, "multiply");
+    }
+
+    [TestMethod]
+    public void ADateFormatTheFrameworkRejects_IsReportedRatherThanEscaping()
+    {
+        var rule = new TransformRule { Fn = "formatDate" };
+        rule.Args["format"] = JToken.FromObject("%");
+
+        Assert.IsFalse(Transforms.TryApply(rule, "2026-03-04", out _, out var error));
+        StringAssert.Contains(error!, "formatDate");
+    }
 }

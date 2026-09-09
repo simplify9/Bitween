@@ -142,8 +142,18 @@ export function itemScopeOf(scope: DocumentNode | null, over: string): DocumentN
   return { key: "", path: "", kind: "object", children: itemShapeAt(scope, over) };
 }
 
+/**
+ * The node at a path, within one namespace.
+ *
+ * A list's children are named relative to one entry — `sku`, not `order.line.sku` — so
+ * they live in a different namespace to everything above them. Searching through a list
+ * would let `findNode(root, "tag")` answer with a `tag` nested inside some list when the
+ * caller meant a `tag` at the top, which is how `itemShapeAt` could scope a list's rules
+ * against the wrong entry shape.
+ */
 export function findNode(root: DocumentNode, path: string): DocumentNode | undefined {
   if (root.path === path) return root;
+  if (root.kind === "list") return undefined;
   for (const child of root.children) {
     const found = findNode(child, path);
     if (found) return found;
@@ -157,4 +167,46 @@ export function describeSample(value: unknown): string {
   if (typeof value === "string") return value.length > 24 ? `"${value.slice(0, 24)}…"` : `"${value}"`;
   if (typeof value === "boolean" || typeof value === "number") return String(value);
   return "";
+}
+
+export interface Coverage {
+  mapped: number;
+  total: number;
+}
+
+/**
+ * How much of what is under each object and list some rule already reads.
+ *
+ * Built once for the whole tree rather than asked per row: every row subscribes to the
+ * hovered path, so each hover re-rendered all of them, and a per-row walk of its own
+ * subtree made that quadratic on a document with any depth to it.
+ *
+ * Counted over the paths as they are named here, which for a list's contents is
+ * relative to one entry — the same name a rule inside that list uses, so the two
+ * halves agree.
+ */
+export function coverageByPath(
+  root: DocumentNode | null,
+  assignedPaths: Set<string>,
+): Map<string, Coverage> {
+  const out = new Map<string, Coverage>();
+  if (!root) return out;
+
+  const walk = (node: DocumentNode): Coverage => {
+    if (node.kind === "value")
+      return { mapped: assignedPaths.has(node.path) ? 1 : 0, total: 1 };
+
+    let mapped = 0;
+    let total = 0;
+    for (const child of node.children) {
+      const under = walk(child);
+      mapped += under.mapped;
+      total += under.total;
+    }
+    out.set(node.path, { mapped, total });
+    return { mapped, total };
+  };
+
+  walk(root);
+  return out;
 }

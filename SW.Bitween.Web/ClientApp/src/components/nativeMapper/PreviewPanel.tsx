@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Copy } from "lucide-react";
 import { useRules } from "../../lib/nativeMapper/RulesEditorContext";
 
@@ -10,6 +11,7 @@ import { useRules } from "../../lib/nativeMapper/RulesEditorContext";
  */
 export function PreviewPanel({ isPreviewing }: { isPreviewing: boolean }) {
   const { previewOutput, previewError, ruleErrors, sourceSample } = useRules();
+  const [copied, setCopied] = useState<"no" | "done" | "failed">("no");
 
   const failedCount = Object.keys(ruleErrors).length;
 
@@ -25,10 +27,22 @@ export function PreviewPanel({ isPreviewing }: { isPreviewing: boolean }) {
           <button
             type="button"
             className="ml-auto flex items-center gap-1 rounded border border-ink-200 px-2 py-0.5 text-xs text-ink-500 transition hover:text-ink-700"
-            onClick={() => void navigator.clipboard.writeText(previewOutput)}
+            // A browser may refuse this — no permission, or no clipboard at all — and an
+            // unhandled rejection is not how a reader should find that out.
+            onClick={() => {
+              const say = (state: "done" | "failed") => {
+                setCopied(state);
+                setTimeout(() => setCopied("no"), 2000);
+              };
+              navigator.clipboard?.writeText(previewOutput).then(
+                () => say("done"),
+                () => say("failed"),
+              );
+            }}
             title="Copy the preview to the clipboard"
           >
-            <Copy size={12} /> Copy
+            <Copy size={12} />{" "}
+            {copied === "failed" ? "Could not copy" : copied === "done" ? "Copied" : "Copy"}
           </button>
         )}
       </div>

@@ -14,6 +14,20 @@ import { LookupFields } from "./LookupFields";
  * Laid out in the order the mapper applies it — the value, then the transform,
  * then the table, then the type — so the panel reads as the pipeline it is.
  */
+/**
+ * A numeric argument as a number, unless that would change what was typed.
+ *
+ * `Number("1.")` is 1, so storing the number and rendering it back deleted the point
+ * as it was typed and made "1.16" impossible to enter. Text is kept whenever the
+ * number would not round-trip to the same characters — the server parses a numeric
+ * string for these arguments either way.
+ */
+function numericOrText(kind: "text" | "number", text: string): string | number {
+  if (kind !== "number") return text;
+  const asNumber = Number(text);
+  return !isNaN(asNumber) && String(asNumber) === text.trim() ? asNumber : text;
+}
+
 export function RuleDetail({
   rule,
   onChange,
@@ -104,13 +118,7 @@ export function TransformFields({
           onChange={(e) => {
             const next: TransformRule = { ...(transform ?? { fn: chosen.fn }) };
             if (e.target.value === "") delete next[arg.name];
-            else
-              next[arg.name] =
-                arg.kind === "number" &&
-                e.target.value.trim() !== "" &&
-                !isNaN(Number(e.target.value))
-                  ? Number(e.target.value)
-                  : e.target.value;
+            else next[arg.name] = numericOrText(arg.kind, e.target.value);
             onChange(next);
           }}
         />

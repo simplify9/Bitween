@@ -163,7 +163,21 @@ export function loadMapping(properties: Record<string, string> | undefined): Loa
     };
   }
 
-  return { rules: fromWire(parsed), sourceSample, targetSample };
+  // Valid JSON of the wrong shape — `"fields": {}`, a list where a field belongs —
+  // reaches this line, and `fromWire` maps over what it is given. A thrown TypeError
+  // here would escape into the route as a blank screen rather than the refusal above.
+  try {
+    return { rules: fromWire(parsed), sourceSample, targetSample };
+  } catch (e) {
+    return {
+      rules: emptyRules(),
+      sourceSample,
+      targetSample,
+      error:
+        "The saved mapping rules are not shaped the way this editor understands: " +
+        `${(e as Error).message}. Rebuild the mapping rather than saving over it.`,
+    };
+  }
 }
 
 /** The mapper properties to save for a mapping. */

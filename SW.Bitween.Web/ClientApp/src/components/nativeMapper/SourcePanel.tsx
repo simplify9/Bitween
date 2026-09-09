@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import { describeSample, type DocumentNode } from "../../lib/nativeMapper/documentTree";
+import {
+  describeSample,
+  type Coverage,
+  type DocumentNode,
+} from "../../lib/nativeMapper/documentTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
 import { TextInput } from "../ui/forms";
 
@@ -17,11 +21,14 @@ export function SourcePanel({
   root,
   parseError,
   assignedPaths,
+  coverage,
   onPick,
 }: {
   root: DocumentNode | null;
   parseError: string | null;
   assignedPaths: Set<string>;
+  /** Coverage per object and list path, built once for the whole tree. */
+  coverage: Map<string, Coverage>;
   /** Called when a path is clicked, to fill whichever rule is selected. */
   onPick: (path: string) => void;
 }) {
@@ -76,6 +83,7 @@ export function SourcePanel({
             depth={0}
             search={searchSource.trim().toLowerCase()}
             assignedPaths={assignedPaths}
+            coverage={coverage}
             onPick={onPick}
           />
         )}
@@ -89,12 +97,14 @@ function NodeRows({
   depth,
   search,
   assignedPaths,
+  coverage,
   onPick,
 }: {
   nodes: DocumentNode[];
   depth: number;
   search: string;
   assignedPaths: Set<string>;
+  coverage: Map<string, Coverage>;
   onPick: (path: string) => void;
 }) {
   return (
@@ -106,6 +116,7 @@ function NodeRows({
           depth={depth}
           search={search}
           assignedPaths={assignedPaths}
+          coverage={coverage}
           onPick={onPick}
         />
       ))}
@@ -118,12 +129,14 @@ function NodeRow({
   depth,
   search,
   assignedPaths,
+  coverage,
   onPick,
 }: {
   node: DocumentNode;
   depth: number;
   search: string;
   assignedPaths: Set<string>;
+  coverage: Map<string, Coverage>;
   onPick: (path: string) => void;
 }) {
   const dispatch = useRulesDispatch();
@@ -176,7 +189,7 @@ function NodeRow({
   }
 
   const isList = node.kind === "list";
-  const covered = coverageOf(node, assignedPaths);
+  const covered = coverage.get(node.path) ?? { mapped: 0, total: 0 };
 
   return (
     <div className={dim ? "opacity-40" : ""}>
@@ -225,38 +238,12 @@ function NodeRow({
           depth={depth + 1}
           search={search}
           assignedPaths={assignedPaths}
+          coverage={coverage}
           onPick={onPick}
         />
       )}
     </div>
   );
-}
-
-/**
- * How much of what is under a node some rule already reads.
- *
- * Counted over the paths as they are named here, which for a list's contents is
- * relative to one entry — the same name a rule inside that list uses, so the two
- * halves agree.
- */
-function coverageOf(
-  node: DocumentNode,
-  assignedPaths: Set<string>,
-): { mapped: number; total: number } {
-  let mapped = 0;
-  let total = 0;
-
-  const walk = (n: DocumentNode) => {
-    if (n.kind === "value") {
-      total++;
-      if (assignedPaths.has(n.path)) mapped++;
-      return;
-    }
-    n.children.forEach(walk);
-  };
-
-  node.children.forEach(walk);
-  return { mapped, total };
 }
 
 function hasDescendantMatch(node: DocumentNode, search: string): boolean {
