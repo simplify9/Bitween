@@ -20,6 +20,24 @@ const TEST_EMAIL = /^pw-.*@example\.test$/;
 const TEST_ROLE = /^PW /;
 /** Everything the suite creates is named this way, so it can be found again and removed. */
 const TEST_NAME = /^Playwright /;
+/**
+ * The partner and values set the mapping tests preview against.
+ *
+ * Seeded here rather than by the spec because the mapper's Partner and Global rows
+ * cannot be seen working without them: both subscription types the editor opens
+ * from are required to have no partner of their own, so the preview has nothing to
+ * resolve against unless a partner is chosen explicitly.
+ */
+export const MAPPER_PARTNER = "Playwright Mapper Partner";
+export const MAPPER_PARTNER_PROPS: Record<string, string> = {
+  WarehouseCode: "WH-7",
+  SenderId: "BITWEEN-JO",
+};
+export const MAPPER_VALUES_SET = { id: "pw-mapper", name: "Playwright Mapper Values" };
+export const MAPPER_VALUES: Record<string, string> = {
+  channel: "EDI",
+  region: "AMMAN",
+};
 /** The only settings the suite writes to — see the reset below for why this is a list, not "all". */
 const TEST_SETTINGS = ["Theme.PrimaryColor", "Theme.TabTitle", "Theme.CompanyName"];
 
@@ -110,6 +128,27 @@ export default async function purgeTestData() {
     api.post(`${API}/workgroups/${id}/delete`, { headers: auth(), data: {} }),
   );
   await purge("documents", (id) => api.delete(`${API}/documents/${id}`, { headers: auth() }));
+  await purge("partners", (id) => api.delete(`${API}/partners/${id}`, { headers: auth() }));
+
+  // Values sets are keyed by a string id rather than a number, so `purge` cannot do them.
+  const sets = await api.get(`${API}/globaladaptervaluessets`, { headers: auth() });
+  if (sets.ok())
+    for (const set of ((await sets.json()).result ?? []) as { id: string; name: string }[])
+      if (TEST_NAME.test(set.name ?? ""))
+        await api.post(`${API}/globaladaptervaluessets/${set.id}/delete`, {
+          headers: auth(),
+          data: {},
+        });
+
+  // ── Then put back the two the mapping tests need ───────────────────────────
+  await api.post(`${API}/partners`, {
+    headers: auth(),
+    data: { name: MAPPER_PARTNER, adapterProperties: MAPPER_PARTNER_PROPS },
+  });
+  await api.post(`${API}/globaladaptervaluessets`, {
+    headers: auth(),
+    data: { ...MAPPER_VALUES_SET, values: MAPPER_VALUES },
+  });
 
   await api.dispose();
 }
