@@ -112,6 +112,24 @@ export function useMappingSave(subscriptionId: number) {
   const queryClient = useQueryClient();
   const [justSaved, setJustSaved] = useState(false);
 
+  // Cached — the loader asked for this already.
+  const { data } = useQuery({
+    queryKey: keys.subscriptions.detail(subscriptionId),
+    queryFn: () => api.getSubscription(subscriptionId),
+    enabled: Boolean(subscriptionId),
+  });
+
+  // Saving switches the subscription to this mapper as well as storing the rules, so a
+  // mapping built in the other editor is replaced rather than kept alongside. Worth
+  // asking first: a template someone wrote by hand exists nowhere else once it is gone,
+  // and reaching this editor no longer requires having saved the switch deliberately.
+  const replacing =
+    data?.mapperId &&
+    data.mapperId !== NATIVE_MAPPER_ID &&
+    Object.keys(data.mapperProperties ?? {}).length > 0
+      ? data.mapperId
+      : null;
+
   const mutation = useMutation({
     mutationFn: () =>
       api.updateSubscription(subscriptionId, {
@@ -143,6 +161,8 @@ export function useMappingSave(subscriptionId: number) {
     isSaving: mutation.isPending,
     justSaved,
     saveError: mutation.error ? (mutation.error as Error).message : null,
+    /** The other mapper whose stored mapping this save would replace, if any. */
+    replacing,
   };
 }
 
