@@ -1,0 +1,300 @@
+// ─── The rules a NativeMapper mapping is made of ─────────────────────────────
+//
+// These mirror SW.Bitween.NativeAdapters.Mapper.MappingRules. The wire format is
+// pinned from the other side by RulesSerializationTests.cs: camelCase property
+// names and lowercase enum values, so this file can read the way TypeScript
+// normally does rather than mirroring C# spelling.
+//
+// Unlike the old mapper, this is what gets saved. Nothing is generated from it and
+// nothing is recovered out of anything, so the editor reads back exactly what it
+// wrote.
+
+export type DocumentFormatId = "json";
+
+export type ValueSourceKind = "path" | "rootPath" | "fixed" | "partner" | "global";
+
+export type ValueTypeName = "string" | "number" | "boolean";
+
+export type FilterOperatorName =
+  | "equal"
+  | "notEqual"
+  | "greaterThan"
+  | "greaterThanOrEqual"
+  | "lessThan"
+  | "lessThanOrEqual";
+
+/** Where a field's value comes from. Exactly one shape, chosen by `kind`. */
+export interface ValueSource {
+  kind: ValueSourceKind;
+  /**
+   * `path` — a dot-separated path, read from wherever the rule sits: the whole
+   * document at the top level, the current entry inside a list.
+   *
+   * `rootPath` — the same, but always read from the top of the document. Only
+   * different inside a list, where it is how one value from the order gets written
+   * onto every line of it.
+   */
+  path?: string;
+  /** `fixed` — a literal. */
+  value?: unknown;
+  /** `partner` — an adapter-property key. `global` — a key within `setId`. */
+  key?: string;
+  /** `global` — which values set. */
+  setId?: string;
+}
+
+/** A named function and its arguments, e.g. `{ fn: "multiply", by: 1.16 }`. */
+export interface TransformRule {
+  fn: string;
+  [arg: string]: unknown;
+}
+
+export interface LookupRule {
+  table: Record<string, unknown>;
+  /** Used when the value is not a key in `table`. Absent means output null. */
+  fallback?: unknown;
+}
+
+export interface FilterRule {
+  field: string;
+  operator: FilterOperatorName;
+  value?: unknown;
+}
+
+export interface FieldRule {
+  /** Path segments, so a key may contain a dot. */
+  target: string[];
+  from: ValueSource;
+  transform?: TransformRule;
+  lookup?: LookupRule;
+  /** Absent leaves the value as the source produced it. */
+  type?: ValueTypeName;
+}
+
+/** One entry of a list that no source list produced. */
+export interface ListEntry {
+  /** When set, the entry is a single value rather than an object. */
+  item?: FieldRule;
+  fields: FieldRule[];
+  lists: ListRule[];
+}
+
+export interface ListRule {
+  /**
+   * Path to the source list to walk.
+   *
+   * Three states, and the first two differ: absent means nothing is walked and the
+   * list is whatever `fixed` holds; empty means the source document is itself the
+   * list; anything else is a path to one.
+   */
+  over?: string;
+  /** What the item is called, for the reader's benefit. */
+  as?: string;
+  target: string[];
+  where?: FilterRule;
+  /** Set for a list of plain values instead of a list of records. */
+  item?: FieldRule;
+  fields: FieldRule[];
+  lists: ListRule[];
+  /**
+   * Entries put into the list before the walked ones.
+   *
+   * For a list that is partly or wholly constant — a header line a partner expects,
+   * or a list whose entries each come from a different field. Each is built from its
+   * own rules, so a constant entry may still read the document, the partner or a
+   * values set, and may hold lists of its own.
+   *
+   * Optional on the wire, and left out when there are none: both sides default it,
+   * and writing it into every stored list would be noise.
+   */
+  fixed?: ListEntry[];
+}
+
+export interface MappingRules {
+  version: number;
+  sourceFormat: DocumentFormatId;
+  targetFormat: DocumentFormatId;
+  fields: FieldRule[];
+  lists: ListRule[];
+  /** When set, the whole output is this list rather than an object. */
+  root?: ListRule;
+}
+
+export const RULES_VERSION = 1;
+
+export const NATIVE_MAPPER_ID = "NativeMapper";
+
+/** The key the rules are stored under in a subscription's mapper properties. */
+export const MAPPING_RULES_KEY = "MappingRules";
+export const SOURCE_SAMPLE_KEY = "SourceSample";
+export const TARGET_SAMPLE_KEY = "TargetSample";
+
+// ─── Editor-side model ────────────────────────────────────────────────────────
+//
+// The same rules with a client-side id on each one, so React can key rows and the
+// reducer can address a rule without walking indices through nested lists. Ids are
+// added on load and stripped on save — they never reach the wire.
+
+export type RuleId = string;
+
+export interface EditorFieldRule extends FieldRule {
+  id: RuleId;
+}
+
+export interface EditorListEntry extends Omit<ListEntry, "fields" | "lists" | "item"> {
+  id: RuleId;
+  item?: EditorFieldRule;
+  fields: EditorFieldRule[];
+  lists: EditorListRule[];
+}
+
+export interface EditorListRule
+  extends Omit<ListRule, "fields" | "lists" | "item" | "fixed"> {
+  id: RuleId;
+  item?: EditorFieldRule;
+  fields: EditorFieldRule[];
+  lists: EditorListRule[];
+  fixed: EditorListEntry[];
+}
+
+export interface EditorRules extends Omit<MappingRules, "fields" | "lists" | "root"> {
+  fields: EditorFieldRule[];
+  lists: EditorListRule[];
+  root?: EditorListRule;
+}
+
+let nextId = 0;
+
+export const newRuleId = (): RuleId => `r${++nextId}`;
+
+/** A field rule with nothing assigned yet, for a row the user has just added. */
+export const emptyFieldRule = (target: string[] = []): EditorFieldRule => ({
+  id: newRuleId(),
+  target,
+  from: { kind: "path", path: "" },
+});
+
+export const emptyListRule = (target: string[] = []): EditorListRule => ({
+  id: newRuleId(),
+  over: "",
+  target,
+  fields: [],
+  lists: [],
+  fixed: [],
+});
+
+export const emptyListEntry = (): EditorListEntry => ({
+  id: newRuleId(),
+  fields: [],
+  lists: [],
+});
+
+export const emptyRules = (): EditorRules => ({
+  version: RULES_VERSION,
+  sourceFormat: "json",
+  targetFormat: "json",
+  fields: [],
+  lists: [],
+});
+
+/** The formats the mapper can read and write, for the dropdowns. */
+export const DOCUMENT_FORMATS: { id: DocumentFormatId; label: string }[] = [
+  { id: "json", label: "JSON" },
+];
+
+/**
+ * Where a value can come from, with labels short enough to sit inside a row.
+ */
+/**
+ * The segments shown on a row. `rootPath` is deliberately absent: it is not a
+ * different kind of thing to a reader, it is the same "from the document" choice
+ * pointed at the top rather than at the entry — so the path dropdown offers it as
+ * its own group instead of adding a fifth segment that means nothing at the top level.
+ */
+export const SOURCE_KINDS: { value: ValueSourceKind; label: string; title: string }[] = [
+  { value: "path", label: "Source", title: "Read a field out of the incoming document" },
+  { value: "fixed", label: "Fixed", title: "The same value every time" },
+  { value: "partner", label: "Partner", title: "A property of the exchange's partner" },
+  { value: "global", label: "Global", title: "A key from one of the global values sets" },
+];
+
+/** What a value can be written as. Blank leaves it as the source produced it. */
+export const VALUE_TYPES: { value: string; label: string }[] = [
+  { value: "", label: "As it comes" },
+  { value: "string", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "boolean", label: "Yes / no" },
+];
+
+/**
+ * A fresh source of the given kind.
+ *
+ * Switching replaces the whole source rather than adding a field to it, so two
+ * sources can never both be half-set — the thing the old model's six optional
+ * fields kept getting wrong, since every switch had to remember to clear five.
+ */
+export const freshSource = (kind: ValueSourceKind): ValueSource =>
+  kind === "path" || kind === "rootPath"
+    ? { kind, path: "" }
+    : kind === "fixed"
+      ? { kind: "fixed", value: "" }
+      : kind === "partner"
+        ? { kind: "partner", key: "" }
+        : { kind: "global", setId: "", key: "" };
+
+/** Filter operators, with the symbol a user recognises. */
+export const FILTER_OPERATORS: { value: FilterOperatorName; label: string }[] = [
+  { value: "equal", label: "=" },
+  { value: "notEqual", label: "≠" },
+  { value: "greaterThan", label: ">" },
+  { value: "greaterThanOrEqual", label: "≥" },
+  { value: "lessThan", label: "<" },
+  { value: "lessThanOrEqual", label: "≤" },
+];
+
+/**
+ * The transform functions and the arguments each takes.
+ *
+ * Mirrors Transforms.Names in C#, which has a test asserting every listed name is
+ * implemented. A name here that C# does not know would be a dropdown entry that
+ * fails at runtime.
+ */
+export const TRANSFORMS: {
+  fn: string;
+  label: string;
+  args: { name: string; label: string; kind: "text" | "number" }[];
+}[] = [
+  { fn: "upper", label: "Uppercase", args: [] },
+  { fn: "lower", label: "Lowercase", args: [] },
+  { fn: "trim", label: "Trim spaces", args: [] },
+  {
+    fn: "substring",
+    label: "Take part of the text",
+    args: [
+      { name: "start", label: "Start at", kind: "number" },
+      { name: "length", label: "Length", kind: "number" },
+    ],
+  },
+  {
+    fn: "replace",
+    label: "Replace text",
+    args: [
+      { name: "find", label: "Find", kind: "text" },
+      { name: "with", label: "Replace with", kind: "text" },
+    ],
+  },
+  { fn: "concat", label: "Append text", args: [{ name: "with", label: "Append", kind: "text" }] },
+  { fn: "round", label: "Round", args: [{ name: "decimals", label: "Decimals", kind: "number" }] },
+  { fn: "multiply", label: "Multiply", args: [{ name: "by", label: "By", kind: "number" }] },
+  { fn: "add", label: "Add", args: [{ name: "amount", label: "Amount", kind: "number" }] },
+  {
+    fn: "formatDate",
+    label: "Format a date",
+    args: [{ name: "format", label: "Format", kind: "text" }],
+  },
+  {
+    fn: "defaultIfEmpty",
+    label: "Use a default when empty",
+    args: [{ name: "value", label: "Default", kind: "text" }],
+  },
+];

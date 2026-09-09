@@ -5,7 +5,11 @@ import { X } from "lucide-react";
 import { Button, FormError } from "../../components/ui/basics";
 import { Checkbox, Field, TextInput } from "../../components/ui/forms";
 import { Panel } from "../../components/ui/Panel";
-import { AdapterConfig, useAdapterCatalog } from "../../components/config/AdapterConfig";
+import {
+  AdapterConfig,
+  useAdapterCatalog,
+  usesVisualMappingEditor,
+} from "../../components/config/AdapterConfig";
 import { ScheduleEditor } from "../../components/config/ScheduleEditor";
 import { InfoTypePicker } from "../../components/config/pickers";
 import { useSubscriptionsCache } from "../../components/config/shared";
@@ -186,7 +190,7 @@ export function NewScheduledJobPage() {
               disabled={false}
               noneLabel="None — the document passes through unchanged"
             />
-            {draft.mapperId === "NativeJSONMapper" && (
+            {usesVisualMappingEditor(draft.mapperId) && (
               <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-[13px] text-ink-500">
                 The visual mapping editor opens from the job's own page, once it exists.
               </p>

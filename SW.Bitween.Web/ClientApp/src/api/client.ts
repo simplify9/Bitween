@@ -412,4 +412,24 @@ export interface ApiClient {
     inputJson: string;
     partnerId?: number | null;
   }): Promise<{ outputJson: string | null; error: string | null }>;
+
+  /**
+   * Maps a sample document with unsaved rules, through the same read/map/write the exchange
+   * pipeline runs — so what the editor shows is what a partner would receive.
+   *
+   * `ruleErrors` carries one entry per rule that could not be applied, keyed by its target path,
+   * so the editor can mark the rows that are wrong. `error` is set instead when the mapping could
+   * not be attempted at all, which is a problem with the document or the rules rather than with
+   * any one row.
+   */
+  previewMappingRules(input: {
+    mappingRules: string;
+    sourceDocument: string;
+    partnerId?: number | null;
+  }): Promise<{
+    outputDocument: string | null;
+    contentType: string | null;
+    ruleErrors: { target: string; reason: string }[];
+    error: string | null;
+  }>;
 }

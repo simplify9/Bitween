@@ -7,6 +7,20 @@ import { Button } from "../ui/basics";
 import { Field } from "../ui/forms";
 import { SearchSelect } from "../ui/SearchSelect";
 import { keys } from "../../api/queryKeys";
+import { NATIVE_MAPPER_ID } from "../../lib/nativeMapper/types";
+
+/**
+ * Mappers whose mapping is built in the visual editor rather than typed into
+ * adapter properties. Both are listed while the old mapper is still in use by
+ * running subscriptions; its entry goes when they have been moved over.
+ *
+ * The old id is spelled out because its module sits outside the app's tsconfig.
+ */
+const VISUAL_EDITOR_MAPPERS: readonly string[] = ["NativeJSONMapper", NATIVE_MAPPER_ID];
+
+export function usesVisualMappingEditor(adapterId: string | null | undefined): boolean {
+  return adapterId != null && VISUAL_EDITOR_MAPPERS.includes(adapterId);
+}
 
 /** What the picker is choosing, named for the band above the fields. */
 const KIND_LABELS: Record<AdapterKind, string> = {
@@ -418,7 +432,7 @@ export function AdapterConfig({
   required?: boolean;
   /** What "no adapter" means here, e.g. "None — payload passes through unchanged". */
   noneLabel?: string;
-  /** When the native JSON mapper is selected, where its visual editor lives. */
+  /** When a mapper with a visual editor is selected, where that editor lives. */
   /** Null while the subscription is still a draft — there is no page to open yet. */
   mapperEditorHref?: string | null;
 }) {
@@ -523,7 +537,7 @@ export function AdapterConfig({
           )}
         </div>
       )}
-      {adapter && adapter.id === "NativeJSONMapper" && (
+      {adapter && usesVisualMappingEditor(adapter.id) && (
         mapperEditorHref ? (
           <Link
             to={mapperEditorHref}
