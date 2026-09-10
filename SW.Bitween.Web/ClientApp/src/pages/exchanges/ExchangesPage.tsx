@@ -66,6 +66,8 @@ export function ExchangesPage() {
   const [allMatching, setAllMatching] = useState(false);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState(false);
+  /** Mirrors the confirm dialog's own choice, because the plan depends on it. */
+  const [bulkReset, setBulkReset] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -180,8 +182,8 @@ export function ExchangesPage() {
    * before anyone commits rather than reported afterwards.
    */
   const { data: plan, isFetching: planLoading } = useQuery({
-    queryKey: keys.exchanges.bulkRetryPreview(JSON.stringify(selection)),
-    queryFn: () => api.previewBulkRetry(selection, { reset: false }),
+    queryKey: keys.exchanges.bulkRetryPreview(JSON.stringify({ selection, reset: bulkReset })),
+    queryFn: () => api.previewBulkRetry(selection, { reset: bulkReset }),
     enabled: bulkConfirm && selectedCount > 0,
     staleTime: 30_000,
   });
@@ -190,6 +192,7 @@ export function ExchangesPage() {
     mutationFn: (reset: boolean) => api.bulkRetryExchanges(selection, { reset }),
     onSuccess: (done) => {
       setBulkConfirm(false);
+      setBulkReset(false);
       clearSelection();
       setBulkResult(
         `${done.willRetry.toLocaleString()} retr${done.willRetry === 1 ? "y" : "ies"} started` +
@@ -627,7 +630,12 @@ export function ExchangesPage() {
           planLoading={planLoading}
           busy={bulkRetry.isPending}
           onConfirm={(reset) => bulkRetry.mutate(reset)}
-          onClose={() => setBulkConfirm(false)}
+          onResetChange={setBulkReset}
+          onClose={() => {
+            setBulkConfirm(false);
+            // The dialog starts unticked each time it opens, so the mirrored copy has to as well.
+            setBulkReset(false);
+          }}
         />
       )}
     </div>

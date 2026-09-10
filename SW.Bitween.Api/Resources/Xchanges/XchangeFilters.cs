@@ -87,6 +87,14 @@ internal static class XchangeFilters
                 case "3":
                     query = query.Where(i => i.Status == false);
                     break;
+
+                default:
+                    // The filter is removed below whether or not it matched, so falling through
+                    // here used to drop it silently and widen the selection to everything. A
+                    // search returning too much is merely wrong; bulk retry runs over whatever
+                    // this selects, so an unreadable status has to be refused rather than ignored.
+                    throw new SWValidationException("NOT_SUPPORTED",
+                        $"'{statusFilter.Value}' is not an exchange status.");
             }
 
             condition.Filters.Remove(statusFilter);

@@ -318,6 +318,71 @@ public class RetryChainTests
         Assert.False(await db.Set<Xchange>().AnyAsync(x => x.RetryFor == xchange.Id));
     }
 
+    /// <summary>
+    /// The plan has to answer the question actually being asked. Re-resolving properties needs the
+    /// subscription, so for an exchange that has none the answer differs with the choice — and a
+    /// plan that promised a retry the retry then skipped would make the confirmation worthless.
+    /// </summary>
+    [Fact]
+    public async Task BulkRetryPreview_answers_for_the_reset_that_was_asked_about()
+    {
+        await using var scope = _fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+        var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
+        var ctx = scope.Superuser();
+
+        // A document-only exchange: no subscription from the start, which is also what an exchange
+        // whose subscription was later deleted looks like.
+        var doc = new Document(null, "Preview Reset Doc", DocumentFormat.Json);
+        db.Set<Document>().Add(doc);
+        await db.SaveChangesAsync();
+
+        var orphan = await xs.CreateXchange(doc, WorkGroup.None, new XchangeFile("{}"));
+        await db.SaveChangesAsync();
+        db.Set<XchangeResult>().Add(new XchangeResult(orphan.Id, null, null, exception: "boom"));
+        await db.SaveChangesAsync();
+
+        var preview = new Resources.Xchanges.BulkRetryPreview(db, ctx);
+
+        var plain = (XchangeBulkRetryPlan)await preview.Handle(
+            new XchangeBulkRetry { Ids = [orphan.Id], Reset = false });
+        Assert.Equal(1, plain.WillRetry);
+        Assert.Empty(plain.Skipped);
+
+        var withReset = (XchangeBulkRetryPlan)await preview.Handle(
+            new XchangeBulkRetry { Ids = [orphan.Id], Reset = true });
+        Assert.Equal(0, withReset.WillRetry);
+        Assert.Contains("subscription no longer exists", Assert.Single(withReset.Skipped).Reason);
+
+        // And the retry itself agrees with the plan that described it.
+        var done = (XchangeBulkRetryPlan)await new Resources.Xchanges.BulkRetry(db, ctx, xs)
+            .Handle(new XchangeBulkRetry { Ids = [orphan.Id], Reset = true });
+        await db.SaveChangesAsync();
+        Assert.Equal(0, done.WillRetry);
+        Assert.False(await db.Set<Xchange>().AnyAsync(x => x.RetryFor == orphan.Id));
+    }
+
+    /// <summary>
+    /// A status the filter cannot read used to be dropped, which widened the selection to every
+    /// exchange there is — harmless in a search, but bulk retry runs over whatever this selects.
+    /// </summary>
+    [Fact]
+    public async Task BulkRetry_refuses_a_filter_carrying_an_unreadable_status()
+    {
+        await using var scope = _fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+        var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
+        var ctx = scope.Superuser();
+
+        var (_, xchange) = await FailedXchange(db, xs, "Bad Status Doc");
+
+        await Assert.ThrowsAsync<SWValidationException>(() =>
+            new Resources.Xchanges.BulkRetry(db, ctx, xs)
+                .Handle(new XchangeBulkRetry { Filter = "filter=StatusFilter:1:9" }));
+
+        Assert.False(await db.Set<Xchange>().AnyAsync(x => x.RetryFor == xchange.Id));
+    }
+
     // ─── Reading the chain back ───────────────────────────────────────────────
 
     [Fact]

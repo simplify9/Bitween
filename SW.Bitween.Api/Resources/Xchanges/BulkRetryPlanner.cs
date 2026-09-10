@@ -55,10 +55,13 @@ internal sealed class BulkRetryPlanner
             {
                 Plan = new XchangeBulkRetryPlan
                 {
-                    // The list was cut off at Limit + 1 to notice it was too long without reading
-                    // it all; count properly now, so the caller is told how far past the line it
-                    // is rather than just "501".
-                    Selected = await CountSelection(request),
+                    // A hand-picked list is already counted. A filter's selection was cut off at
+                    // Limit + 1 to notice it was too long without reading it all, so that one is
+                    // counted properly now — the caller is told how far past the line it is rather
+                    // than just "501", and never a count of rows it did not ask about.
+                    Selected = string.IsNullOrWhiteSpace(request.Filter)
+                        ? selected.Count
+                        : await CountSelection(request),
                     Limit = Limit,
                     OverLimit = true
                 }
@@ -66,6 +69,7 @@ internal sealed class BulkRetryPlanner
 
         var newestAttempt = await FindNewestAttempts(selected);
         var state = await ReadState(newestAttempt.Values.Distinct().ToList());
+        var reset = request.Reset;
 
         var plan = new XchangeBulkRetryPlan { Selected = selected.Count, Limit = Limit };
         var targets = new List<string>();
@@ -81,7 +85,7 @@ internal sealed class BulkRetryPlanner
                     RetryId = targetId
                 });
 
-            var reason = WhyNot(state.GetValueOrDefault(targetId), targetId != selectedId);
+            var reason = WhyNot(state.GetValueOrDefault(targetId), targetId != selectedId, reset);
             if (reason != null)
             {
                 plan.Skipped.Add(new XchangeRetrySkip { Id = targetId, Reason = reason });
@@ -104,12 +108,19 @@ internal sealed class BulkRetryPlanner
     /// says whose fault it is: the exchange the caller picked, or the later attempt standing in
     /// for it.
     /// </summary>
-    private static string WhyNot(SelectionState state, bool substituted)
+    private static string WhyNot(SelectionState state, bool substituted, bool reset)
     {
         var subject = substituted ? "Its newest attempt" : "It";
 
         if (state == null)
             return "This exchange no longer exists.";
+
+        // Only when the caller asked for the subscription's current configuration, which there is
+        // no way to read once the subscription is gone. Checked here as well as at the moment of
+        // retrying, because a plan that promises to retry something the retry then skips makes the
+        // confirmation worthless — the whole point of showing it is that it is what will happen.
+        if (reset && state.SubscriptionMissing)
+            return $"{subject} cannot have its properties re-resolved: the subscription no longer exists.";
 
         if (state.ScheduledRetryOn != null)
             return $"{subject} already has an auto-retry scheduled. Run that now instead.";
@@ -210,6 +221,12 @@ internal sealed class BulkRetryPlanner
         public bool? Status { get; set; }
         public bool? ResponseBad { get; set; }
         public System.DateTime? ScheduledRetryOn { get; set; }
+
+        /// <summary>
+        /// Covers an exchange that never had a subscription — a document-only one — as well as one
+        /// whose subscription has since been deleted. Both leave a reset with nothing to read.
+        /// </summary>
+        public bool SubscriptionMissing { get; set; }
     }
 
     private async Task<Dictionary<string, SelectionState>> ReadState(List<string> ids)
@@ -226,7 +243,9 @@ internal sealed class BulkRetryPlanner
                 Id = xchange.Id,
                 Status = result.Success,
                 ResponseBad = result.ResponseBad,
-                ScheduledRetryOn = delayed != null ? delayed.On : (System.DateTime?)null
+                ScheduledRetryOn = delayed != null ? delayed.On : (System.DateTime?)null,
+                SubscriptionMissing = xchange.SubscriptionId == null ||
+                    !_dbContext.Set<Subscription>().Any(sub => sub.Id == xchange.SubscriptionId)
             }).AsNoTracking().ToListAsync();
 
         return rows.ToDictionary(r => r.Id);

@@ -36,6 +36,15 @@ public class RetryTree : IQueryHandler<XchangeRetryTreeRequest, object>
     /// </summary>
     private const int MaxDepth = 100;
 
+    /// <summary>
+    /// How many attempts one answer carries. Depth alone does not bound the work: an exchange
+    /// retried many times over before the one-retry rule existed has all of those as direct
+    /// children, and every one would be loaded and serialized. Far above any real chain, so
+    /// reaching it means the data is unusual — and the answer then says it is partial rather than
+    /// quietly costing the database more the older the exchange is.
+    /// </summary>
+    private const int MaxNodes = 500;
+
     private readonly BitweenDbContext _dbContext;
     private readonly RequestContext _requestContext;
 
@@ -93,6 +102,14 @@ public class RetryTree : IQueryHandler<XchangeRetryTreeRequest, object>
                 .ToListAsync();
 
             level = children.Where(visited.Add).ToList();
+
+            if (ids.Count + level.Count > MaxNodes)
+            {
+                ids.AddRange(level.Take(MaxNodes - ids.Count));
+                truncated = true;
+                break;
+            }
+
             ids.AddRange(level);
 
             if (depth == MaxDepth - 1 && level.Count > 0) truncated = true;

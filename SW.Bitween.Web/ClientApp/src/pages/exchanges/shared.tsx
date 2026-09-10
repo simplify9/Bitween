@@ -161,6 +161,7 @@ export function RetryDialog({
   planLoading = false,
   busy,
   onConfirm,
+  onResetChange,
   onClose,
 }: {
   count: number;
@@ -169,6 +170,11 @@ export function RetryDialog({
   planLoading?: boolean;
   busy: boolean;
   onConfirm: (reset: boolean) => void;
+  /**
+   * Bulk retries only: the plan depends on this choice — re-resolving properties is impossible
+   * for an exchange whose subscription is gone — so the caller has to be able to ask again.
+   */
+  onResetChange?: (reset: boolean) => void;
   onClose: () => void;
 }) {
   const [reset, setReset] = useState(false);
@@ -255,7 +261,10 @@ export function RetryDialog({
               label="Re-resolve adapter properties"
               description="Use the subscription's current configuration instead of the values captured when the exchange first ran."
               checked={reset}
-              onChange={(e) => setReset(e.target.checked)}
+              onChange={(e) => {
+                setReset(e.target.checked);
+                onResetChange?.(e.target.checked);
+              }}
             />
           </>
         )}

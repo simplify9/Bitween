@@ -215,7 +215,7 @@ public class XchangeService :
     /// The original input, or <c>null</c> when it cannot be read — deleted from storage, expired by a
     /// lifecycle rule, or storage itself unavailable.
     /// </summary>
-    private async Task<XchangeFile> ReadInputFile(Xchange xchange)
+    public async Task<XchangeFile> ReadInputFile(Xchange xchange)
     {
         try
         {

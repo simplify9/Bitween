@@ -71,8 +71,19 @@ namespace SW.Bitween.Resources.Xchanges
                     continue;
                 }
 
-                var inputFileData = await _xchangeService.GetFile(xchange.Id, XchangeFileType.Input);
-                var xchangeFile = new XchangeFile(inputFileData, xchange.InputName);
+                // The tolerant read, not GetFile: a retry re-sends the original input, so an
+                // exchange whose input has been deleted or expired cannot be retried — and one of
+                // those in a selection of five hundred must not take the other 499 with it.
+                var xchangeFile = await _xchangeService.ReadInputFile(xchange);
+                if (xchangeFile == null)
+                {
+                    plan.Skipped.Add(new XchangeRetrySkip
+                    {
+                        Id = id,
+                        Reason = "Its input document could not be read, so there is nothing to re-send."
+                    });
+                    continue;
+                }
 
                 try
                 {

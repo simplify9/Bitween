@@ -96,7 +96,12 @@ test("a retried exchange shows its chain and sends you to the newest attempt", a
   // press — which is the very thing under test further down.
   let retried: string | null = null;
   const failedRows = page.getByRole("row").filter({ hasText: "Failed" });
-  for (let i = 0; i < 5 && retried === null; i++) {
+  // The whole page, not the first few rows: this database accumulates chains as the suite runs,
+  // and a run that happened to leave several retried exchanges at the top would otherwise fail
+  // here before reaching what the test is about. Newest first, and every retry lands at the top
+  // as a fresh un-retried leaf, so a page is far more than enough.
+  const candidates = await failedRows.count();
+  for (let i = 0; i < candidates && retried === null; i++) {
     const row = failedRows.nth(i);
     const label = await row.locator("input[type=checkbox]").getAttribute("aria-label");
     await row.locator("td").last().click();
@@ -106,7 +111,10 @@ test("a retried exchange shows its chain and sends you to the newest attempt", a
     }
     await row.locator("td").last().click(); // collapse and try the next one
   }
-  expect(retried, "no un-retried failed exchange to retry").not.toBeNull();
+  expect(
+    retried,
+    `no un-retried failed exchange among the ${candidates} on this page`,
+  ).not.toBeNull();
 
   await page.getByRole("button", { name: "Retry…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Retry" }).click();
