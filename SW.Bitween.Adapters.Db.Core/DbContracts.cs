@@ -169,6 +169,28 @@ public class DbRoutineParameter
     public int Ordinal { get; set; }
 }
 
+[JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+public class StatementValidationRequest
+{
+    /// <summary>The SQL to check. Prepared, never run, and never stored by this call.</summary>
+    public string Sql { get; set; }
+}
+
+[JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+public class StatementValidationResult
+{
+    public bool Ok { get; set; }
+
+    /// <summary>Why it was refused, in the database's own words plus a hint where one applies.</summary>
+    public string Error { get; set; }
+
+    /// <summary>
+    /// Set when it passed but not everything could be checked — a bare procedure name is accepted
+    /// without confirming the routine exists, because it is resolved when called.
+    /// </summary>
+    public string Note { get; set; }
+}
+
 // ---------------------------------------------------------------------------- statements
 
 /// <summary>

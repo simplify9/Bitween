@@ -413,6 +413,27 @@ the split keeps working untouched.
 | `timestamp+incrementing` | both | `CursorColumn` |
 | `marker` | a processed-flag column | `MarkProcessedStatement` |
 
+### 6.2 Statements are checked when they are saved
+
+`ValidateStatement { sql }` → `{ ok, error, note }`. The engine PREPARES the SQL — parsed and
+planned, never run, nothing stored — and the create/update handlers call it before a statement is
+written. A typo is refused where it was made, rather than surfacing later as a failed connection
+test or, if nobody ran one, as a failed message days afterwards.
+
+It is best-effort by construction: the adapter has to be running on this node to answer, and a
+source that is stopped or still starting cannot be asked, so the save proceeds unchecked. Refusing
+to let someone save a fix because the connection they are fixing it for is down would be backwards.
+
+Two answers are not plain pass/fail. A bare **procedure name** passes with a `note` saying its
+existence was not checked — it is resolved when called, and preparing it as text is a syntax error
+every time. And a **wrong placeholder prefix** — `:name` on PostgreSQL, `@name` on Oracle — is
+named in the error rather than left as the driver's "syntax error at position 76", because that is
+what a statement copied between two data sources looks like.
+
+`TestConnection` runs the same check over every configured statement, and reports **all** of them
+rather than stopping at the first failure: the second failure is usually the first mistake
+repeated, which is obvious when both are on screen and invisible when they arrive a fix apart.
+
 **None of them can see a DELETE.** That is a property of polling, not of this adapter. It is stated
 here, and in the form, rather than left to be discovered.
 

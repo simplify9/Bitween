@@ -172,6 +172,11 @@ namespace SW.Bitween.Web
             // Scoped: it reads subscriptions through the request's DbContext.
             services.AddScoped<StatementUsageReader>();
 
+            // Scoped for the same reason: it reads the data source through the request's DbContext.
+            // IResidentAdapterHost is an optional dependency, so this resolves on a node with
+            // resident adapters turned off too — it just never has anyone to ask.
+            services.AddScoped<StatementValidator>();
+
             // Resident data source providers — brokers and databases both. Off by default because
             // it is opt-in, not because it is unsafe to run on more than one node: a broker
             // connection is exclusive, and every

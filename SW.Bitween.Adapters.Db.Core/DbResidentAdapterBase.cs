@@ -276,50 +276,32 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
 
             // Every configured statement is PREPARED, not run. That catches a typo, a dropped table
             // and a renamed column now rather than on the first message, and it changes nothing.
+            // Every configured statement is PREPARED, not run. That catches a typo, a dropped
+            // table and a renamed column now rather than on the first message, and it changes
+            // nothing.
+            //
+            // All of them, not up to the first failure. Stopping early meant fixing one statement
+            // only to be told about the next, one connection test at a time — and the second
+            // failure is often the same mistake repeated, which is obvious when both are on
+            // screen and invisible when they arrive a fix apart.
+            var bad = 0;
             foreach (var name in statements.Names)
             {
-                try
+                var check = await CheckStatementAsync(connection, statements.Resolve(name, null, false));
+                if (!check.Ok) bad++;
+
+                result.Steps.Add(new DbTestStage
                 {
-                    var sql = statements.Resolve(name, null, false);
+                    Step = $"statement:{name}", Ok = check.Ok, Detail = check.Detail
+                });
+            }
 
-                    // A statement meant for Call holds a PROCEDURE NAME, not SQL — that is what
-                    // CommandType.StoredProcedure takes, and on Oracle it is the only form that
-                    // works. Preparing it as text is a syntax error every time, so the check would
-                    // fail on a statement that is perfectly correct. Say what was and was not
-                    // verified instead of quietly passing it.
-                    if (IsBareRoutineName(sql))
-                    {
-                        result.Steps.Add(new DbTestStage
-                        {
-                            Step = $"statement:{name}", Ok = true,
-                            Detail = "procedure name — existence not checked, it is resolved when called"
-                        });
-                        continue;
-                    }
-
-                    using var command = connection.CreateCommand();
-                    command.CommandText = sql;
-                    command.CommandTimeout = 10;
-
-                    // The placeholders have to be declared before Prepare, because some drivers
-                    // validate that every parameter in the text has been supplied — Npgsql refuses
-                    // outright — and a test that fell over on every parameterised statement would
-                    // be worse than no test.
-                    DeclarePlaceholders(command);
-                    PrepareCommand(command);
-                    await Task.Run(() => command.Prepare());
-
-                    result.Steps.Add(new DbTestStage { Step = $"statement:{name}", Ok = true });
-                }
-                catch (Exception ex)
-                {
-                    result.Steps.Add(new DbTestStage
-                    {
-                        Step = $"statement:{name}", Ok = false, Detail = ex.Message
-                    });
-                    result.Ok = false;
-                    return result;
-                }
+            if (bad > 0)
+            {
+                result.Ok = false;
+                result.Details["engine"] = capabilities?.Engine ?? DescribeEngine().Engine;
+                result.Details["statementsFailed"] = bad.ToString();
+                return result;
             }
 
             result.Ok = true;
@@ -614,6 +596,86 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
     /// Adds an empty parameter for each placeholder written in the SQL, so a statement can be
     /// prepared without being run. Nothing is bound to a value: this is a syntax and schema check.
     /// </summary>
+    /// <summary>
+    /// Asks the database whether one piece of SQL is valid, by PREPARING it — parsed and planned,
+    /// never run. The check behind both the connection test and the one a statement gets when it
+    /// is saved, so the two cannot disagree about what is acceptable.
+    /// </summary>
+    async Task<(bool Ok, string Detail)> CheckStatementAsync(DbConnection connection, string sql)
+    {
+        // A statement meant for Call holds a PROCEDURE NAME, not SQL — that is what
+        // CommandType.StoredProcedure takes, and on Oracle it is the only form that works.
+        // Preparing it as text is a syntax error every time, so the check would fail on a
+        // statement that is perfectly correct. Say what was and was not verified instead of
+        // quietly passing it.
+        if (IsBareRoutineName(sql))
+            return (true, "procedure name — existence not checked, it is resolved when called");
+
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            command.CommandTimeout = 10;
+
+            // The placeholders have to be declared before Prepare, because some drivers validate
+            // that every parameter in the text has been supplied — Npgsql refuses outright — and
+            // a check that fell over on every parameterised statement would be worse than none.
+            DeclarePlaceholders(command);
+            PrepareCommand(command);
+            await Task.Run(() => command.Prepare());
+
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message + WrongPrefixHint(sql));
+        }
+    }
+
+    /// <summary>
+    /// The one mistake worth naming rather than leaving to a position offset.
+    ///
+    /// Every engine has its own placeholder character, and the driver reports the other one as a
+    /// bare syntax error at a column number — true, and no help at all to someone who copied a
+    /// working statement from an Oracle data source into a PostgreSQL one. If the SQL uses the
+    /// other convention, say so.
+    /// </summary>
+    string WrongPrefixHint(string sql)
+    {
+        var other = ParameterPrefix == ":" ? "@" : ":";
+        var escaped = System.Text.RegularExpressions.Regex.Escape(other);
+
+        // Same exclusion as the placeholder scan: `::` is PostgreSQL's cast, not a parameter.
+        var pattern = $@"(?<![{escaped}\w]){escaped}([A-Za-z_][A-Za-z0-9_]*)";
+        var match = System.Text.RegularExpressions.Regex.Match(sql ?? "", pattern);
+        if (!match.Success) return "";
+
+        return $" — this looks like the wrong placeholder for {DescribeEngine().Engine}: it binds "
+             + $"parameters as {ParameterPrefix}name, so write {ParameterPrefix}{match.Groups[1].Value} "
+             + $"rather than {other}{match.Groups[1].Value}.";
+    }
+
+    /// <summary>
+    /// Validates one piece of SQL without storing or running it. Called when a statement is saved,
+    /// so a typo is refused at the point it was made rather than surfacing later as a failed
+    /// connection test or, worse, a failed message.
+    /// </summary>
+    public virtual async Task<object> ValidateStatement(StatementValidationRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Sql))
+            return new StatementValidationResult { Ok = false, Error = "There is no SQL to check." };
+
+        using var connection = await OpenAsync(stopping?.Token ?? CancellationToken.None);
+        var check = await CheckStatementAsync(connection, request.Sql);
+
+        return new StatementValidationResult
+        {
+            Ok = check.Ok,
+            Error = check.Ok ? null : check.Detail,
+            Note = check.Ok ? check.Detail : null
+        };
+    }
+
     void DeclarePlaceholders(DbCommand command)
     {
         var prefix = System.Text.RegularExpressions.Regex.Escape(ParameterPrefix);

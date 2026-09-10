@@ -50,6 +50,11 @@ export function DataSourcePage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DataSourceTestResult | null>(null);
+
+  // The statement steps, separated from the connection steps: a failure among them means the
+  // connection is fine and some SQL is not, which is a different thing to go and fix.
+  const statementStages = (result?.stages ?? []).filter((s) => s.name.startsWith("statement:"));
+  const failedStatements = statementStages.filter((s) => !s.succeeded);
   const [newKey, setNewKey] = useState("");
   const [inspect, setInspect] = useState<DataSourceInspectResult | null>(null);
 
@@ -229,24 +234,63 @@ export function DataSourcePage() {
               {result.succeeded ? "The connection works" : "The connection failed"}
             </h2>
             <Badge tone={result.succeeded ? "ok" : "danger"}>{result.succeeded ? "OK" : "Failed"}</Badge>
+            {/* Which statements, out of how many — the number that says whether this is one typo
+                or the same mistake copied across a set. */}
+            {failedStatements.length > 0 && (
+              <Badge tone="danger">
+                {failedStatements.length} of {statementStages.length} statements
+              </Badge>
+            )}
           </div>
 
           <ul className="flex flex-col gap-1">
             {result.stages.map((stage, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
+              <li
+                key={i}
+                className={`flex items-start gap-2 text-sm ${
+                  stage.succeeded ? "" : "rounded-md bg-danger-100/60 px-1.5 py-1"
+                }`}
+              >
                 {stage.succeeded ? (
                   <Check className="mt-0.5 size-4 shrink-0 text-ok-700" />
                 ) : (
                   <X className="mt-0.5 size-4 shrink-0 text-danger-700" />
                 )}
-                <span className="w-56 shrink-0 font-medium text-ink-800">{stage.name}</span>
-                <span className="text-ink-600">{stage.detail}</span>
+                <span
+                  className={`w-56 shrink-0 font-medium ${
+                    stage.succeeded ? "text-ink-800" : "text-danger-800"
+                  }`}
+                >
+                  {stage.name}
+                </span>
+                {/* pre-wrap because a driver's message carries its own line breaks — PostgreSQL
+                    puts the character offset on a line of its own, and collapsed into a paragraph
+                    it reads as part of the sentence before it. min-w-0 so a long one wraps inside
+                    the row instead of widening the card. */}
+                <span
+                  className={`min-w-0 flex-1 whitespace-pre-wrap ${
+                    stage.succeeded ? "text-ink-600" : "text-danger-800"
+                  }`}
+                >
+                  {stage.detail}
+                </span>
               </li>
             ))}
           </ul>
 
-          {!result.succeeded && result.error && (
-            <p className="mt-2 text-sm text-danger-800">{result.error}</p>
+          {/* Only when it is not already a stage's own detail: a failure inside a statement is
+              reported against that statement, and repeating it underneath reads as a second,
+              different problem. */}
+          {!result.succeeded && result.error && failedStatements.length === 0 && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-danger-800">{result.error}</p>
+          )}
+
+          {failedStatements.length > 0 && (
+            <p className="mt-2 text-[12px] text-danger-800">
+              Statements are prepared against the live schema, never run. Fix them on this page —
+              a statement is refused when it is saved now, so these predate that check or the
+              schema moved underneath them.
+            </p>
           )}
 
           <p className="mt-2 text-[12px] text-ink-500">

@@ -264,6 +264,7 @@ public sealed class BitweenFixture : IAsyncLifetime
 
                     services.AddSingleton<DataSourceProviderCatalog>();
                     services.AddScoped<StatementUsageReader>();
+                    services.AddScoped<StatementValidator>();
                     services.AddSingleton<FilterService>();
                     services.AddScoped<NativeAdapterDiscoveryService>();
                     services.AddScoped<AdapterRequirements>();

@@ -16,7 +16,8 @@ namespace SW.Bitween.Resources.DataSourceStatements;
 /// is the whole reason this is an entity: writing a query and changing a database password are
 /// different jobs, and before this they needed the same right.
 /// </summary>
-public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+public class Create(BitweenDbContext dbContext, RequestContext requestContext,
+    SW.Bitween.Services.DataSources.StatementValidator validator)
     : ICommandHandler<DataSourceStatementCreate, object>
 {
     public async Task<object> Handle(DataSourceStatementCreate model)
@@ -41,6 +42,7 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
                 + "something to a Relational one.");
 
         await EnsureNameIsFree(dbContext, dataSourceId, model.Name, existingId: null);
+        await EnsureSqlIsValid(validator, dataSourceId, model.Sql);
 
         var entity = new DataSourceStatement
         {
@@ -57,6 +59,22 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
         dbContext.Add(entity);
         await dbContext.SaveChangesAsync();
         return entity.Id;
+    }
+
+    /// <summary>
+    /// Refuses SQL the database itself will not accept, while the person who wrote it is still
+    /// looking at it. The check prepares the statement — parsed and planned, never run.
+    ///
+    /// Silent when the adapter cannot answer: a connection that is down is a fact about the
+    /// connection, and blocking someone from saving a fix because the thing they are fixing it
+    /// for is broken would be exactly backwards.
+    /// </summary>
+    internal static async Task EnsureSqlIsValid(
+        SW.Bitween.Services.DataSources.StatementValidator validator, int dataSourceId, string sql)
+    {
+        var result = await validator.ValidateAsync(dataSourceId, sql);
+        if (result.Checked && !result.Ok)
+            throw new SWException($"The database will not accept this statement. {result.Error}");
     }
 
     /// <summary>

@@ -531,6 +531,94 @@ public class PostgreSqlAdapterTests : IClassFixture<PostgreSqlDbFixture>
         Assert.Contains("is not a statement this data source defines", error.Message);
     }
 
+    // ---------------------------------------------------------------- validating
+
+    /// <summary>
+    /// A statement is checked by PREPARING it — parsed and planned by the engine, never run — so
+    /// a typo is refused where it was made instead of surfacing later as a failed connection test
+    /// or a failed message.
+    /// </summary>
+    [SkippableFact]
+    public async Task Valid_sql_passes_validation()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = $"select id from {PostgreSqlDbFixture.Table} where id = @id" },
+            timeoutSeconds: 60);
+
+        Assert.True(result.Value<bool>("ok"), result.Value<string>("error"));
+    }
+
+    [SkippableFact]
+    public async Task A_dropped_table_is_caught_before_the_statement_is_stored()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = "select 1 from nothing_of_the_sort" }, timeoutSeconds: 60);
+
+        Assert.False(result.Value<bool>("ok"));
+        Assert.Contains("does not exist", result.Value<string>("error"));
+    }
+
+    /// <summary>
+    /// The mistake worth naming rather than leaving to a character offset: SQL copied from an
+    /// Oracle data source, where a parameter is :name, into a PostgreSQL one, where it is @name.
+    /// The driver calls it a syntax error at a column number, which is true and no help.
+    /// </summary>
+    [SkippableFact]
+    public async Task The_wrong_placeholder_prefix_is_named_rather_than_left_to_a_column_number()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = $"select id from {PostgreSqlDbFixture.Table} where id = :ident" },
+            timeoutSeconds: 60);
+
+        var error = result.Value<string>("error");
+
+        Assert.False(result.Value<bool>("ok"));
+        Assert.Contains("@ident", error);
+        Assert.Contains("rather than :ident", error);
+    }
+
+    /// <summary>
+    /// A statement meant to be CALLED holds a procedure name, not SQL. Preparing it as text is a
+    /// syntax error every time, so it is accepted with a note saying what was not checked —
+    /// refusing it would block a statement that is perfectly correct.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_bare_procedure_name_is_accepted_and_says_what_was_not_checked()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = "public.some_procedure" }, timeoutSeconds: 60);
+
+        Assert.True(result.Value<bool>("ok"));
+        Assert.Contains("existence not checked", result.Value<string>("note"));
+    }
+
+    /// <summary>
+    /// Every statement, not up to the first bad one. Fixing one only to be told about the next,
+    /// one connection test at a time, hides that the second is usually the same mistake repeated.
+    /// </summary>
+    [SkippableFact]
+    public async Task The_connection_test_reports_every_failing_statement()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("TestConnection", timeoutSeconds: 60);
+        var steps = result["steps"]!
+            .Select(s => s.Value<string>("step"))
+            .Where(s => s!.StartsWith("statement:"))
+            .ToList();
+
+        // The fixture configures several; all of them are reported, in one answer.
+        Assert.True(steps.Count >= 4, $"only {steps.Count} statement steps were reported");
+    }
+
     static int KeyOf(string fileId) => int.Parse(fileId.Substring(fileId.IndexOf(':') + 1));
 
     /// <summary>What the host stamps on every invocation, and what scopes the cursor.</summary>

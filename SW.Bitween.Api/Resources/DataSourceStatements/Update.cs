@@ -8,7 +8,8 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.DataSourceStatements;
 
-public class Update(BitweenDbContext dbContext, RequestContext requestContext)
+public class Update(BitweenDbContext dbContext, RequestContext requestContext,
+    Services.DataSources.StatementValidator validator)
     : ICommandHandler<int, DataSourceStatementUpdate, object>
 {
     public async Task<object> Handle(int key, DataSourceStatementUpdate model)
@@ -38,6 +39,12 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
                     + string.Join(", ", users.Select(u => u.SubscriptionName).Distinct())
                     + ". Point them at the new name first, or add a statement and retire this one.");
         }
+
+        // Only when it actually changed: re-checking untouched SQL would refuse a rename, or a
+        // change of owner, because of a table someone dropped last week — a fault worth surfacing
+        // but not here, and not as a block on an unrelated edit.
+        if (!string.Equals(entity.Sql, model.Sql, System.StringComparison.Ordinal))
+            await Create.EnsureSqlIsValid(validator, entity.DataSourceId, model.Sql);
 
         entity.Name = model.Name.Trim();
         entity.Sql = model.Sql;
