@@ -1,8 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { api } from "../../../api";
+import { api, type DataSourceStatement } from "../../../api";
 import { keys } from "../../../api/queryKeys";
 import { Field, Select, TextInput } from "../../../components/ui/forms";
+import { Button, FormError } from "../../../components/ui/basics";
+import { useSessionCan } from "../../../auth/guards";
 
 /**
  * Binds an adapter slot to a database: which connection, which statement, and what to do with it.
@@ -265,18 +268,8 @@ export function DataSourceBinding({
                 />
               </Field>
 
-              {chosenStatement && !chosenStatement.keyColumn && (
-                <p className="text-[12px] text-warn-700">
-                  “{chosenStatement.name}” does not say which of its columns identifies a row, so
-                  polling it will fail. Set its key column on the connection.
-                </p>
-              )}
-
-              {chosenStatement && needsCursor && !chosenStatement.cursorColumn && (
-                <p className="text-[12px] text-warn-700">
-                  {properties.ReceiveMode} follows a column, but “{chosenStatement.name}” does not
-                  say which of its columns is the cursor.
-                </p>
+              {chosenStatement && (
+                <StatementColumns statement={chosenStatement} needsCursor={needsCursor} mode={mode} />
               )}
             </>
           )}
@@ -287,6 +280,159 @@ export function DataSourceBinding({
             </Link>
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The polled statement's key and cursor columns, edited from the subscription that polls with it.
+ *
+ * They belong to the STATEMENT, not to this subscription, and that is not an accident: the SQL
+ * already decided them. A statement reading `where id > @cursor order by id` has `id` as its
+ * cursor whoever polls it — a subscription nominating anything else would have the adapter save a
+ * value of one type and bind it into a comparison against another. The key column is welded the
+ * same way, to the mark-processed statement that binds it as `@key`.
+ *
+ * But storing them there does not mean making someone go there. The version of this that only
+ * warned — "set its key column on the connection" — sent the reader to a second screen to finish
+ * a job they had started here. So the fields are here, and the write goes there.
+ *
+ * Which makes this the one control on this panel that does NOT edit the subscription: it saves
+ * immediately, to a record other subscriptions share. Both facts are said out loud, and the save
+ * is a button rather than a blur, so it is never something that happened while you were looking
+ * somewhere else.
+ */
+function StatementColumns({
+  statement,
+  needsCursor,
+  mode,
+}: {
+  statement: DataSourceStatement;
+  needsCursor: boolean;
+  mode: string;
+}) {
+  const queryClient = useQueryClient();
+  const canEdit = useSessionCan("data-source-statements.edit");
+
+  const [keyColumn, setKeyColumn] = useState(statement.keyColumn ?? "");
+  const [cursorColumn, setCursorColumn] = useState(statement.cursorColumn ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  // Choosing a different statement means different columns; without this the boxes would keep the
+  // previous statement's and offer to write them onto this one.
+  useEffect(() => {
+    setKeyColumn(statement.keyColumn ?? "");
+    setCursorColumn(statement.cursorColumn ?? "");
+    setError(null);
+  }, [statement.id, statement.keyColumn, statement.cursorColumn]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.updateDataSourceStatement(statement.id, {
+        name: statement.name,
+        sql: statement.sql,
+        description: statement.description,
+        workGroupId: statement.workGroupId,
+        inactive: statement.inactive,
+        keyColumn,
+        cursorColumn,
+      }),
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({
+        queryKey: keys.dataSourceStatements.forDataSource(statement.dataSourceId),
+      });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const dirty =
+    keyColumn !== (statement.keyColumn ?? "") || cursorColumn !== (statement.cursorColumn ?? "");
+
+  return (
+    <div className="space-y-3 rounded-lg border border-ink-200 bg-white p-3">
+      <p className="text-[12px] text-ink-500">
+        These describe the rows <span className="font-medium text-ink-700">{statement.name}</span>{" "}
+        returns, so they live on the statement and are shared by every subscription polling it.
+        Saving here changes it for all of them.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Key column"
+          hint="Which column identifies a row, for mark-processed and deduplication. Required for polling."
+        >
+          <TextInput
+            value={keyColumn}
+            disabled={!canEdit}
+            placeholder="id"
+            spellCheck={false}
+            onChange={(e) => setKeyColumn(e.target.value)}
+          />
+        </Field>
+
+        <Field
+          label="Cursor column"
+          hint="Which column the receiver follows. It has to be the column the statement compares against the cursor. Not needed for bulk or marker."
+        >
+          <TextInput
+            value={cursorColumn}
+            disabled={!canEdit}
+            placeholder="id"
+            spellCheck={false}
+            onChange={(e) => setCursorColumn(e.target.value)}
+          />
+        </Field>
+      </div>
+
+      {error && <FormError>{error}</FormError>}
+
+      {!canEdit && (
+        <p className="text-[12px] text-ink-500">
+          Changing these needs the right to edit this connection&apos;s statements.
+        </p>
+      )}
+
+      {dirty && canEdit && (
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => save.mutate()} busy={save.isPending}>
+            Save to statement
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setKeyColumn(statement.keyColumn ?? "");
+              setCursorColumn(statement.cursorColumn ?? "");
+            }}
+          >
+            Discard
+          </Button>
+          <span className="text-[12px] text-ink-500">Saves now, not with the subscription.</span>
+        </div>
+      )}
+
+      {/* The two ways this fails at poll time rather than here. Shown against what is SAVED, not
+          what is typed, so a warning does not vanish the moment someone starts typing. */}
+      {!statement.keyColumn && (
+        <p className="text-[12px] text-warn-700">
+          Without a key column this receiver fails on its first poll: a row cannot be identified,
+          so it cannot be marked processed or deduplicated.
+        </p>
+      )}
+
+      {needsCursor && !statement.cursorColumn && (
+        <p className="text-[12px] text-warn-700">
+          {mode} follows a column, and this statement does not say which of its columns that is.
+        </p>
+      )}
+
+      {statement.cursorColumn && !/[:@]cursor\b/i.test(statement.sql) && (
+        <p className="text-[12px] text-warn-700">
+          The statement&apos;s SQL never mentions the cursor, so every poll would read from the
+          beginning again.
+        </p>
       )}
     </div>
   );
