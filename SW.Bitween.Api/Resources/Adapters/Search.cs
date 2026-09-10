@@ -31,7 +31,8 @@ namespace SW.Bitween.Resources.Adapters
             await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.View);
 
             // Get native adapters first
-            var nativeAdapters = _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix).ToList();
+            var nativeAdapters = await _nativeAdapterDiscovery.GetNativeAdapters(request.Prefix)
+                .ExceptRetiring(_dbContext);
 
             // Get external adapters from storage
             var cloudFilesList =
