@@ -48,7 +48,88 @@ public abstract partial class DbResidentAdapterBase
         public int Outstanding { get; set; }
     }
 
-    const string CursorStateName = "receive.cursor";
+    /// <summary>
+    /// Where the cursor was kept before it was scoped per subscription. Read as a fallback so an
+    /// upgrade does not reset progress to the beginning and replay every row already processed;
+    /// never written, so the first advance after an upgrade moves to the scoped name and the old
+    /// one is simply left behind.
+    /// </summary>
+    const string LegacyCursorStateName = "receive.cursor";
+
+    /// <summary>
+    /// The host holds state per (adapter, instance, name), and the instance here is the DATA
+    /// SOURCE — one connection shared by every subscription pointed at it. So the name has to
+    /// carry the reader, or two subscriptions polling one connection share a cursor: whichever
+    /// polls first advances it, and the rows it took are invisible to the other. No error, no
+    /// warning, half the rows each.
+    ///
+    /// The subscription id arrives as a per-invocation value, which is why this is computed per
+    /// call rather than held in a field — the field would belong to whichever subscription
+    /// happened to call first.
+    /// </summary>
+    string CursorStateName()
+    {
+        var subscriptionId = Context.ValueOf(SubscriptionIdKey);
+        return string.IsNullOrWhiteSpace(subscriptionId)
+            ? LegacyCursorStateName
+            : $"{LegacyCursorStateName}.{subscriptionId}";
+    }
+
+    /// <summary>
+    /// Set by the host on every invocation. Its Bitween-side name is
+    /// <c>StartupValuesFiller.SubscriptionIdKey</c>; the two are literals on either side of a
+    /// process boundary rather than a shared constant, because the adapter is published on its
+    /// own and shares no assembly with the host.
+    /// </summary>
+    const string SubscriptionIdKey = "__subscriptionId__";
+
+    /// <summary>
+    /// Which subscription inherited the unscoped cursor. Inheriting it is a one-time migration for
+    /// the receiver that was already running, not a starting point for every reader added later:
+    /// without this, a second subscription pointed at the same connection would begin life at
+    /// wherever the first one had got to, silently skipping every row before that.
+    ///
+    /// A marker rather than a delete because the SDK's state API has no delete.
+    /// </summary>
+    const string CursorClaimStateName = "receive.cursor.inheritedBy";
+
+    /// <summary>
+    /// The saved cursor: this subscription's own, or — once, for whichever subscription asks
+    /// first — the unscoped one left behind by a version that did not scope them.
+    /// </summary>
+    async Task<string> ReadCursorAsync()
+    {
+        var name = CursorStateName();
+        var saved = await Context.GetStateAsync(name, Stopping);
+
+        // Already has its own progress, or there is no subscription id to scope by — either way
+        // there is nothing to inherit.
+        if (!string.IsNullOrEmpty(saved) || name == LegacyCursorStateName) return saved;
+
+        var legacy = await Context.GetStateAsync(LegacyCursorStateName, Stopping);
+        if (string.IsNullOrEmpty(legacy)) return null;
+
+        var subscriptionId = Context.ValueOf(SubscriptionIdKey);
+        var claimedBy = await Context.GetStateAsync(CursorClaimStateName, Stopping);
+
+        if (string.IsNullOrEmpty(claimedBy))
+        {
+            await Context.SetStateAsync(CursorClaimStateName, subscriptionId, Stopping);
+            Logger.LogInformation(
+                "Subscription {Subscription} has no cursor of its own, so it continues from the "
+                + "unscoped {Legacy} this connection used before cursors were scoped. No later "
+                + "subscription will inherit it.", subscriptionId, LegacyCursorStateName);
+            return legacy;
+        }
+
+        // Claimed by this one already, and it has not accepted a row yet — so the inherited value
+        // is still where it is up to.
+        if (claimedBy == subscriptionId) return legacy;
+
+        // Claimed by someone else: this is a new reader, and a new reader starts at the beginning.
+        // Anything else would hand it another subscription's progress as its own.
+        return null;
+    }
 
     /// <summary>
     /// Nothing to do. The transaction a mark-processed statement might want cannot live here: the
@@ -99,7 +180,7 @@ public abstract partial class DbResidentAdapterBase
         var parameters = new Dictionary<string, object>();
         if (needsCursor)
         {
-            var saved = await Context.GetStateAsync(CursorStateName, Stopping);
+            var saved = await ReadCursorAsync();
             parameters["cursor"] = ParseCursor(saved, mode);
 
             Logger.LogDebug("Polling from cursor {Cursor} ({Mode}).", saved ?? "(none)", mode);
@@ -184,7 +265,7 @@ public abstract partial class DbResidentAdapterBase
         }
 
         if (batch.Cursors.TryGetValue(fileId, out var cursorValue) && cursorValue != null)
-            await Context.SetStateAsync(CursorStateName, FormatCursor(cursorValue), Stopping);
+            await Context.SetStateAsync(CursorStateName(), FormatCursor(cursorValue), Stopping);
 
         batch.Rows.Remove(fileId);
         batch.Outstanding--;

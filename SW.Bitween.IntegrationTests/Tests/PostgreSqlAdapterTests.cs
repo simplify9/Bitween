@@ -351,41 +351,140 @@ public class PostgreSqlAdapterTests : IClassFixture<PostgreSqlDbFixture>
     {
         var adapter = await AdapterAsync();
 
-        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60);
-        var first = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60);
+        // Its own subscription, so its cursor is its own. Every test in this class shares one data
+        // source and one table; before cursors were scoped they also shared one cursor, and which
+        // of them passed depended on the order xUnit happened to run them in.
+        var me = Subscription(1);
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: me);
+        var first = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: me);
 
         Assert.Equal(5, first.Count);
 
         foreach (var id in first)
         {
-            var file = await adapter.InvokeAsync<JObject>("GetFile", id, timeoutSeconds: 60);
+            var file = await adapter.InvokeAsync<JObject>("GetFile", id, timeoutSeconds: 60,
+                properties: me);
             var data = file.Value<string>("data") ?? file.Value<string>("Data");
             Assert.False(string.IsNullOrWhiteSpace(data));
 
-            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 60);
+            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 60, properties: me);
         }
 
-        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: me);
 
-        var store = _fixture.App.Services.GetRequiredService<IAdapterStateStore>();
-        var saved = await store.GetAsync(new AdapterStateKey
-        {
-            AdapterId = BusAdapters.PostgreSql,
-            InstanceKey = _dataSourceId.ToString(),
-            Name = "receive.cursor"
-        }, default);
-
-        Assert.Equal("5", saved);
+        Assert.Equal("5", await CursorAsync("receive.cursor.1"));
 
         var restarted = await Host.RestartAsync(BusAdapters.PostgreSql, _dataSourceId.ToString(),
             drain: false);
 
-        await restarted.InvokeAsync<object>("Initialize", timeoutSeconds: 60);
-        var second = await restarted.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60);
+        await restarted.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: me);
+        var second = await restarted.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: me);
 
-        var keys = second.Select(id => int.Parse(id.Substring(id.IndexOf(':') + 1))).OrderBy(i => i).ToList();
-        Assert.Equal(new[] { 6, 7, 8, 9, 10 }, keys);
+        Assert.Equal(new[] { 6, 7, 8, 9, 10 }, second.Select(KeyOf).OrderBy(i => i));
     }
+
+    /// <summary>
+    /// Two subscriptions polling ONE data source keep separate cursors.
+    ///
+    /// They did not. State is keyed by (adapter, instance, name) and the instance is the data
+    /// source, so a fixed cursor name meant one cursor for the whole connection: whichever
+    /// subscription polled first advanced it, and the rows it took were invisible to the other.
+    /// Half the rows each, no error. The name now carries the subscription, which arrives as a
+    /// per-invocation value.
+    /// </summary>
+    [SkippableFact]
+    public async Task Two_subscriptions_on_one_data_source_do_not_share_a_cursor()
+    {
+        var adapter = await AdapterAsync();
+
+        var first = Subscription(101);
+        var second = Subscription(202);
+
+        // Subscription 101 reads and accepts everything it was given.
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: first);
+        var forFirst = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: first);
+        foreach (var id in forFirst)
+            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 60, properties: first);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: first);
+
+        Assert.NotEmpty(forFirst);
+
+        // Subscription 202 has never read anything, so it must see the same rows from the start —
+        // not the ones left over after 101 moved the cursor.
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: second);
+        var forSecond = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: second);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: second);
+
+        Assert.Equal(
+            forFirst.Select(KeyOf).OrderBy(k => k),
+            forSecond.Select(KeyOf).OrderBy(k => k));
+
+        // And each was saved under its own name, rather than one overwriting the other.
+        Assert.NotNull(await CursorAsync("receive.cursor.101"));
+        // 202 listed but accepted nothing, so it has no cursor yet — which is the point: its
+        // progress is its own, and reading did not move it.
+        Assert.Null(await CursorAsync("receive.cursor.202"));
+    }
+
+    /// <summary>
+    /// A receiver upgraded into scoped cursors resumes where it was, rather than replaying every
+    /// row it has already processed. The unscoped name is read as a fallback and never written.
+    /// </summary>
+    [SkippableFact]
+    public async Task An_existing_unscoped_cursor_is_inherited_rather_than_ignored()
+    {
+        var adapter = await AdapterAsync();
+        var store = _fixture.App.Services.GetRequiredService<IAdapterStateStore>();
+
+        // What a pre-upgrade adapter would have left behind.
+        await store.SetAsync(new AdapterStateKey
+        {
+            AdapterId = BusAdapters.PostgreSql,
+            InstanceKey = _dataSourceId.ToString(),
+            Name = "receive.cursor"
+        }, "5", default);
+
+        var subscription = Subscription(303);
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: subscription);
+        var listed = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: subscription);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: subscription);
+
+        // Rows 1-5 are behind the inherited cursor, so they are not read again.
+        Assert.All(listed, id => Assert.True(KeyOf(id) > 5));
+
+        // And only once. A subscription added afterwards is a NEW reader, not a continuation of
+        // the old one, so it starts at the beginning rather than being handed 303's progress.
+        var newcomer = Subscription(304);
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: newcomer);
+        var forNewcomer = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: newcomer);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: newcomer);
+
+        Assert.Contains(forNewcomer, id => KeyOf(id) <= 5);
+    }
+
+    static int KeyOf(string fileId) => int.Parse(fileId.Substring(fileId.IndexOf(':') + 1));
+
+    /// <summary>What the host stamps on every invocation, and what scopes the cursor.</summary>
+    static Dictionary<string, string> Subscription(int id) =>
+        new() { ["__subscriptionId__"] = id.ToString() };
+
+    async Task<string> CursorAsync(string name) =>
+        await _fixture.App.Services.GetRequiredService<IAdapterStateStore>()
+            .GetAsync(new AdapterStateKey
+            {
+                AdapterId = BusAdapters.PostgreSql,
+                InstanceKey = _dataSourceId.ToString(),
+                Name = name
+            }, default);
 
     /// <summary>
     /// The mark-processed statement — Camel's onConsume — running per row once Bitween has accepted
@@ -395,14 +494,16 @@ public class PostgreSqlAdapterTests : IClassFixture<PostgreSqlDbFixture>
     public async Task Mark_processed_runs_for_each_accepted_row()
     {
         var adapter = await AdapterAsync();
+        var me = Subscription(2);
 
-        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60);
-        var listed = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60);
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: me);
+        var listed = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: me);
 
         foreach (var id in listed)
-            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 60);
+            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 60, properties: me);
 
-        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: me);
 
         var processed = await adapter.InvokeAsync<JObject>("Query", new { name = "processedOrders" },
             timeoutSeconds: 60);

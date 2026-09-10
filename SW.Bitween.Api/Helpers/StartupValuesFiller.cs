@@ -18,6 +18,17 @@ public static class StartupValuesFiller
     public const string DataSourceIdKey = "__dataSourceId__";
 
     /// <summary>
+    /// Which subscription this invocation is for.
+    ///
+    /// Unlike <see cref="DataSourceIdKey"/> this is NOT stripped: the adapter reads it. A resident
+    /// data source is one instance shared by every subscription pointed at it, so anything the
+    /// adapter remembers between calls — a receive cursor above all — has to be namespaced by the
+    /// reader, or two subscriptions polling one connection share one cursor and each sees half the
+    /// rows. The adapter side of this contract is DbReceiver's CursorStateName.
+    /// </summary>
+    public const string SubscriptionIdKey = "__subscriptionId__";
+
+    /// <summary>
     /// Stamps the data source id onto a set of adapter properties. A null id leaves them alone, so
     /// every subscription that does not use one is byte-for-byte what it was.
     /// </summary>
@@ -25,6 +36,18 @@ public static class StartupValuesFiller
         int? dataSourceId)
     {
         if (dataSourceId != null) properties[DataSourceIdKey] = dataSourceId.Value.ToString();
+        return properties;
+    }
+
+    /// <summary>
+    /// Stamps the subscription id, so an adapter holding state for several subscriptions can tell
+    /// them apart. Unconditional: a receiver that cannot say who it is reading for is exactly the
+    /// case that produced a shared cursor.
+    /// </summary>
+    public static Dictionary<string, string> WithSubscription(this Dictionary<string, string> properties,
+        int subscriptionId)
+    {
+        properties[SubscriptionIdKey] = subscriptionId.ToString();
         return properties;
     }
 

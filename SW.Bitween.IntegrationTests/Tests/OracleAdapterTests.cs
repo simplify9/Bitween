@@ -374,15 +374,22 @@ public class OracleAdapterTests : IClassFixture<OracleFixture>
     {
         var adapter = await AdapterAsync();
 
-        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 120);
-        var first = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 120);
+        // The host stamps this on every invocation, and it is what scopes the cursor: one resident
+        // instance serves every subscription bound to the data source, so an unscoped cursor would
+        // be shared between them.
+        var me = new Dictionary<string, string> { ["__subscriptionId__"] = "1" };
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 120, properties: me);
+        var first = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 120,
+            properties: me);
 
         // ReceiveBatchSize is five, so a first poll takes five of the twenty-five seeded rows.
         Assert.Equal(5, first.Count);
 
         foreach (var id in first)
         {
-            var file = await adapter.InvokeAsync<JObject>("GetFile", id, timeoutSeconds: 120);
+            var file = await adapter.InvokeAsync<JObject>("GetFile", id, timeoutSeconds: 120,
+                properties: me);
 
             // XchangeFile is SW.PrimitiveTypes' type, not one of the contracts this adapter
             // controls, so its casing is whatever that library serialises — read it either way
@@ -392,10 +399,11 @@ public class OracleAdapterTests : IClassFixture<OracleFixture>
 
             // What the pipeline calls once Bitween has durably accepted the row — and therefore the
             // only point at which the cursor may move.
-            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 120);
+            await adapter.InvokeAsync<object>("DeleteFile", id, timeoutSeconds: 120,
+                properties: me);
         }
 
-        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 120);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 120, properties: me);
 
         // The cursor is Bitween's row, not the adapter's memory, so it is readable from here.
         var store = _fixture.App.Services.GetRequiredService<IAdapterStateStore>();
@@ -403,7 +411,7 @@ public class OracleAdapterTests : IClassFixture<OracleFixture>
         {
             AdapterId = BusAdapters.Oracle,
             InstanceKey = _dataSourceId.ToString(),
-            Name = "receive.cursor"
+            Name = "receive.cursor.1"
         }, default);
 
         Assert.Equal("5", saved);
@@ -411,8 +419,9 @@ public class OracleAdapterTests : IClassFixture<OracleFixture>
         // A new process, same instance key: exactly what the supervisor does after a crash.
         var restarted = await Host.RestartAsync(BusAdapters.Oracle, _dataSourceId.ToString(), drain: false);
 
-        await restarted.InvokeAsync<object>("Initialize", timeoutSeconds: 120);
-        var second = await restarted.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 120);
+        await restarted.InvokeAsync<object>("Initialize", timeoutSeconds: 120, properties: me);
+        var second = await restarted.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 120,
+            properties: me);
 
         var keys = second.Select(id => int.Parse(id.Substring(id.IndexOf(':') + 1))).OrderBy(i => i).ToList();
         Assert.Equal(new[] { 6, 7, 8, 9, 10 }, keys);

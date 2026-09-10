@@ -57,7 +57,10 @@ public class ReceivingJob(
         {
             var globals = await dbContext.Set<GlobalAdapterValuesSet>().ToArrayAsync();
             var startupParameters = rec.ReceiverProperties.ToDictionary().Fill(null, globals)
-                .WithDataSource(rec.DataSourceId);
+                .WithDataSource(rec.DataSourceId)
+                // The receiver's cursor is namespaced by this. Without it, two subscriptions
+                // polling one data source share a cursor and split the rows between them.
+                .WithSubscription(rec.Id);
             await RunReceiver(rec.ReceiverId, startupParameters, rec.Id, createdExchangeIds);
             rec.SetHealth();
             RecordAttempt(rec.Id, startedOn,
