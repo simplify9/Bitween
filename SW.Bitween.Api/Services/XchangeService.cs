@@ -90,6 +90,7 @@ public class XchangeService :
     public async Task CreateXchange(Xchange xchange, XchangeFile file, WorkGroup workGroup,
         bool manualRetry = false)
     {
+        await EnsureNotAlreadyRetried(xchange.Id);
         var newXchange = new Xchange(xchange, file, workGroup, manualRetry);
         await AddFile(newXchange.Id, XchangeFileType.Input, file);
         _dbContext.Add(newXchange);
@@ -98,6 +99,7 @@ public class XchangeService :
     public async Task CreateXchange(Subscription subscription, Xchange xchange, XchangeFile file,
         string[] references = null, Dictionary<string, int> groupAttemptCounts = null, bool manualRetry = false)
     {
+        await EnsureNotAlreadyRetried(xchange.Id);
         var partnerId = xchange.PartnerId ?? subscription.PartnerId;
         var partner = partnerId.HasValue ? await _dbContext.FindAsync<Partner>(partnerId.Value) : null;
         var globalAdapterValuesSets = await _BitweenCache.ListGlobalAdapterValuesSetsAsync();
@@ -173,6 +175,21 @@ public class XchangeService :
             var orphaned = await _dbContext.FindAsync<XchangeResult>(xchange.Id);
             orphaned?.SetRetryBlocked(
                 "The scheduled retry was dropped: the subscription it belonged to no longer exists.");
+            return false;
+        }
+
+        var alreadyRetried = await FindRetryOf(xchange.Id);
+        if (alreadyRetried != null)
+        {
+            // Reached only if a manual retry got in first — the endpoint refuses that while a
+            // retry is scheduled, so it takes a race to arrive here. Dropped like the cases below
+            // rather than left to throw: an exception here would leave the schedule in place and
+            // the job would pick the same impossible retry up again on every pass, forever.
+            _dbContext.Remove(delayedRetry);
+
+            var retried = await _dbContext.FindAsync<XchangeResult>(xchange.Id);
+            retried?.SetRetryBlocked(
+                $"The scheduled retry was dropped: this exchange had already been retried, as {alreadyRetried}.");
             return false;
         }
 
@@ -650,6 +667,38 @@ public class XchangeService :
                 decision.MatchedGroup!.Id,
                 decision.MatchedGroup.Name,
                 decision.MatchedGroup.Budget!.MaxAttemptsTotal);
+    }
+
+    /// <summary>
+    /// The retry, if any, already made from <paramref name="xchangeId"/>.
+    /// </summary>
+    private Task<string> FindRetryOf(string xchangeId) =>
+        _dbContext.Set<Xchange>().AsNoTracking()
+            .Where(x => x.RetryFor == xchangeId)
+            .Select(x => x.Id)
+            .FirstOrDefaultAsync();
+
+    /// <summary>
+    /// An exchange gets at most one retry, so that the attempts made from one original form a
+    /// single chain that can be read end to end. Retrying an exchange that already has one would
+    /// fork it: two attempts from the same starting point, neither of them the current state of
+    /// anything, and no way to say which one "the retry" of the original was.
+    /// </summary>
+    /// <remarks>
+    /// Enforced here rather than at each endpoint so that every way of asking for a retry — by
+    /// hand, in bulk, or by a retry policy coming due — is held to it. Not enforced by a unique
+    /// index as well: exchanges retried before this rule existed can already have forked, and an
+    /// index that will not create over the data it inherits is worse than no index. Two retries of
+    /// the same exchange committed at the very same moment can therefore still both pass this
+    /// check; the loser is a duplicate attempt, which the tree then shows as a fork.
+    /// </remarks>
+    private async Task EnsureNotAlreadyRetried(string xchangeId)
+    {
+        var existing = await FindRetryOf(xchangeId);
+        if (existing != null)
+            throw new SWValidationException("ALREADY_RETRIED",
+                $"This exchange has already been retried, as exchange {existing}. Retry that attempt " +
+                "instead — an exchange is only retried once, so that its attempts stay a single chain.");
     }
 
     private async Task<int> CountRetryChainDepth(Xchange xchange)

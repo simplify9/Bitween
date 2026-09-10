@@ -96,90 +96,29 @@ namespace SW.Bitween.Resources.Xchanges
                             RetryBlockedReason = result.RetryBlockedReason
                         };
 
-            var condition = searchyRequest.Conditions.FirstOrDefault();
-            if (condition != null)
-            {
-                var idFilters = condition.Filters.Where(f => f.Field == "Id").ToList();
-                foreach (var idFilter in idFilters)
-                {
-                    var value = idFilter.Value.ToString();
-                    switch (idFilter.Rule)
-                    {
-                        case SearchyRule.EqualsTo:
-                            query = query.Where(i =>
-                                i.Id == value || i.RetryFor == value || i.AggregationXchangeId == value);
-                            break;
-                        case SearchyRule.Contains:
-                            {
-                                var valueAsArray = idFilter.ValueStringArray;
-                                query = query.Where(i =>
-                                    valueAsArray.Any(v => i.RetryFor == v) ||
-                                    valueAsArray.Any(v => i.AggregationXchangeId == v) ||
-                                    valueAsArray.Any(v => i.Id == v)
-                                );
-                                break;
-                            }
-
-
-                        default:
-                            throw new SWValidationException("NOT_SUPPORTED", "Search query not supported");
-                    }
-
-                    condition.Filters.Remove(idFilter);
-                }
-
-                var statusFilters = condition.Filters.Where(f => f.Field == "StatusFilter").ToList();
-                foreach (var statusFilter in statusFilters)
-                {
-                    switch (statusFilter.Value)
-                    {
-                        case "0":
-                            // "Still running" means no result row exists yet. Asking for it as
-                            // Status == null reads as `x0.success IS NULL` on the left join, and
-                            // Postgres cannot estimate that: it guesses one row, plans every join
-                            // above it for one row, and picks per-row sequential scans of the small
-                            // side tables. Measured on 1M exchanges that was 22.8s for 25 rows.
-                            // NOT EXISTS asks the same question as an anti-join, which it can
-                            // estimate — 34ms. Equivalent because success is NOT NULL, so a result
-                            // row can never itself carry a null status.
-                            query = query.Where(i =>
-                                !dbContext.Set<XchangeResult>().Any(r => r.Id == i.Id));
-                            break;
-                        case "1":
-                            query = query.Where(i => i.Status == true && i.ResponseBad != true);
-                            break;
-
-                        case "2":
-                            query = query.Where(i => i.Status == true && i.ResponseBad == true);
-                            break;
-
-                        case "3":
-                            query = query.Where(i => i.Status == false);
-                            break;
-                    }
-
-                    condition.Filters.Remove(statusFilter);
-                }
-
-                var propertiesFilters = condition.Filters
-                    .Where(f => f.Field == "PromotedPropertiesRaw").ToList();
-                foreach (var propertyFilter in propertiesFilters)
-                {
-                    var value = propertyFilter.Value.ToString()!.ToLower();
-
-                    // Both sides lower-cased at query time. Promoted values keep the case the
-                    // payload had (see FilterService), so the column has to be folded here for
-                    // the search to stay case-insensitive. No index is lost: a Contains is a
-                    // leading-wildcard LIKE, which the b-tree on this column could never serve.
-                    query = query.Where(i => i.PromotedPropertiesRaw.ToLower().Contains(value));
-                    condition.Filters.Remove(propertyFilter);
-                }
-            }
+            query = query.ApplySpecialFilters(searchyRequest, dbContext);
 
             var s = query.OrderByDescending(p => p.StartedOn).AsNoTracking().Search(searchyRequest.Conditions,
                 searchyRequest.Sorts, searchyRequest.PageSize, searchyRequest.PageIndex);
 
             var r = await s.ToListAsync();
+
+            // Which of these have already been retried, so the client can tell a spent exchange
+            // from a retryable one without asking about each row's chain. Asked separately rather
+            // than as a subquery in the projection above, because TotalCount reuses that query and
+            // an exact count already costs more than fetching the rows does — this way neither
+            // plan changes. One indexed lookup over RetryFor for the page's worth of ids.
+            if (r.Count > 0)
+            {
+                var pageIds = r.Select(row => row.Id).ToList();
+                var retriedIds = await dbContext.Set<Xchange>().AsNoTracking()
+                    .Where(x => pageIds.Contains(x.RetryFor))
+                    .Select(x => x.RetryFor)
+                    .Distinct()
+                    .ToListAsync();
+                foreach (var row in r)
+                    row.HasRetry = retriedIds.Contains(row.Id);
+            }
 
             var searchyResponse = new SearchyResponse<XchangeRow>
             {
