@@ -17,7 +17,7 @@ import { ConfirmDialog } from "../../components/ui/overlays";
 import { BackLink } from "../../components/ui/BackLink";
 import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "./ConnectionBadge";
-import { isSecretName, providerOf, settingOf, useDataSourceProviders } from "./providers";
+import { isSecretName, providerOf, settingOf, useDataSourceProviders, orderedSettingNames } from "./providers";
 import { LiveConnection } from "./LiveConnection";
 import { Statements } from "./Statements";
 import { draftOf, editableFingerprint, type Draft } from "./draft";
@@ -514,7 +514,7 @@ export function DataSourcePage() {
             </p>
 
             <div className="flex flex-col gap-3">
-              {Object.keys(draft.properties).map((key) => {
+              {orderedSettingNames(provider, Object.keys(draft.properties)).map((key) => {
                 const declared = settingOf(provider, key);
                 const secret = isSecretName(key, d.secretProperties, declared);
                 const value = draft.properties[key];

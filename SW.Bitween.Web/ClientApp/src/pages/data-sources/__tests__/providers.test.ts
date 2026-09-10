@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { DataSourceProvider } from "../../../api/types";
-import { declaredSecrets, initialProperties, isSecretName, settingOf } from "../providers";
+import {
+  declaredSecrets,
+  initialProperties,
+  isSecretName,
+  orderedSettingNames,
+  settingOf,
+} from "../providers";
 
 const rabbit: DataSourceProvider = {
   adapterId: "bitween.bus.rabbitmq",
@@ -26,6 +32,36 @@ describe("initialProperties", () => {
     // Twenty mostly-empty boxes hide the four that matter; Exchange is added by hand when wanted.
     expect(initialProperties(rabbit)).not.toHaveProperty("Exchange");
     expect(initialProperties(rabbit)).not.toHaveProperty("QueueType");
+  });
+});
+
+describe("orderedSettingNames", () => {
+  it("renders in the adapter's order, not the order the map came back in", () => {
+    // The server hands back a dictionary, and its order is whatever the database and serializer
+    // produced — which is how the form once asked for a password before the username it belongs to.
+    expect(orderedSettingNames(rabbit, ["Password", "Port", "Host"])).toEqual([
+      "Host",
+      "Port",
+      "Password",
+    ]);
+  });
+
+  it("matches whatever case the property was saved in", () => {
+    expect(orderedSettingNames(rabbit, ["password", "host"])).toEqual(["host", "password"]);
+  });
+
+  it("puts hand-added properties after the declared ones, in their own order", () => {
+    expect(orderedSettingNames(rabbit, ["Tls", "Password", "Host"])).toEqual([
+      "Host",
+      "Password",
+      "Tls",
+    ]);
+  });
+
+  it("changes nothing when the catalog has not arrived", () => {
+    // The form still renders while the provider list loads; reordering to nothing would make the
+    // fields jump once it lands.
+    expect(orderedSettingNames(undefined, ["Password", "Host"])).toEqual(["Password", "Host"]);
   });
 });
 

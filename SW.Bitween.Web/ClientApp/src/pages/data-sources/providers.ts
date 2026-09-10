@@ -47,6 +47,29 @@ export const initialProperties = (provider: DataSourceProvider): Record<string, 
       .map((s) => [s.name, s.default ?? ""]),
   );
 
+/**
+ * The order to show a data source's settings in: the adapter's, not the dictionary's.
+ *
+ * What comes back from the server is a map, and a map has whatever order the database and the
+ * serializer between them produced — which is how a form ended up asking for a password before the
+ * username it belongs to. The adapter declares its settings in a deliberate order (connection
+ * first, then credentials, then tuning), and that is the order to render.
+ *
+ * Anything not declared was added by hand, so it keeps its own order and follows the declared set
+ * rather than being interleaved into it.
+ */
+export const orderedSettingNames = (
+  provider: DataSourceProvider | undefined,
+  names: string[],
+): string[] => {
+  const rank = new Map(provider?.settings.map((s, i) => [s.name.toLowerCase(), i]) ?? []);
+  const declared = names
+    .filter((n) => rank.has(n.toLowerCase()))
+    .sort((a, b) => rank.get(a.toLowerCase())! - rank.get(b.toLowerCase())!);
+  const rest = names.filter((n) => !rank.has(n.toLowerCase()));
+  return [...declared, ...rest];
+};
+
 export const declaredSecrets = (provider: DataSourceProvider): string[] =>
   provider.settings.filter((s) => s.secret).map((s) => s.name);
 
