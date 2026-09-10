@@ -43,6 +43,17 @@ export function DataSourceBinding({
     staleTime: 60_000,
   });
 
+  // The chosen connection's own settings, for one question: does it actually define a default
+  // receive mode? The dropdown used to offer "the connection's default" whether or not one
+  // existed, and a subscription that took it failed at poll time with "no ReceiveMode" — a fault
+  // reported nowhere near the screen that caused it.
+  const chosenDetail = useQuery({
+    queryKey: keys.dataSources.detail(dataSourceId ?? 0),
+    queryFn: () => api.getDataSource(dataSourceId!),
+    enabled: dataSourceId != null && slot === "receiver",
+    staleTime: 60_000,
+  });
+
   const statements = useQuery({
     queryKey: keys.dataSourceStatements.forDataSource(dataSourceId ?? 0),
     queryFn: () => api.listDataSourceStatements(dataSourceId!),
@@ -75,6 +86,12 @@ export function DataSourceBinding({
   const missing = current !== "" && !available.some((s) => s.name === current);
 
   const chosenStatement = available.find((s) => s.name === current) ?? null;
+
+  // Case-insensitively, the way adapter properties bind.
+  const connectionMode = Object.entries(chosenDetail.data?.properties ?? {}).find(
+    ([key]) => key.toLowerCase() === "receivemode",
+  )?.[1];
+
   const mode = properties.ReceiveMode ?? "";
   const needsCursor = ["incrementing", "timestamp", "timestamp+incrementing"].includes(mode);
   // Without a cursor, the mark statement is the only thing that stops a poll re-reading the same
@@ -185,7 +202,12 @@ export function DataSourceBinding({
                   value={properties.ReceiveMode ?? ""}
                   disabled={disabled}
                   options={[
-                    { value: "", label: "The connection's default" },
+                    {
+                      value: "",
+                      label: connectionMode
+                        ? `The connection's default — ${connectionMode}`
+                        : "None — and this connection sets no default",
+                    },
                     { value: "incrementing", label: "incrementing — follow an always-growing column" },
                     { value: "timestamp", label: "timestamp — follow a modified-at column" },
                     {
@@ -198,6 +220,13 @@ export function DataSourceBinding({
                   onChange={(e) => setProperty("ReceiveMode", e.target.value)}
                 />
               </Field>
+
+              {mode === "" && !connectionMode && !chosenDetail.isLoading && (
+                <p className="text-[12px] text-warn-700">
+                  Nothing here or on the connection says how to find new rows, so this receiver
+                  will fail on its first poll. Pick a mode.
+                </p>
+              )}
 
               {needsMark && (
                 <Field

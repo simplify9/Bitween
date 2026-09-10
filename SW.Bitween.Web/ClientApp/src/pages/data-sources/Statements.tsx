@@ -303,13 +303,6 @@ function StatementForm({
   const [cursorColumn, setCursorColumn] = useState(statement?.cursorColumn ?? "");
   const [keyColumn, setKeyColumn] = useState(statement?.keyColumn ?? "");
 
-  // The polling fields are shown once either is set, and behind a disclosure otherwise: most
-  // statements are never polled, and two empty boxes about cursors on every one of them is how a
-  // form stops being read.
-  const [polling, setPolling] = useState(
-    !!(statement?.cursorColumn || statement?.keyColumn),
-  );
-
   const save = useMutation({
     mutationFn: async () => {
       if (statement) {
@@ -363,48 +356,58 @@ function StatementForm({
         <TextInput value={description} onChange={(e) => setDescription(e.target.value)} />
       </Field>
 
-      {!polling ? (
-        <button
-          type="button"
-          className="text-[12px] text-accent-600 hover:underline"
-          onClick={() => setPolling(true)}
+      {/*
+        Always shown, never behind a disclosure. They were, and it failed exactly as a disclosure
+        does: a subscription bound to this statement warns "set its key column on the connection",
+        and whoever followed that here found a line of prose instead of the field. Two optional
+        boxes with a caption is the cheaper mistake.
+      */}
+      <div className="grid gap-3 border-t border-ink-200 pt-3 sm:grid-cols-2">
+        <p className="text-[12px] font-medium text-ink-600 sm:col-span-2">
+          Only for a statement a receiver polls with
+        </p>
+
+        <Field
+          label="Key column"
+          hint="Which column identifies a row, for mark-processed and deduplication. Required for polling; the statement has to select it, spelled as the database returns it."
         >
-          A receiver polls with this statement
-        </button>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field
-            label="Cursor column"
-            hint="Which column the receiver follows — the incrementing id, or the modified-at timestamp. Its value in the last row read is what gets saved. Not needed for bulk or marker."
-          >
-            <TextInput
-              value={cursorColumn}
-              onChange={(e) => setCursorColumn(e.target.value)}
-              spellCheck={false}
-            />
-          </Field>
+          <TextInput
+            value={keyColumn}
+            onChange={(e) => setKeyColumn(e.target.value)}
+            spellCheck={false}
+            placeholder="id"
+          />
+        </Field>
 
-          <Field
-            label="Key column"
-            hint="Which column identifies a row, for mark-processed and deduplication. The statement has to select it, spelled as the database returns it."
-          >
-            <TextInput
-              value={keyColumn}
-              onChange={(e) => setKeyColumn(e.target.value)}
-              spellCheck={false}
-            />
-          </Field>
+        <Field
+          label="Cursor column"
+          hint="Which column the receiver follows — the incrementing id, or the modified-at timestamp. Its value in the last row read is what gets saved. Not needed for bulk or marker."
+        >
+          <TextInput
+            value={cursorColumn}
+            onChange={(e) => setCursorColumn(e.target.value)}
+            spellCheck={false}
+            placeholder="id"
+          />
+        </Field>
 
-          {/* Said here rather than in the docs: both columns describe what THIS query returns, so
-              every subscription polling it reads them the same way. Which is the point of their
-              being here and not on the subscription. */}
-          <p className="text-[12px] text-ink-500 sm:col-span-2">
-            These describe the rows this statement returns, so every subscription polling it agrees
-            on them. How often, in what mode and in what batch size is each subscription&apos;s own
-            choice.
+        {/* Said here rather than in the docs: both columns describe what THIS query returns, so
+            every subscription polling it reads them the same way. Which is the point of their
+            being here and not on the subscription. */}
+        <p className="text-[12px] text-ink-500 sm:col-span-2">
+          These describe the rows this statement returns, so every subscription polling it agrees
+          on them. How often, in what mode and in what batch size is each subscription&apos;s own
+          choice.
+        </p>
+
+        {cursorColumn && !/[:@]cursor\b/i.test(sql) && (
+          <p className="text-[12px] text-warn-700 sm:col-span-2">
+            The SQL never mentions the cursor, so every poll would re-read from the beginning.
+            A cursor mode needs something like{" "}
+            <code>where {cursorColumn} &gt; @cursor order by {cursorColumn}</code>.
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {statement && (
         <Checkbox
