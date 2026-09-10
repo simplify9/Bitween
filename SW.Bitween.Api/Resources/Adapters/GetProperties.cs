@@ -11,15 +11,15 @@ namespace SW.Bitween.Resources.Adapters
     [HandlerName("properties")]
     public class GetProperties : IGetHandler<string,object>
     {
-        private readonly IServerlessService serverless;
+        private readonly AdapterStartupValues startupValues;
         private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
         private readonly BitweenDbContext dbContext;
         private readonly RequestContext requestContext;
 
-        public GetProperties(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
+        public GetProperties(AdapterStartupValues startupValues, NativeAdapterDiscoveryService nativeAdapterDiscovery,
             BitweenDbContext dbContext, RequestContext requestContext)
         {
-            this.serverless = serverless;
+            this.startupValues = startupValues;
             _nativeAdapterDiscovery = nativeAdapterDiscovery;
             this.dbContext = dbContext;
             this.requestContext = requestContext;
@@ -37,21 +37,9 @@ namespace SW.Bitween.Resources.Adapters
                 return _nativeAdapterDiscovery.GetExpectedStartupValues(decodedKey);
             }
             
-            // Handle serverless adapters
-            try
-            {
-                await serverless.StartAsync(decodedKey, null);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                throw new BitweenException(
-                    $"Adapter '{decodedKey}' metadata is incomplete or the adapter package is not installed. " +
-                    $"Missing metadata key: {ex.Message}", ex);
-            }
-
-            var expected = await serverless.GetExpectedStartupValues();
-            if (expected == null)
-                return new Dictionary<string, string>();
+            // Handle serverless adapters. The native branch above returns a different shape —
+            // each key's default rather than a "key (default)" label — so it is left as it was.
+            var expected = await startupValues.Describe(decodedKey);
 
             return expected
                 .ToList()
