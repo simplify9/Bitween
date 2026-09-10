@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers, Plus, RotateCcw, X } from "lucide-react";
 import { api, type BulkRetrySelection, type ExchangeQuery, type ExchangeStatus } from "../../api";
 import { Can } from "../../auth/guards";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -35,7 +35,7 @@ const REFRESH_OPTIONS = [
 ];
 
 /** Everything except paging counts as "a filter" for the Clear affordance. */
-const FILTER_KEYS = ["status", "subscriptionId", "partnerId", "informationTypeId", "ids", "correlationId", "propertyKey", "property", "from", "to"] as const;
+const FILTER_KEYS = ["status", "subscriptionId", "partnerId", "informationTypeId", "ids", "correlationId", "propertyKey", "property", "from", "to", "latest"] as const;
 
 const readQuery = (sp: URLSearchParams): ExchangeQuery => ({
   status: (sp.get("status") as ExchangeStatus | null) ?? undefined,
@@ -44,6 +44,7 @@ const readQuery = (sp: URLSearchParams): ExchangeQuery => ({
   informationTypeId: sp.get("informationTypeId") ? Number(sp.get("informationTypeId")) : undefined,
   ids: sp.get("ids") ?? undefined,
   correlationId: sp.get("correlationId") ?? undefined,
+  latest: sp.get("latest") === "1" || undefined,
   propertyKey: sp.get("propertyKey") ?? undefined,
   property: sp.get("property") ?? undefined,
   from: sp.get("from") ? new Date(sp.get("from")! + "T00:00:00").toISOString() : undefined,
@@ -253,6 +254,27 @@ export function ExchangesPage() {
             </button>
           );
         })}
+
+        {/* Separated from the status pills, which pick one of a set — this one narrows whatever
+            they picked. A chain is one piece of work however many attempts it took, so this is
+            what turns a list of failures into a list of things still to deal with. */}
+        <span className="mx-1 h-5 w-px bg-ink-200" aria-hidden />
+        {/* Deliberately not shaped like the status pills beside it. Those pick one of a set; this
+            narrows whatever they picked, and as a sixth round pill it read as a seventh status. */}
+        <button
+          onClick={() => setParam("latest", query.latest ? null : "1")}
+          aria-pressed={!!query.latest}
+          title="Hide attempts that have since been retried, leaving the newest attempt of each chain — the one that is still the state of that work."
+          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+            query.latest
+              ? "border border-crimson-300 bg-crimson-50 text-crimson-700"
+              : "border border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50"
+          }`}
+        >
+          <Layers className="size-3.5" aria-hidden />
+          Latest attempt only
+        </button>
+
         <span className="ml-auto flex items-center gap-2">
           {refreshMs > 0 && (
             <span

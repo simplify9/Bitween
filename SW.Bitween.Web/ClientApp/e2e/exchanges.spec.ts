@@ -170,3 +170,40 @@ test("select all matching covers the whole filter, and the confirm says what wil
   await dialog.locator("button", { hasText: /^(Cancel|Close)$/ }).click();
   await expect(dialog).toHaveCount(0);
 });
+
+/**
+ * A chain is one piece of work however many attempts it took, so the list needs to be able to
+ * show the newest attempt of each — otherwise a chain retried nine times fills nine rows, none
+ * of which is the current state of anything.
+ */
+test("the list can show only the newest attempt of each chain", async ({ page }) => {
+  await page.goto("exchanges?status=failed");
+  await expect(page.getByRole("row").nth(1)).toBeVisible({ timeout: 15000 });
+  await page.getByLabel("Refresh interval").selectOption("0");
+
+  const total = async () =>
+    Number(
+      (await page.locator("text=/Showing .* of [\\d,]+/").first().innerText())
+        .match(/of ([\d,]+)/)![1]
+        .replace(/,/g, ""),
+    );
+
+  const attempts = await total();
+  const pill = page.getByRole("button", { name: "Latest attempt only" });
+  await expect(pill).toHaveAttribute("aria-pressed", "false");
+
+  await pill.click();
+  await expect(page).toHaveURL(/latest=1/);
+  await expect(pill).toHaveAttribute("aria-pressed", "true");
+
+  // Never more than the attempts, and fewer as soon as anything has been retried.
+  const problems = await total();
+  expect(problems).toBeLessThanOrEqual(attempts);
+
+  // And it survives a reload, since it lives in the URL like every other filter.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Latest attempt only" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
