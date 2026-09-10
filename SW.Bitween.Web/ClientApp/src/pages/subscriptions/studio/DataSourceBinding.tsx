@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
+import { Check } from "lucide-react";
 import { api, type DataSourceStatement } from "../../../api";
 import { keys } from "../../../api/queryKeys";
 import { Field, Select, TextInput } from "../../../components/ui/forms";
@@ -319,6 +320,11 @@ function StatementColumns({
   const [cursorColumn, setCursorColumn] = useState(statement.cursorColumn ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  // Saving here leaves the fields exactly as they were — the values are already on screen, which
+  // is precisely why it needs saying. Two seconds in place of the button, the same way the
+  // mapping editor says it.
+  const [justSaved, setJustSaved] = useState(false);
+
   // Choosing a different statement means different columns; without this the boxes would keep the
   // previous statement's and offer to write them onto this one.
   useEffect(() => {
@@ -340,6 +346,8 @@ function StatementColumns({
       }),
     onSuccess: () => {
       setError(null);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
       void queryClient.invalidateQueries({
         queryKey: keys.dataSourceStatements.forDataSource(statement.dataSourceId),
       });
@@ -394,7 +402,13 @@ function StatementColumns({
         </p>
       )}
 
-      {dirty && canEdit && (
+      {justSaved && (
+        <span className="flex items-center gap-1 text-sm font-medium text-ok-600">
+          <Check className="size-4" /> Saved to {statement.name}
+        </span>
+      )}
+
+      {dirty && canEdit && !justSaved && (
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={() => save.mutate()} busy={save.isPending}>
             Save to statement

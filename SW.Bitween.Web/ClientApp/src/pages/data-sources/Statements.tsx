@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import { api, type DataSourceStatement } from "../../api";
 import { keys } from "../../api/queryKeys";
 import { Can, useSessionCan } from "../../auth/guards";
@@ -111,7 +111,6 @@ export function Statements({
               onSeedConsumed?.();
               void invalidate();
             }}
-            onError={setError}
           />
         </div>
       )}
@@ -134,7 +133,6 @@ export function Statements({
                 setRemoving(statement);
               }}
               onSaved={invalidate}
-              onError={setError}
             />
           ))}
         </ul>
@@ -167,13 +165,11 @@ function StatementRow({
   canEdit,
   onDelete,
   onSaved,
-  onError,
 }: {
   statement: DataSourceStatement;
   canEdit: boolean;
   onDelete: () => void;
   onSaved: () => void;
-  onError: (message: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -263,7 +259,6 @@ function StatementRow({
               dataSourceId={statement.dataSourceId}
               onClose={() => setOpen(false)}
               onSaved={onSaved}
-              onError={onError}
             />
           )}
         </div>
@@ -285,14 +280,12 @@ function StatementForm({
   dataSourceId,
   onClose,
   onSaved,
-  onError,
 }: {
   statement?: DataSourceStatement;
   seed?: StatementSeed | null;
   dataSourceId: number;
   onClose: () => void;
   onSaved: () => void;
-  onError: (message: string) => void;
 }) {
   const [name, setName] = useState(statement?.name ?? seed?.name ?? "");
   const [sql, setSql] = useState(statement?.sql ?? seed?.sql ?? "");
@@ -302,6 +295,16 @@ function StatementForm({
   const [inactive, setInactive] = useState(statement?.inactive ?? false);
   const [cursorColumn, setCursorColumn] = useState(statement?.cursorColumn ?? "");
   const [keyColumn, setKeyColumn] = useState(statement?.keyColumn ?? "");
+
+  // Its own error, shown under the buttons rather than raised to the panel header. A message
+  // about the SQL in this box belongs beside the box, not four rows above it where a long list
+  // of statements can put it off screen entirely.
+  const [error, setError] = useState<string | null>(null);
+
+  // The codebase's existing way of saying a save landed — see the mapping editor. Two seconds,
+  // in place of the button, because a save that changes nothing visible on the form otherwise
+  // looks like a button that did nothing.
+  const [justSaved, setJustSaved] = useState(false);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -325,8 +328,19 @@ function StatementForm({
         });
       }
     },
-    onSuccess: onSaved,
-    onError: (e: Error) => onError(e.message),
+    onSuccess: () => {
+      setError(null);
+      // Only for an edit. A create closes the form on success, which says it landed by itself —
+      // and a "Saved" flash on a form that is disappearing is a flicker, not a message.
+      if (statement) {
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+      }
+      onSaved();
+    },
+    // Not raised to the panel as well: one message in two places reads as two problems, and
+    // the panel header is where a DELETE failure belongs — that one has no form to sit under.
+    onError: (e: Error) => setError(e.message),
   });
 
   const complete = name.trim().length > 0 && sql.trim().length > 0;
@@ -418,12 +432,22 @@ function StatementForm({
         />
       )}
 
-      <div className="flex gap-2">
-        <Button onClick={() => save.mutate()} disabled={!complete || save.isPending}>
-          {statement ? "Save changes" : "Create statement"}
-        </Button>
+      {/* Under the fields and above the buttons: the error is about what was typed, and this is
+          where the eye already is when the save is pressed. */}
+      {error && <FormError>{error}</FormError>}
+
+      <div className="flex items-center gap-2">
+        {justSaved ? (
+          <span className="flex items-center gap-1 text-sm font-medium text-ok-600">
+            <Check className="size-4" /> Saved
+          </span>
+        ) : (
+          <Button onClick={() => save.mutate()} disabled={!complete || save.isPending} busy={save.isPending}>
+            {statement ? "Save changes" : "Create statement"}
+          </Button>
+        )}
         <Button variant="ghost" onClick={onClose}>
-          Cancel
+          {justSaved ? "Close" : "Cancel"}
         </Button>
       </div>
     </div>
