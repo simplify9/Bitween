@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { pickOption, signInAsAdmin } from "./helpers";
 import {
   SAMPLE,
+  addList,
+  addListValue,
   addPathRule,
   buildFromSample,
   createSubscription,
@@ -298,6 +300,63 @@ test("builds the whole output from a sample of it, and matches the source fields
   await expect(preview).toContainText('"sku": "B7"');
 });
 
+test("a list of plain values built from a sample is wired up and says so", async ({
+  page,
+}) => {
+  // The shape that sent this round: both sides hold `[1,2,3]`, and the scaffolder
+  // wires each entry to the entry itself — the right answer, which used to be shown
+  // as an empty box behind a checkbox and read as nothing configured at all.
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+
+  await page
+    .getByRole("textbox", { name: "Sample source document" })
+    .fill(JSON.stringify({ city: "errr", test: [1, 2, 3] }));
+  await buildFromSample(page, { city: "", test: [1, 2, 3] });
+  await page.getByRole("button", { name: "Build from a sample of the output" }).click();
+  await page.keyboard.press("Escape");
+
+  const list = page.getByRole("group", { name: "Rules for the list test" });
+
+  // A row in the tree, not a setting behind a chevron — and it reads as an answer
+  // rather than as a box waiting to be filled in.
+  const value = list.getByRole("combobox", { name: "Source field" });
+  await expect(value).toHaveAttribute("placeholder", "the entry itself");
+  await expect(value).toHaveValue("");
+  await expect(list.getByText("each entry")).toBeVisible();
+
+  // Nothing is left unassigned, which is what the count above the tree has to agree
+  // with: an empty path here is the answer, not a blank.
+  await expect(page.getByText("2 rules · 2 assigned")).toBeVisible();
+
+  // And it runs: the source values come straight through.
+  await expect(page.locator("pre").first()).toHaveText(/"test":\s*\[\s*1,\s*2,\s*3\s*\]/, {
+    timeout: 15000,
+  });
+});
+
+test("a list's value takes a type and a transform like any other rule", async ({ page }) => {
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+  await page
+    .getByRole("textbox", { name: "Sample source document" })
+    .fill(JSON.stringify({ price: [10, 20] }));
+
+  const list = await addList(page, "totals", "price");
+  await addListValue(list, "totals", "");
+
+  // The row carries the whole rule, which is the point of it being a row: the value
+  // each entry produces can be multiplied and typed exactly like a named field.
+  await list.getByRole("button", { name: "Details for each entry" }).click();
+  await list.getByRole("combobox", { name: "Transform" }).selectOption("multiply");
+  await list.getByRole("textbox", { name: /Multiply.*By/ }).fill("2");
+  await list.getByRole("combobox", { name: "Value type" }).selectOption("number");
+
+  await expect(page.locator("pre").first()).toHaveText(/"totals":\s*\[\s*20,\s*40\s*\]/, {
+    timeout: 15000,
+  });
+});
+
 test("a list inside a list offers the entry's own lists, not the document's", async ({ page }) => {
   const subscriptionId = await createSubscription(page);
   await openMapper(page, subscriptionId);
@@ -499,11 +558,10 @@ test("a list of values with a slot per rule, walking nothing", async ({ page }) 
   // Nothing to walk, so the list is exactly what is written into it. This is what
   // the old mapper called a primitive array.
   await page.getByRole("combobox", { name: "Source list" }).selectOption("none");
-  await page.getByRole("button", { name: "Settings for the list codes" }).click();
-  await page.getByRole("checkbox", { name: /A list of plain values/ }).check();
 
-  // Each entry mirrors the list, so each is one value rather than a record.
-  await page.getByRole("button", { name: "Add an entry to codes" }).click();
+  // What the list holds is decided by what is put in it, not by a setting: the first
+  // slot says these are plain values, and every entry after it follows.
+  await page.getByRole("button", { name: "Add a value to codes" }).click();
   await page.getByRole("button", { name: "Add an entry to codes" }).click();
 
   const first = page.getByRole("group", { name: "Entry 1" });

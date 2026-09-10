@@ -6,12 +6,12 @@ import {
   addFixedRule,
   addList,
   addListField,
+  addListValue,
   addPathRule,
   buildFromSample,
   createSubscription,
   expectPreview,
   openDetail,
-  openMapper,
   openWithSample,
   preview,
   saveAndReload,
@@ -372,7 +372,7 @@ test("every filter comparison keeps the entries it should", async ({ page }) => 
   await openWithSample(page, { line: [{ qty: 1 }, { qty: 2 }, { qty: 3 }] });
 
   for (const { field, operator } of OPERATOR_CASES) {
-    await addList(page, field, "line");
+    const list = await addList(page, field, "line");
     await page.getByRole("button", { name: `Settings for the list ${field}` }).click();
 
     await page.getByRole("checkbox", { name: "Only some entries" }).last().check();
@@ -380,12 +380,11 @@ test("every filter comparison keeps the entries it should", async ({ page }) => 
     await page.getByRole("combobox", { name: "Filter comparison" }).last().selectOption(operator);
     await page.getByRole("textbox", { name: "Filter value" }).last().fill("2");
 
+    await page.getByRole("button", { name: `Settings for the list ${field}` }).click();
+
     // A list of plain values, so what survived the filter reads straight off the
     // preview rather than through a wrapper object.
-    await page.getByRole("checkbox", { name: /A list of plain values/ }).last().check();
-    await setSourcePath(page, "qty");
-
-    await page.getByRole("button", { name: `Settings for the list ${field}` }).click();
+    await addListValue(list, field, "qty");
   }
 
   for (const { expect: shape } of OPERATOR_CASES)
@@ -464,9 +463,10 @@ test("the whole output can be a list, of records or of plain values", async ({ p
   await expect(preview(page)).toHaveText(/^\[[\s\S]*\]$/);
 
   // ── And the same thing as plain values ─────────────────────────────────────
-  await page.getByRole("button", { name: "Settings for the list at the root" }).click();
-  await page.getByRole("checkbox", { name: /A list of plain values/ }).check();
-  await setSourcePath(page, "sku");
+  // A list holds one or the other, and says so by what it will let you add: the
+  // record's field has to go before the value can be put in its place.
+  await root.getByRole("button", { name: "Remove the rule for code" }).click();
+  await addListValue(root, "the root list", "sku");
 
   await expect(preview(page)).toHaveText(/^\[\s*"A1",\s*"B7"\s*\]$/, { timeout: 15000 });
 });
@@ -999,10 +999,6 @@ test("a checkbox in a settings panel can be ticked by its text", async ({ page }
   // The entry with qty 0 is gone, which is the whole point of the checkbox.
   await expectPreview(page, '"qty": 2');
   await expect(preview(page)).not.toContainText('"qty": 0');
-
-  // And the same for the other checkbox in the panel.
-  await page.getByText("A list of plain values, not records").click();
-  await expect(page.getByText("each walked entry is")).toBeVisible();
 });
 
 test("a checkbox in a rule's detail can be ticked by its text", async ({ page }) => {

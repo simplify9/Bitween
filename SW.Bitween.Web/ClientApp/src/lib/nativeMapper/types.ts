@@ -238,6 +238,18 @@ export const SOURCE_KINDS: { value: ValueSourceKind; label: string; title: strin
   { value: "global", label: "Global", title: "A key from one of the global values sets" },
 ];
 
+/**
+ * Short enough for a row; "boo" is not a word anyone wants to read.
+ *
+ * Keyed by the type union rather than by `string`, so adding a value type is a
+ * compile error here instead of a badge that silently renders as nothing.
+ */
+export const TYPE_BADGES: Record<ValueTypeName, string> = {
+  string: "txt",
+  number: "num",
+  boolean: "y/n",
+};
+
 /** What a value can be written as. Blank leaves it as the source produced it. */
 export const VALUE_TYPES: { value: string; label: string }[] = [
   { value: "", label: "As it comes" },

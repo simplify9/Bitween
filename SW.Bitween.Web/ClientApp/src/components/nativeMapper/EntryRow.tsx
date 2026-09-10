@@ -1,8 +1,15 @@
-import { CornerDownRight, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, CornerDownRight, Trash2 } from "lucide-react";
 import type { OutputEntryNode } from "../../lib/nativeMapper/outputTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
-import { SOURCE_KINDS, freshSource } from "../../lib/nativeMapper/types";
+import {
+  SOURCE_KINDS,
+  TYPE_BADGES,
+  freshSource,
+  type EditorFieldRule,
+} from "../../lib/nativeMapper/types";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { RuleDetail } from "./RuleDetail";
 import { ValueCell, type SourcePaths } from "./ValueCell";
 
 /**
@@ -12,6 +19,11 @@ import { ValueCell, type SourcePaths } from "./ValueCell";
  * from somewhere different. Its rules read whatever the list reads, because there
  * is no entry of its own to read — which is what lets a constant entry still pull a
  * value out of the document, the partner or a values set.
+ *
+ * An entry holding one value is a whole rule on this line, so it gets what any other
+ * rule gets: a transform, a substitution table and a type, behind the chevron. It is
+ * a slot in the output like any other, and "it is written in by hand" is no reason
+ * for it to be the one value in the mapping that cannot be rounded or reformatted.
  */
 export function EntryRow({
   node,
@@ -24,9 +36,18 @@ export function EntryRow({
   const { entry, position } = node;
   const dispatch = useRulesDispatch();
   const { ruleErrors } = useRules();
+  const [open, setOpen] = useState(false);
 
   const error = ruleErrors[node.errorKey];
-  const isValue = entry.item !== undefined;
+  const item = entry.item;
+  const extras = (item?.transform ? 1 : 0) + (item?.lookup ? 1 : 0);
+
+  const updateItem = (changes: Partial<Omit<EditorFieldRule, "id">>) =>
+    dispatch({
+      type: "UPDATE_FIXED_ENTRY",
+      id: entry.id,
+      changes: { item: { ...item!, ...changes } },
+    });
 
   return (
     <div
@@ -44,7 +65,7 @@ export function EntryRow({
           entry {position}
         </span>
 
-        {isValue && entry.item && (
+        {item && (
           <>
             <span aria-hidden className="flex-shrink-0 text-ink-300">
               ←
@@ -53,27 +74,35 @@ export function EntryRow({
               size="sm"
               label={`Where entry ${position} comes from`}
               options={SOURCE_KINDS}
-              value={entry.item.from.kind === "rootPath" ? "path" : entry.item.from.kind}
-              onChange={(kind) =>
-                dispatch({
-                  type: "UPDATE_FIXED_ENTRY",
-                  id: entry.id,
-                  changes: { item: { ...entry.item!, from: freshSource(kind) } },
-                })
-              }
+              value={item.from.kind === "rootPath" ? "path" : item.from.kind}
+              onChange={(kind) => updateItem({ from: freshSource(kind) })}
             />
             <ValueCell
-              source={entry.item.from}
+              source={item.from}
               paths={paths}
-              valueType={entry.item.type}
-              onChange={(from) =>
-                dispatch({
-                  type: "UPDATE_FIXED_ENTRY",
-                  id: entry.id,
-                  changes: { item: { ...entry.item!, from } },
-                })
-              }
+              valueType={item.type}
+              onChange={(from) => updateItem({ from })}
             />
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-label={`Details for entry ${position}`}
+              title={
+                extras > 0
+                  ? "Has a transform or a table"
+                  : "Change it, substitute it, or set its type"
+              }
+              className={`flex flex-shrink-0 items-center gap-0.5 rounded px-1 py-0.5 hover:bg-ink-100 ${
+                extras > 0 ? "text-crimson-600" : "text-ink-400 hover:text-ink-700"
+              }`}
+            >
+              {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              {item.type && (
+                <span className="font-mono text-[9px]">{TYPE_BADGES[item.type]}</span>
+              )}
+              {extras > 0 && <span aria-hidden className="size-1 rounded-full bg-crimson-500" />}
+            </button>
           </>
         )}
 
@@ -87,6 +116,12 @@ export function EntryRow({
           <Trash2 size={12} />
         </button>
       </div>
+
+      {open && item && (
+        <div className="px-1.5 pb-1.5">
+          <RuleDetail rule={item} onChange={updateItem} />
+        </div>
+      )}
 
       {/* A colour is not a message. The reason is rendered here as a list's is, so it
           reaches a reader who cannot tell the two borders apart. */}
