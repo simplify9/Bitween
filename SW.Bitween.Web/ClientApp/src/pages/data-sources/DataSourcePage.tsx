@@ -303,12 +303,16 @@ export function DataSourcePage() {
         </Can>
       )}
 
-      {/* ——— what the live adapter says about the broker ——— */}
+      {/* ——— what the live adapter says it can see ——— */}
       {inspect && (
         <section className="mb-4 rounded-xl border border-ink-200 bg-white p-4">
           <div className="mb-2 flex items-center gap-2">
             <h2 className="text-sm font-semibold text-ink-900">
-              {inspect.command === "GetStats" ? "Adapter statistics" : "What is on the broker"}
+              {inspect.command === "GetStats"
+                ? "Adapter statistics"
+                : source.data?.kind === "Relational"
+                  ? "What is in the database"
+                  : "What is on the broker"}
             </h2>
             <button
               type="button"
@@ -320,7 +324,10 @@ export function DataSourcePage() {
           </div>
 
           {inspect.ran ? (
-            <pre className="overflow-x-auto rounded-lg bg-ink-50 p-3 font-mono text-[12px] text-ink-800">
+            /* Capped and scrolled: a database's catalog runs to every table, view and routine the
+               role can see, and printed in full it buries the settings form under a page of JSON
+               with no way back but the scrollbar. */
+            <pre className="max-h-96 overflow-auto rounded-lg bg-ink-50 p-3 font-mono text-[12px] text-ink-800">
               {inspect.result}
             </pre>
           ) : (
@@ -329,7 +336,10 @@ export function DataSourcePage() {
 
           <p className="mt-2 text-[12px] text-ink-500">
             Asked of the connection that is actually serving traffic, not a throwaway one — and
-            read-only: nothing is consumed, acknowledged or published.
+            read-only:{" "}
+            {source.data?.kind === "Relational"
+              ? "it reads the catalog, and writes nothing."
+              : "nothing is consumed, acknowledged or published."}
           </p>
         </section>
       )}
