@@ -124,6 +124,13 @@ export const keys = {
     all: ["exchanges"] as const,
     search: (params: string) => ["exchanges", "search", params] as const,
     document: (key: string | null) => ["exchanges", "document", key] as const,
+    /**
+     * A chain never changes above the exchange asked about, and only grows below it, so this is
+     * safe to keep and to prefetch on hover.
+     */
+    retryTree: (id: string) => ["exchanges", "retryTree", id] as const,
+    /** Keyed by the serialized selection, since that is the whole of what the plan depends on. */
+    bulkRetryPreview: (selection: string) => ["exchanges", "bulkRetryPreview", selection] as const,
   },
 
   scheduledRetries: {

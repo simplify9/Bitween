@@ -1,9 +1,12 @@
 import type { ApiClient } from "../client";
 import type {
+  BulkRetryPlan,
+  BulkRetrySelection,
   ExchangeQuery,
   ExchangeRow,
   ExchangeStatus,
   Paged,
+  RetryTree,
   ScheduledRetryQuery,
   ScheduledRetryRow,
 } from "../types";
@@ -40,7 +43,39 @@ interface RawXchangeRow {
   correlationId: string | null;
   partnerId: number | null;
   scheduledRetryOn: string | null;
+  hasRetry: boolean;
 }
+
+interface RawRetryNode {
+  id: string;
+  retryFor: string | null;
+  promotedProperties: Record<string, string | null> | null;
+  startedOn: string;
+  finishedOn: string | null;
+  status: boolean | null;
+  responseBad: boolean | null;
+  exception: string | null;
+  manualRetry: boolean;
+  scheduledRetryOn: string | null;
+  retryBlockedReason: string | null;
+}
+
+interface RawRetryTree {
+  rootId: string;
+  nodes: RawRetryNode[];
+  truncated: boolean;
+}
+
+interface RawBulkRetryPlan {
+  selected: number;
+  willRetry: number;
+  limit: number;
+  overLimit: boolean;
+  substituted: { selectedId: string; retryId: string }[] | null;
+  skipped: { id: string; reason: string }[] | null;
+  properties: Record<string, Record<string, string | null>> | null;
+}
+
 interface RawDelayedRetryRow {
   id: string;
   on: string;
@@ -84,6 +119,7 @@ const toExchangeRow = (raw: RawXchangeRow, partnerNameById: Map<number, string>)
   finishedOn: raw.finishedOn,
   correlationId: raw.correlationId,
   retryFor: raw.retryFor,
+  hasRetry: raw.hasRetry,
   aggregationXchangeId: raw.aggregationXchangeId,
   scheduledRetryOn: raw.scheduledRetryOn,
   exception: raw.exception,
@@ -124,7 +160,11 @@ const toScheduledRetryRow = (raw: RawDelayedRetryRow): ScheduledRetryRow => ({
  * comparisons (`GreaterThanOrEquals`/`LessThanOrEquals`, rules 6/8) go
  * through a different code path and work correctly — use those instead.
  */
-function buildExchangeQuery(query: ExchangeQuery): string {
+/**
+ * Just the filters, without paging — what "select all matching" sends, so a bulk retry acts on
+ * the same set the list was showing rather than on the 25 rows that happened to be on screen.
+ */
+function buildExchangeFilters(query: ExchangeQuery): URLSearchParams {
   const params = new URLSearchParams();
   if (query.status) params.append("filter", `StatusFilter:1:${STATUS_FILTER[query.status]}`);
   if (query.subscriptionId !== undefined) params.append("filter", `SubscriptionId:1:${query.subscriptionId}`);
@@ -144,6 +184,11 @@ function buildExchangeQuery(query: ExchangeQuery): string {
   if (propertyTerm) params.append("filter", `PromotedPropertiesRaw:4:${propertyTerm}`);
   if (query.from) params.append("filter", `StartedOn:6:${query.from}`);
   if (query.to) params.append("filter", `StartedOn:8:${query.to}`);
+  return params;
+}
+
+function buildExchangeQuery(query: ExchangeQuery): string {
+  const params = buildExchangeFilters(query);
   params.set("page", String(Math.floor(query.offset / query.limit)));
   params.set("size", String(query.limit));
   return searchyQueryString(params);
@@ -159,6 +204,38 @@ function buildScheduledRetryQuery(query: ScheduledRetryQuery): string {
   params.set("page", String(Math.floor(query.offset / query.limit)));
   params.set("size", String(query.limit));
   return searchyQueryString(params);
+}
+
+/**
+ * Both bulk-retry endpoints take the same request, so the preview cannot describe a different
+ * selection than the retry acts on. The filter goes over as the same query-string fragment the
+ * list itself sends, percent-encoded the way the backend's parser expects (see
+ * `searchyQueryString`), and the backend re-runs it — the client never has to enumerate ids it
+ * has not loaded.
+ */
+async function postBulkRetry(
+  url: string,
+  selection: BulkRetrySelection,
+  reset: boolean,
+): Promise<BulkRetryPlan> {
+  const body =
+    "ids" in selection
+      ? { ids: selection.ids }
+      : {
+          filter: searchyQueryString(buildExchangeFilters(selection.matching)),
+          excludeIds: selection.excludeIds,
+        };
+
+  const plan = await post<RawBulkRetryPlan>(url, { ...body, reason: "Bulk retry", reset });
+  return {
+    selected: plan.selected,
+    willRetry: plan.willRetry,
+    limit: plan.limit,
+    overLimit: plan.overLimit,
+    substituted: plan.substituted ?? [],
+    skipped: plan.skipped ?? [],
+    properties: plan.properties ?? {},
+  };
 }
 
 async function partnerNameMap(): Promise<Map<number, string>> {
@@ -190,20 +267,38 @@ export const exchangeMethods = {
     return { id: res.result[0]?.id ?? id };
   },
 
-  async bulkRetryExchanges(ids: string[], { reset }: { reset: boolean }): Promise<{ retried: number; skipped: number }> {
-    // BulkRetry.cs silently skips ids that already have a scheduled auto-retry
-    // and returns null — mirror its exact skip rule ourselves beforehand so we
-    // can report real counts back to the caller.
-    const idFilter = `Id:4:text|${ids.join("|")}`;
-    const current = await get<SearchyResponse<RawXchangeRow>>(
-      `/xchanges?filter=${encodeURIComponent(idFilter)}&size=${ids.length}`,
-    );
-    // The Id filter also matches retryFor/aggregationXchangeId — narrow back
-    // down to exactly the requested ids.
-    const byId = new Map(current.result.filter((r) => ids.includes(r.id)).map((r) => [r.id, r]));
-    const skipped = ids.filter((id) => byId.get(id)?.scheduledRetryOn != null).length;
-    await post("/xchanges/bulkretry", { ids, reason: "Bulk retry", reset });
-    return { retried: ids.length - skipped, skipped };
+  /**
+   * Every attempt related to one exchange. Worth asking for only when the row says there is
+   * something to see — `retryFor` or `hasRetry` — since most exchanges have neither.
+   */
+  async getRetryTree(id: string): Promise<RetryTree> {
+    const raw = await get<RawRetryTree>(`/xchanges/retrytree?id=${encodeURIComponent(id)}`);
+    return {
+      rootId: raw.rootId,
+      truncated: raw.truncated,
+      attempts: (raw.nodes ?? []).map((n) => ({
+        id: n.id,
+        retryFor: n.retryFor,
+        promotedProperties: n.promotedProperties,
+        startedOn: n.startedOn,
+        finishedOn: n.finishedOn,
+        status: deriveStatus(n),
+        exception: n.exception,
+        manualRetry: n.manualRetry,
+        scheduledRetryOn: n.scheduledRetryOn,
+        retryBlockedReason: n.retryBlockedReason,
+      })),
+    };
+  },
+
+  /** What a bulk retry would do, so it can be shown before anyone commits to it. */
+  previewBulkRetry(selection: BulkRetrySelection, { reset }: { reset: boolean }): Promise<BulkRetryPlan> {
+    return postBulkRetry("/xchanges/bulkretrypreview", selection, reset);
+  },
+
+  /** Runs the retry and reports what it actually did, in the same shape as the preview. */
+  bulkRetryExchanges(selection: BulkRetrySelection, { reset }: { reset: boolean }): Promise<BulkRetryPlan> {
+    return postBulkRetry("/xchanges/bulkretry", selection, reset);
   },
 
   async createExchange(input: {

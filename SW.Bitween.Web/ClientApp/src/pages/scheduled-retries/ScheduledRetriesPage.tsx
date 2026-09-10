@@ -157,7 +157,9 @@ export function ScheduledRetriesPage() {
               // Same identity rule as the Exchanges list: what it carries first,
               // the id only as a link out.
               header: "Properties",
-              cell: (r) => <PromotedProps properties={r.promotedProperties} />,
+              // With a fallback id, so a row whose promoted paths resolved to nothing keeps an
+              // identity of its own rather than falling back to a bare dash.
+              cell: (r) => <PromotedProps properties={r.promotedProperties} fallbackId={r.id} />,
             },
             {
               header: "Information type",

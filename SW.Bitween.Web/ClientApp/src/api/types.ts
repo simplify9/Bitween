@@ -845,6 +845,12 @@ export interface ExchangeRow {
   correlationId: string | null;
   /** Set when this exchange is a retry of another one. */
   retryFor: string | null;
+  /**
+   * True when a retry has already been made from this exchange. An exchange gets at most one
+   * retry, so this is also what makes it un-retryable — the newest attempt in the chain is the
+   * one to act on.
+   */
+  hasRetry: boolean;
   /** Set when this exchange was rolled up into an aggregation exchange. */
   aggregationXchangeId: string | null;
   /** A pending auto-retry, when the retry policy scheduled one. */
@@ -858,6 +864,68 @@ export interface ExchangeRow {
     mapped: ExchangeFileRef | null;
     handled: ExchangeFileRef | null;
   };
+}
+
+/** One attempt in a retry chain. */
+export interface RetryTreeNode {
+  id: string;
+  /** null on the original attempt. */
+  retryFor: string | null;
+  /** What the payload promoted — how an attempt is named, the same as in the exchange list. */
+  promotedProperties: Record<string, string | null> | null;
+  startedOn: string;
+  finishedOn: string | null;
+  status: ExchangeStatus;
+  exception: string | null;
+  /** True when a person asked for this attempt rather than a retry policy. */
+  manualRetry: boolean;
+  scheduledRetryOn: string | null;
+  retryBlockedReason: string | null;
+}
+
+/** Every attempt related to one exchange, oldest first. */
+export interface RetryTree {
+  rootId: string;
+  attempts: RetryTreeNode[];
+  /** True when the chain is longer than the server would walk. */
+  truncated: boolean;
+}
+
+/**
+ * Which exchanges a bulk retry is about: the rows someone ticked, or a whole filter's worth
+ * minus the ones they unticked.
+ */
+export type BulkRetrySelection =
+  | { ids: string[] }
+  /** Everything the list's current filters match, minus the rows unticked after selecting all. */
+  | { matching: ExchangeQuery; excludeIds: string[] };
+
+/** A selection that had already been retried, and the later attempt standing in for it. */
+export interface RetrySubstitution {
+  selectedId: string;
+  retryId: string;
+}
+
+export interface RetrySkip {
+  /** The exchange the skip is about — the one selected, or the attempt that stood in for it. */
+  id: string;
+  reason: string;
+}
+
+/** What a bulk retry will do, or (returned by the retry itself) what it did. */
+export interface BulkRetryPlan {
+  selected: number;
+  willRetry: number;
+  limit: number;
+  /** True when the selection is past `limit`; nothing else is filled in. */
+  overLimit: boolean;
+  substituted: RetrySubstitution[];
+  skipped: RetrySkip[];
+  /**
+   * Promoted properties for every exchange the plan names, keyed by id, so they can be named the
+   * way the exchange list names them. Absent for exchanges that promote nothing.
+   */
+  properties: Record<string, Record<string, string | null> | undefined>;
 }
 
 export interface ExchangeQuery {
