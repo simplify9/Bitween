@@ -35,10 +35,13 @@ public class Test(BitweenDbContext dbContext, RequestContext requestContext,
         await requestContext.EnsurePermission(dbContext, Model.Permissions.DataSources.Operate);
 
         // Registered only when BusProvidersEnabled, so say which switch is off rather than
-        // failing to resolve a service the operator has never heard of.
+        // failing to resolve a service the operator has never heard of. The switch is named for
+        // brokers because it predates database sources, so the message says what it now gates
+        // rather than repeating a name that means nothing to someone configuring PostgreSQL.
         if (adapters == null)
-            return Failed("External bus providers are turned off on this node "
-                          + "(Bitween:BusProvidersEnabled). Nothing can connect from here.");
+            return Failed("Resident data source providers are turned off on this node, so nothing "
+                          + "can connect from here. Turn on Bitween:BusProvidersEnabled — the "
+                          + "switch is older than database sources and still carries the bus name.");
 
         var dataSource = await dbContext.Set<DataSource>().AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == key);

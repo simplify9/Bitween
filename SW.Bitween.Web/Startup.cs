@@ -172,8 +172,9 @@ namespace SW.Bitween.Web
             // Scoped: it reads subscriptions through the request's DbContext.
             services.AddScoped<StatementUsageReader>();
 
-            // External bus providers. Off by default because it is opt-in, not because it is
-            // unsafe to run on more than one node: a broker connection is exclusive, and every
+            // Resident data source providers — brokers and databases both. Off by default because
+            // it is opt-in, not because it is unsafe to run on more than one node: a broker
+            // connection is exclusive, and every
             // data source is held through a lease with a database-issued fencing term, so only
             // one node consumes any given source. See BusProviderSupervisor and ILeaderElection.
             if (bitweenOptions.BusProvidersEnabled)
