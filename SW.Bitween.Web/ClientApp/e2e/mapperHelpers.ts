@@ -155,6 +155,23 @@ export async function addListField(
   await setSourcePath(list, path, from);
 }
 
+/**
+ * Makes a list hold plain values, and points its one value at a path.
+ *
+ * The counterpart of `addListField`. What a list holds is decided by what is put into
+ * it, so this is a click that adds a row rather than a setting that changes a mode —
+ * and it is only offered while the list is still empty.
+ */
+export async function addListValue(
+  list: Locator,
+  addTo: string,
+  path: string,
+  from: "entry" | "document" = "entry",
+) {
+  await list.getByRole("button", { name: `Add a value to ${addTo}` }).click();
+  await setSourcePath(list, path, from);
+}
+
 /** The mapped document, which the server produces. */
 export const preview = (page: Page): Locator => page.locator("pre").first();
 

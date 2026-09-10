@@ -5,15 +5,10 @@ import type { OutputListNode } from "../../lib/nativeMapper/outputTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
 import {
   FILTER_OPERATORS,
-  SOURCE_KINDS,
-  emptyFieldRule,
-  freshSource,
   type FilterOperatorName,
 } from "../../lib/nativeMapper/types";
 import { Checkbox } from "../ui/forms";
 import { RowInput, RowSelect } from "./rowControls";
-import { SegmentedControl } from "../ui/SegmentedControl";
-import { ValueCell, type SourcePaths } from "./ValueCell";
 
 /**
  * The three states of a list's source, encoded for a select.
@@ -34,22 +29,20 @@ const decodeOver = (value: string) =>
  * A list in the output: one entry per entry of a list on the way in.
  *
  * The header is one line like a field's, and what the list walks sits on it because
- * that is the thing you check when reading a mapping. The filter and the
- * plain-values switch are behind the chevron.
+ * that is the thing you check when reading a mapping. The filter is behind the
+ * chevron. What each entry holds is not a setting at all — it is the rows in the
+ * list, the same as everywhere else in the tree.
  */
 export function ListRow({
   node,
   /** The source node this list's own list is named against. */
   scope,
-  itemPaths,
   prefix,
   collapsed,
   onToggleCollapsed,
 }: {
   node: OutputListNode;
   scope: DocumentNode | null;
-  /** The paths one entry of this list may read, for a list of plain values. */
-  itemPaths: SourcePaths;
   prefix: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -65,7 +58,7 @@ export function ListRow({
   // the list's own rules away, like an object's does; this one shows the list's
   // settings. Kept shut, a list that uses neither costs one line like anything else.
   const [detail, setDetail] = useState(false);
-  const settings = (list.where ? 1 : 0) + (list.item ? 1 : 0);
+  const settings = list.where ? 1 : 0;
 
   const update = (changes: Partial<Omit<typeof list, "id" | "fields" | "lists">>) =>
     dispatch({ type: "UPDATE_LIST", id: list.id, changes });
@@ -172,7 +165,7 @@ export function ListRow({
           onClick={() => setDetail((d) => !d)}
           aria-expanded={detail}
           aria-label={`Settings for the list ${node.name || "at the root"}`}
-          title="Filter the entries, or make it a list of plain values"
+          title="Skip some of the entries"
           className={`flex flex-shrink-0 items-center gap-0.5 rounded px-1 py-0.5 hover:bg-ink-100 ${
             settings > 0 ? "text-crimson-600" : "text-ink-400 hover:text-ink-700"
           }`}
@@ -233,40 +226,6 @@ export function ListRow({
                   placeholder="0"
                   value={String(list.where.value ?? "")}
                   onChange={(e) => update({ where: { ...list.where!, value: e.target.value } })}
-                />
-              </div>
-            )}
-
-            <Checkbox
-              label="A list of plain values, not records"
-              description={
-                list.item
-                  ? 'Each entry is one value, e.g. ["A1", "B7"].'
-                  : 'Each entry is an object, e.g. [{ "sku": "A1" }].'
-              }
-              checked={list.item !== undefined}
-              onChange={(e) => update({ item: e.target.checked ? emptyFieldRule() : undefined })}
-            />
-
-            {/* Configures the entry a walked source produces, so it has nothing to
-                say for a list that walks nothing — those entries carry their own. */}
-            {list.item && list.over !== undefined && (
-              <div className="flex items-center gap-1.5">
-                <span className="flex-shrink-0 text-[10px] text-ink-500">each walked entry is</span>
-                <SegmentedControl
-                  size="sm"
-                  label="Where each value comes from"
-                  options={SOURCE_KINDS}
-                  value={list.item.from.kind === "rootPath" ? "path" : list.item.from.kind}
-                  onChange={(kind) =>
-                    update({ item: { ...list.item!, from: freshSource(kind) } })
-                  }
-                />
-                <ValueCell
-                  source={list.item.from}
-                  paths={itemPaths}
-                  valueType={list.item.type}
-                  onChange={(from) => update({ item: { ...list.item!, from } })}
                 />
               </div>
             )}

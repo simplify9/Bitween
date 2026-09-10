@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import type { DocumentNode } from "../../lib/nativeMapper/documentTree";
 import { filterTree, outputTreeOf } from "../../lib/nativeMapper/outputTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
-import { everyFieldRule, isAssigned } from "../../lib/nativeMapper/rulesReducer";
+import { everyFieldRule, isAssigned, isItemAssigned } from "../../lib/nativeMapper/rulesReducer";
 import { TextInput } from "../ui/forms";
 import { AddRuleButtons, OutputTreeView } from "./OutputTreeView";
 
@@ -22,7 +22,9 @@ export function OutputPanel({ sourceRoot }: { sourceRoot: DocumentNode | null })
   const shown = useMemo(() => filterTree(tree, searchTarget), [tree, searchTarget]);
 
   const fields = everyFieldRule(rules);
-  const assigned = fields.filter((f) => isAssigned(f.rule)).length;
+  const assigned = fields.filter((f) =>
+    f.isItem ? isItemAssigned(f.rule) : isAssigned(f.rule),
+  ).length;
   const empty = rules.fields.length === 0 && rules.lists.length === 0 && !rules.root;
 
   return (

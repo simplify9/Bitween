@@ -1,32 +1,23 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
-import { isAssigned } from "../../lib/nativeMapper/rulesReducer";
-import type { OutputFieldNode } from "../../lib/nativeMapper/outputTree";
-import { SOURCE_KINDS, freshSource, type ValueTypeName } from "../../lib/nativeMapper/types";
+import { isAssigned, isItemAssigned } from "../../lib/nativeMapper/rulesReducer";
+import type { OutputRowNode } from "../../lib/nativeMapper/outputTree";
+import { SOURCE_KINDS, TYPE_BADGES, freshSource } from "../../lib/nativeMapper/types";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { RuleDetail } from "./RuleDetail";
 import { RowInput } from "./rowControls";
 import { ValueCell, type SourcePaths } from "./ValueCell";
 
 /**
- * Short enough for the row; "boo" is not a word anyone wants to read.
+ * One rule, on one line.
  *
- * Keyed by the type union rather than by `string`, so adding a value type is a
- * compile error here instead of a badge that silently renders as nothing.
- */
-const TYPE_BADGES: Record<ValueTypeName, string> = {
-  string: "txt",
-  number: "num",
-  boolean: "y/n",
-};
-
-/**
- * One output field, on one line.
- *
- * The name shown is the last segment only — the indentation carries the rest, the
- * way the source side already did. Typing dots into it still nests, because the
- * rule stores segments; the tree redraws itself around the new path.
+ * Two kinds of rule are drawn this way. A field has a name, shown as its last
+ * segment only — the indentation carries the rest, the way the source side already
+ * did — and typing dots into it still nests, because the rule stores segments. The
+ * single value each entry of a list of plain values produces has no name to show,
+ * because `["A1","B7"]` has nowhere to put one; everything else about the row is
+ * the same, which is the point of it being a row at all.
  *
  * Everything that is not the value lives behind the chevron. A row that carries a
  * transform or a table says so with a dot rather than by taking three lines to
@@ -41,7 +32,7 @@ export function OutputRow({
   prefix,
   paths,
 }: {
-  node: OutputFieldNode;
+  node: OutputRowNode;
   prefix: string[];
   paths: SourcePaths;
 }) {
@@ -50,15 +41,33 @@ export function OutputRow({
   const { selectedId, ruleErrors, hoveredPath } = useRules();
   const [open, setOpen] = useState(false);
 
+  const isItem = node.kind === "item";
   const error = ruleErrors[errorKey];
   const selected = selectedId === rule.id;
   // Only a path read in this scope has a source row to draw a line to; one read
   // from the top of the document inside a list has no single row to point at.
   const sourcePath = rule.from.kind === "path" ? (rule.from.path ?? "") : "";
   const extras = (rule.transform ? 1 : 0) + (rule.lookup ? 1 : 0);
+  // A field's name, or the words standing in for the name a list's value has not
+  // got. Used in every label on the row, so both kinds read the same way.
+  const describe = node.kind === "item" ? "each entry" : node.name || "this field";
+  const assigned = isItem ? isItemAssigned(rule) : isAssigned(rule);
 
   const update = (changes: Partial<Omit<typeof rule, "id">>) =>
-    dispatch({ type: "UPDATE_FIELD", id: rule.id, changes });
+    node.kind === "item"
+      ? dispatch({
+          type: "UPDATE_LIST",
+          id: node.listId,
+          changes: { item: { ...rule, ...changes } },
+        })
+      : dispatch({ type: "UPDATE_FIELD", id: rule.id, changes });
+
+  // Removing a list's value does not remove a row from the list — it puts the list
+  // back to having decided nothing, so it can be built out of fields instead.
+  const remove = () =>
+    node.kind === "item"
+      ? dispatch({ type: "UPDATE_LIST", id: node.listId, changes: { item: undefined } })
+      : dispatch({ type: "REMOVE_FIELD", id: rule.id });
 
   return (
     <div
@@ -108,24 +117,33 @@ export function OutputRow({
       <div className="flex items-center gap-1.5 px-1.5 py-0.5">
         <span
           aria-hidden
-          title={isAssigned(rule) ? "Has a value" : "Nothing assigned yet"}
+          title={assigned ? "Has a value" : "Nothing assigned yet"}
           className={`size-1.5 flex-shrink-0 rounded-full ${
-            isAssigned(rule) ? "bg-ok-600" : "bg-ink-300"
+            assigned ? "bg-ok-600" : "bg-ink-300"
           }`}
         />
 
-        <RowInput
-          className="w-28 flex-shrink-0 border-transparent bg-transparent font-mono hover:border-ink-200 focus:bg-white"
-          aria-label="Output field name"
-          placeholder="name"
-          title="Use dots to nest, e.g. billing.city"
-          value={node.name}
-          onChange={(e) =>
-            update({
-              target: [...prefix, ...(e.target.value === "" ? [] : e.target.value.split("."))],
-            })
-          }
-        />
+        {node.kind === "item" ? (
+          <span
+            className="w-28 flex-shrink-0 px-1 font-mono text-[11px] text-warn-700"
+            title="Every entry of this list is one value, so it has no name of its own"
+          >
+            each entry
+          </span>
+        ) : (
+          <RowInput
+            className="w-28 flex-shrink-0 border-transparent bg-transparent font-mono hover:border-ink-200 focus:bg-white"
+            aria-label="Output field name"
+            placeholder="name"
+            title="Use dots to nest, e.g. billing.city"
+            value={node.name}
+            onChange={(e) =>
+              update({
+                target: [...prefix, ...(e.target.value === "" ? [] : e.target.value.split("."))],
+              })
+            }
+          />
+        )}
 
         <span aria-hidden className="flex-shrink-0 text-ink-300">
           ←
@@ -145,6 +163,7 @@ export function OutputRow({
           source={rule.from}
           paths={paths}
           valueType={rule.type}
+          emptyPathLabel={isItem ? "the entry itself" : undefined}
           onChange={(from) => update({ from })}
         />
 
@@ -152,7 +171,7 @@ export function OutputRow({
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          aria-label={`Details for ${node.name || "this field"}`}
+          aria-label={`Details for ${describe}`}
           title={
             extras > 0
               ? "Has a transform or a table"
@@ -171,9 +190,11 @@ export function OutputRow({
 
         <button
           type="button"
-          onClick={() => dispatch({ type: "REMOVE_FIELD", id: rule.id })}
-          aria-label={`Remove the rule for ${node.name || "the unnamed field"}`}
-          title="Remove this rule"
+          onClick={remove}
+          aria-label={
+            isItem ? "Remove the value rule" : `Remove the rule for ${node.name || "the unnamed field"}`
+          }
+          title={isItem ? "Stop this list being a list of plain values" : "Remove this rule"}
           className="flex-shrink-0 rounded p-0.5 text-ink-300 hover:bg-danger-50 hover:text-danger-700"
         >
           <Trash2 size={12} />

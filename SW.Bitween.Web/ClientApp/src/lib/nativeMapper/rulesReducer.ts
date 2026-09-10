@@ -87,6 +87,7 @@ export type RulesEditorAction =
   | { type: "ADD_LIST"; parentListId: RuleId | null; target?: string[] }
   | { type: "UPDATE_LIST"; id: RuleId; changes: Partial<Omit<EditorListRule, "id" | "fields" | "lists">> }
   | { type: "REMOVE_LIST"; id: RuleId }
+  | { type: "MAKE_LIST_OF_VALUES"; listId: RuleId }
   | { type: "ADD_FIXED_ENTRY"; listId: RuleId }
   | { type: "REMOVE_FIXED_ENTRY"; id: RuleId }
   | {
@@ -221,6 +222,7 @@ function changesTheMapping(action: RulesEditorAction): boolean {
     case "ADD_LIST":
     case "UPDATE_LIST":
     case "REMOVE_LIST":
+    case "MAKE_LIST_OF_VALUES":
     case "ADD_FIXED_ENTRY":
     case "REMOVE_FIXED_ENTRY":
     case "UPDATE_FIXED_ENTRY":
@@ -352,6 +354,21 @@ export function rulesEditorReducer(
         break;
       }
 
+      case "MAKE_LIST_OF_VALUES": {
+        const list = findList(draft.rules, action.listId);
+        if (!list) break;
+        list.item = emptyFieldRule();
+        // A list that walks nothing has no walked entry for that rule to describe, so
+        // what it needs is the first slot written into it. Without this the click
+        // would set a mark nobody can see and add nothing anyone can fill in.
+        if (list.over === undefined) {
+          const entry = emptyListEntry();
+          entry.item = emptyFieldRule();
+          list.fixed.push(entry);
+        }
+        break;
+      }
+
       case "ADD_FIXED_ENTRY": {
         const list = findList(draft.rules, action.listId);
         if (!list) break;
@@ -366,7 +383,12 @@ export function rulesEditorReducer(
 
       case "REMOVE_FIXED_ENTRY": {
         const owner = allEntries(draft.rules).find((e) => e.entry.id === action.id)?.list;
-        if (owner) owner.fixed = owner.fixed.filter((e) => e.id !== action.id);
+        if (!owner) break;
+        owner.fixed = owner.fixed.filter((e) => e.id !== action.id);
+        // A list that walks nothing is exactly the entries written into it, so with the
+        // last one gone there is nothing left to say it holds values — and leaving the
+        // mark on would mean the list could never be built out of records instead.
+        if (owner.over === undefined && owner.fixed.length === 0) owner.item = undefined;
         break;
       }
 
@@ -461,21 +483,43 @@ export function targetPathOf(target: string[]): string {
 /** Every field rule in the mapping, with the list it belongs to. */
 export function everyFieldRule(
   rules: EditorRules,
-): { rule: EditorFieldRule; list: EditorListRule | null }[] {
-  const out: { rule: EditorFieldRule; list: EditorListRule | null }[] = [];
-  for (const rule of rules.fields) out.push({ rule, list: null });
+): { rule: EditorFieldRule; list: EditorListRule | null; isItem: boolean }[] {
+  const out: { rule: EditorFieldRule; list: EditorListRule | null; isItem: boolean }[] = [];
+  const add = (rule: EditorFieldRule, list: EditorListRule | null, isItem = false) =>
+    out.push({ rule, list, isItem });
+
+  for (const rule of rules.fields) add(rule, null);
   for (const list of allLists(rules)) {
-    if (list.item) out.push({ rule: list.item, list });
-    for (const rule of list.fields) out.push({ rule, list });
+    if (list.item) add(list.item, list, true);
+    for (const rule of list.fields) add(rule, list);
   }
   for (const { entry, list } of allEntries(rules)) {
-    if (entry.item) out.push({ rule: entry.item, list });
-    for (const rule of entry.fields) out.push({ rule, list });
+    if (entry.item) add(entry.item, list, true);
+    for (const rule of entry.fields) add(rule, list);
   }
   return out;
 }
 
-/** Whether a rule has a value assigned, for the "n of m assigned" count. */
+/**
+ * Whether a rule producing a whole entry of a list of plain values has a value.
+ *
+ * Separate from `isAssigned` because an empty path means something here:
+ * the entry itself, which is what a list of plain values almost always wants and what
+ * the scaffolder writes. Counted as blank, a correctly built list of values would sit
+ * in the "not assigned yet" tally for ever with nothing for anyone to fill in.
+ */
+export function isItemAssigned(rule: EditorFieldRule): boolean {
+  return rule.from.kind === "path" || rule.from.kind === "rootPath"
+    ? true
+    : isAssigned(rule);
+}
+
+/**
+ * Whether a rule has a value assigned, for the "n of m assigned" count.
+ *
+ * Takes only the rule on purpose: it is passed straight to `Array.map` in places, so
+ * a second parameter would quietly receive the index.
+ */
 export function isAssigned(rule: EditorFieldRule): boolean {
   switch (rule.from.kind) {
     case "path":

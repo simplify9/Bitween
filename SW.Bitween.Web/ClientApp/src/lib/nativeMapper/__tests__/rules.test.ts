@@ -4,6 +4,7 @@ import {
   everyFieldRule,
   initialRulesEditorState,
   isAssigned,
+  isItemAssigned,
   rulesEditorReducer,
   type RulesEditorAction,
   type RulesEditorState,
@@ -586,5 +587,98 @@ describe("fixed entries", () => {
     // A list with none carries no key at all, so what was saved equals what loads.
     expect("fixed" in wire.lists[1]).toBe(false);
     expect(toWire(fromWire(wire))).toEqual(wire);
+  });
+});
+
+// ─── What a list is made of ───────────────────────────────────────────────────
+//
+// Records or plain values, decided by what is put into the list rather than by a
+// setting sitting off to one side. These pin both halves: the click that makes it
+// values, and what takes it back.
+
+describe("a list of plain values", () => {
+  const runFrom = (state: RulesEditorState, actions: RulesEditorAction[]) =>
+    actions.reduce(rulesEditorReducer, state);
+
+  const theList = (state: RulesEditorState) => state.rules.lists[0];
+
+  const withAList = (over: string | undefined): RulesEditorState => {
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.over = over;
+    rules.lists.push(list);
+    return loaded(rules);
+  };
+
+  it("gives a list that walks a source one value rule, and nothing written into it", () => {
+    const start = withAList("order.line");
+    const after = runFrom(start, [
+      { type: "MAKE_LIST_OF_VALUES", listId: theList(start).id },
+    ]);
+
+    // The rule describing each walked entry, which is the row the editor draws.
+    expect(theList(after).item).toBeDefined();
+    expect(theList(after).fixed).toHaveLength(0);
+  });
+
+  it("gives a list that walks nothing its first slot as well", () => {
+    // There is no walked entry for that rule to describe, so on its own the click
+    // would set a mark nobody can see and add nothing anyone can fill in.
+    const start = withAList(undefined);
+    const after = runFrom(start, [
+      { type: "MAKE_LIST_OF_VALUES", listId: theList(start).id },
+    ]);
+
+    expect(theList(after).fixed).toHaveLength(1);
+    expect(theList(after).fixed[0].item).toBeDefined();
+  });
+
+  it("forgets that a list walking nothing held values once its last slot goes", () => {
+    // Otherwise it could never be built out of records again: every entry added
+    // afterwards would keep mirroring a decision with nothing left to justify it.
+    const start = withAList(undefined);
+    const made = runFrom(start, [
+      { type: "MAKE_LIST_OF_VALUES", listId: theList(start).id },
+    ]);
+    const after = runFrom(made, [
+      { type: "REMOVE_FIXED_ENTRY", id: theList(made).fixed[0].id },
+    ]);
+
+    expect(theList(after).item).toBeUndefined();
+  });
+
+  it("is one step to undo", () => {
+    const start = withAList(undefined);
+    const after = runFrom(start, [
+      { type: "MAKE_LIST_OF_VALUES", listId: theList(start).id },
+      { type: "UNDO" },
+    ]);
+
+    expect(theList(after).item).toBeUndefined();
+    expect(theList(after).fixed).toHaveLength(0);
+  });
+
+  it("counts a value reading the whole entry as assigned", () => {
+    // An empty path means the entry itself, which is the ordinary case and what the
+    // scaffolder writes. Counted as blank, a correctly built list of values would
+    // sit in the "not assigned yet" tally for ever with nothing to fill in.
+    const rule = emptyFieldRule();
+    expect(isAssigned(rule)).toBe(false);
+    expect(isItemAssigned(rule)).toBe(true);
+
+    // A fixed value is still blank until something is typed into it.
+    expect(isItemAssigned({ ...rule, from: { kind: "fixed", value: "" } })).toBe(false);
+    expect(isItemAssigned({ ...rule, from: { kind: "fixed", value: "WEB" } })).toBe(true);
+  });
+
+  it("reports the value among the mapping's rules, marked as one", () => {
+    const start = withAList("order.line");
+    const after = runFrom(start, [
+      { type: "MAKE_LIST_OF_VALUES", listId: theList(start).id },
+    ]);
+
+    const items = everyFieldRule(after.rules).filter((f) => f.isItem);
+    expect(items).toHaveLength(1);
+    expect(items[0].rule).toBe(theList(after).item);
   });
 });

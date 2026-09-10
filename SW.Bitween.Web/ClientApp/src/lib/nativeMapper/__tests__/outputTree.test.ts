@@ -131,15 +131,34 @@ describe("lists", () => {
     expect(drawn(rules)).toEqual(["lines []", "  tags []", "    code"]);
   });
 
-  /** A list of plain values carries one item rule, so it has no children to show. */
-  it("gives a list of plain values no children", () => {
+  it("shows a list of plain values as its one value row, not its fields", () => {
     const rules = emptyRules();
     const list = emptyListRule(["codes"]);
     list.item = emptyFieldRule();
+    // Fields left over from before it became a list of values. The mapper ignores
+    // them, so drawing them would offer rules that do nothing.
     list.fields.push(emptyFieldRule(["ignored"]));
     rules.lists.push(list);
 
+    const [node] = outputTreeOf(rules);
+    expect(node.kind).toBe("list");
+    const children = node.kind === "list" ? node.children : [];
+    expect(children.map((c) => c.kind)).toEqual(["item"]);
     expect(drawn(rules)).toEqual(["codes []"]);
+  });
+
+  it("keeps a list of plain values whole when its name is searched for", () => {
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+
+    // The value row has no name of its own, so it can only be reached through its
+    // list — and a search that finds the list has to keep what is in it.
+    const [found] = filterTree(outputTreeOf(rules), "codes");
+    expect(found.kind === "list" && found.children).toHaveLength(1);
+
+    expect(filterTree(outputTreeOf(rules), "nothing")).toHaveLength(0);
   });
 
   it("puts the whole output under one root list", () => {
