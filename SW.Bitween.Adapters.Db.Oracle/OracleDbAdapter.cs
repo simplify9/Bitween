@@ -21,7 +21,14 @@ namespace SW.Bitween.Adapters.Db.Oracle;
 /// Oracle: how a connection string is spelled, what the data dictionary is called, which privileges
 /// are worth probing, and REF CURSOR.
 /// </summary>
+// Three roles, one package. "datasource" is what makes it configurable as a connection;
+// "receiver" and "handler" are what put it in the pickers a subscription actually chooses from,
+// because the same resident instance both polls a table and runs a statement on delivery.
+// Declared rather than encoded in the id: reclassifying by rename would break every subscription
+// that stores it.
 [AdapterKind("datasource")]
+[AdapterKind("receiver")]
+[AdapterKind("handler")]
 public class OracleDbAdapter(IOptions<OracleOptions> options, ILogger<OracleDbAdapter> logger)
     : DbResidentAdapterBase(options.Value, logger)
 {

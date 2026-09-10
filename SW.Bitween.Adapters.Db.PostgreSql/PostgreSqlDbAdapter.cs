@@ -20,7 +20,14 @@ namespace SW.Bitween.Adapters.Db.PostgreSql;
 /// PostgreSQL: the connection string, the system catalogs, and what a role is actually allowed to
 /// do.
 /// </summary>
+// Three roles, one package. "datasource" is what makes it configurable as a connection;
+// "receiver" and "handler" are what put it in the pickers a subscription actually chooses from,
+// because the same resident instance both polls a table and runs a statement on delivery.
+// Declared rather than encoded in the id: reclassifying by rename would break every subscription
+// that stores it.
 [AdapterKind("datasource")]
+[AdapterKind("receiver")]
+[AdapterKind("handler")]
 public class PostgreSqlDbAdapter(IOptions<PostgreSqlOptions> options, ILogger<PostgreSqlDbAdapter> logger)
     : DbResidentAdapterBase(options.Value, logger)
 {
