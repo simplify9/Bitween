@@ -80,7 +80,13 @@ export function ValueCell({
       const orphan = path !== "" && !known.includes(path);
       // Not a hint about what to type but the answer itself, so it is set in the
       // colour of a value rather than the grey of a placeholder.
-      const meansWholeEntry = emptyPathLabel !== undefined && path === "";
+      //
+      // Only ever true of a path read from the entry. Switch the box to "document"
+      // and an empty path is the whole incoming document, not the entry — a mapping
+      // that writes the same document into every slot of the list, and the last
+      // thing to label as the ordinary answer.
+      const meansWholeEntry =
+        emptyPathLabel !== undefined && path === "" && source.kind === "path";
 
       return (
         <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -111,9 +117,9 @@ export function ValueCell({
               meansWholeEntry ? "placeholder:text-ink-700" : ""
             }`}
             aria-label="Source field"
-            placeholder={emptyPathLabel ?? "order.customer"}
+            placeholder={meansWholeEntry ? emptyPathLabel : "order.customer"}
             title={
-              emptyPathLabel
+              meansWholeEntry
                 ? `Empty means ${emptyPathLabel}. Type a path to read a field of it instead.`
                 : paths.document
                   ? "A path on this entry, or on the whole document — type it, or pick from the sample"

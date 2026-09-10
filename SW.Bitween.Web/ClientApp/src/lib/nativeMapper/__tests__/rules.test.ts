@@ -671,6 +671,44 @@ describe("a list of plain values", () => {
     expect(isItemAssigned({ ...rule, from: { kind: "fixed", value: "WEB" } })).toBe(true);
   });
 
+  it("does not call a value read from the document assigned", () => {
+    // Switching the box to "document" and leaving the path empty is the whole
+    // incoming document written into every slot of the list — a mistake, and the
+    // one empty path here that nobody means.
+    const rule = emptyFieldRule();
+    expect(isItemAssigned({ ...rule, from: { kind: "rootPath", path: "" } })).toBe(false);
+    expect(isItemAssigned({ ...rule, from: { kind: "rootPath", path: "ref" } })).toBe(true);
+  });
+
+  it("does not treat an entry written by hand as reading an entry", () => {
+    // It has no entry of its own: the mapper runs its rules against whatever the
+    // list reads, so an empty path there is the enclosing scope and still a blank.
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.over = "order.line";
+    list.item = emptyFieldRule();
+    const entry = emptyListEntry();
+    entry.item = emptyFieldRule();
+    list.fixed.push(entry);
+    rules.lists.push(list);
+
+    const marked = everyFieldRule(rules).filter((f) => f.isItem);
+    expect(marked).toHaveLength(1);
+    expect(marked[0].rule).toBe(list.item);
+  });
+
+  it("does not treat the mark on a list that walks nothing as a rule with a value", () => {
+    // Nothing is walked, so that rule never runs — counting it assigned would pad
+    // the tally with a rule the mapper does not read.
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.over = undefined;
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+
+    expect(everyFieldRule(rules).filter((f) => f.isItem)).toHaveLength(0);
+  });
+
   it("reports the value among the mapping's rules, marked as one", () => {
     const start = withAList("order.line");
     const after = runFrom(start, [

@@ -177,7 +177,9 @@ describe("the keys rule errors arrive under", () => {
     const out: string[] = [];
     const walk = (nodes: OutputNode[]) => {
       for (const n of nodes) {
-        if (n.kind === "field") out.push(n.errorKey);
+        // A field and a list's value are both leaves; only the value shares its key
+        // with something else, because the mapper reports it under the list.
+        if (n.kind === "field" || n.kind === "item") out.push(n.errorKey);
         else if (n.kind === "list") {
           out.push(n.errorKey);
           walk(n.children);
@@ -187,6 +189,18 @@ describe("the keys rule errors arrive under", () => {
     walk(outputTreeOf(rules));
     return out;
   };
+
+  it("names a list of plain values twice, because both report under the list", () => {
+    // The list's own troubles — no target, a filter that will not read — and the
+    // value's arrive under one key, so the editor lights up both rows. Worth pinning:
+    // it is why a failing value shows a reason at all, having no key of its own.
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+
+    expect(keysOf(rules)).toEqual(["codes", "codes"]);
+  });
 
   it("names a top-level rule by its dotted target", () => {
     expect(keysOf(withFields(["ref"], ["billing", "city"]))).toEqual(["ref", "billing.city"]);
@@ -240,7 +254,21 @@ describe("filtering", () => {
     const out: string[] = [];
     const walk = (nodes: OutputNode[], depth: number) => {
       for (const node of nodes) {
-        out.push("  ".repeat(depth) + (node.name || "(root)"));
+        const pad = "  ".repeat(depth);
+
+        // Two of the five kinds have no name to print. A list's value has nothing
+        // under it either; an entry is numbered and holds rules of its own.
+        if (node.kind === "item") {
+          out.push(`${pad}(value)`);
+          continue;
+        }
+        if (node.kind === "entry") {
+          out.push(`${pad}(entry ${node.position})`);
+          walk(node.children, depth + 1);
+          continue;
+        }
+
+        out.push(pad + (node.name || "(root)"));
         if (node.kind !== "field") walk(node.children, depth + 1);
       }
     };

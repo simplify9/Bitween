@@ -12,7 +12,6 @@ import {
   createSubscription,
   expectPreview,
   openDetail,
-  openMapper,
   openWithSample,
   preview,
   saveAndReload,

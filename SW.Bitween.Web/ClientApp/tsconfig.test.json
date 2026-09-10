@@ -1,0 +1,18 @@
+{
+  // The unit and end-to-end tests, which nothing else typechecks.
+  //
+  // `tsconfig.app.json` excludes `__tests__`, and `e2e` sits outside `src` entirely,
+  // so until this existed a test file could reference a property no node in the union
+  // has and only find out by throwing at run time — which is how a walker came to call
+  // itself with `undefined` for a node that has no children.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    // Playwright's config and helpers reach for node's globals.
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/__tests__/**/*", "e2e", "playwright.config.ts", "vite.config.ts"],
+  // The old mapper's own tests, left out for the same reason `tsconfig.app.json`
+  // leaves out its source: it is verbatim-ported code that goes when it goes.
+  "exclude": ["src/lib/mapping/**"]
+}

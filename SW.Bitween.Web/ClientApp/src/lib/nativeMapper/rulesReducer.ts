@@ -490,11 +490,17 @@ export function everyFieldRule(
 
   for (const rule of rules.fields) add(rule, null);
   for (const list of allLists(rules)) {
-    if (list.item) add(list.item, list, true);
+    // Only a list that walks something has an entry for an empty path to mean, and
+    // only then does the rule run at all: for a list that walks nothing this is the
+    // mark saying it holds values, and the mapper never reads it.
+    if (list.item) add(list.item, list, list.over !== undefined);
     for (const rule of list.fields) add(rule, list);
   }
   for (const { entry, list } of allEntries(rules)) {
-    if (entry.item) add(entry.item, list, true);
+    // Not marked: an entry written into a list by hand has no entry of its own, so
+    // the mapper runs its rules against whatever the list reads. An empty path there
+    // is the enclosing scope, not one item of the list, and nothing anyone means.
+    if (entry.item) add(entry.item, list);
     for (const rule of entry.fields) add(rule, list);
   }
   return out;
@@ -509,9 +515,10 @@ export function everyFieldRule(
  * in the "not assigned yet" tally for ever with nothing for anyone to fill in.
  */
 export function isItemAssigned(rule: EditorFieldRule): boolean {
-  return rule.from.kind === "path" || rule.from.kind === "rootPath"
-    ? true
-    : isAssigned(rule);
+  // `rootPath` deliberately not included: an empty path read from the document is
+  // the whole document, which would write the same thing into every slot of the
+  // list. That is a blank someone still has to fill in, not an answer.
+  return rule.from.kind === "path" ? true : isAssigned(rule);
 }
 
 /**
