@@ -432,8 +432,11 @@ Almost free, because the data-source form generates itself from the adapter's at
    view, procedure, function or sequence hands a drafted statement to the form, so the common case
    is reviewed rather than typed. Still missing: the parameter list with types, and a Preview that
    runs `Explain` (never `Query`).
-5. **Receive mode form** — mode, cursor column, marker statement; with the deletes-are-invisible
-   caveat stated in the form, not buried in docs.
+5. **Receive mode form** — DONE, and it moved. Mode, batch size and the mark-processed statement
+   are on the SUBSCRIPTION (`DataSourceBinding`), because they are the reader's policy; the cursor
+   and key columns are on the STATEMENT, because they describe what the query returns. The
+   deletes-are-invisible caveat is in the mode's own hint. See §6.1 of the API doc for the split
+   and why.
 
 ---
 

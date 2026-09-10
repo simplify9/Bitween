@@ -63,6 +63,26 @@ public class DataSourceStatement : BaseEntity, IAudited
     /// </summary>
     public bool Inactive { get; set; }
 
+    /// <summary>
+    /// For a statement a receiver polls with: the column carrying the cursor — the incrementing
+    /// id, or the modified-at timestamp. Its value in the last row read is what gets saved.
+    ///
+    /// It lives here rather than on the subscription because it describes the SHAPE of what this
+    /// query returns, not a choice the reader makes. <c>ordersOutbox</c> returns a
+    /// <c>modified_at</c> whoever reads it, and two subscriptions each nominating their own cursor
+    /// column is two chances to nominate the wrong one, with nothing to check them against.
+    ///
+    /// Null on the ordinary statements, which are never polled.
+    /// </summary>
+    public string CursorColumn { get; set; }
+
+    /// <summary>
+    /// For a polled statement: the column identifying a row, used for mark-processed and for
+    /// deduplication. Here for the same reason as <see cref="CursorColumn"/> — it is a fact about
+    /// the query's result, not about who reads it.
+    /// </summary>
+    public string KeyColumn { get; set; }
+
     public DateTime CreatedOn { get; set; }
     public string CreatedBy { get; set; }
     public DateTime? ModifiedOn { get; set; }

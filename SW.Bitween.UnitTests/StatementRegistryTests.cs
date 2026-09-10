@@ -111,11 +111,43 @@ public class StatementRegistryTests
         StringAssert.Contains(error.Message, "Statements setting");
     }
 
+    /// <summary>
+    /// The object form, which a statement a receiver polls with uses: the SQL plus the columns
+    /// that say which is the cursor and which identifies a row. It used to be rejected outright,
+    /// because there was only one shape.
+    /// </summary>
     [TestMethod]
-    public void A_statement_that_is_not_a_string_is_rejected()
+    public void A_statement_may_also_carry_the_shape_of_its_rows()
+    {
+        var registry = new StatementRegistry(
+            @"{ ""outbox"": { ""sql"": ""select 1"", ""cursorColumn"": ""id"", ""keyColumn"": ""id"" } }");
+
+        var statement = registry.Find("outbox");
+
+        Assert.AreEqual("select 1", statement.Sql);
+        Assert.AreEqual("id", statement.CursorColumn);
+        Assert.AreEqual("id", statement.KeyColumn);
+
+        // And it is still just SQL to everything that only wants SQL.
+        Assert.AreEqual("select 1", registry.Resolve("outbox", null, allowAdHoc: false));
+    }
+
+    [TestMethod]
+    public void An_object_without_sql_is_rejected()
+    {
+        // Named rather than quietly registered as an empty statement, which would fail later as
+        // a database syntax error with nothing to connect it back to the configuration.
+        var error = Assert.ThrowsException<ArgumentException>(() =>
+            new StatementRegistry(@"{ ""getOrder"": { ""cursorColumn"": ""id"" } }"));
+
+        StringAssert.Contains(error.Message, "getOrder");
+    }
+
+    [TestMethod]
+    public void A_statement_that_is_neither_a_string_nor_an_object_is_rejected()
     {
         var error = Assert.ThrowsException<ArgumentException>(() =>
-            new StatementRegistry(@"{ ""getOrder"": { ""sql"": ""select 1"" } }"));
+            new StatementRegistry(@"{ ""getOrder"": 42 }"));
 
         StringAssert.Contains(error.Message, "getOrder");
     }

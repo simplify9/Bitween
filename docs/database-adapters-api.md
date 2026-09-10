@@ -54,12 +54,9 @@ Settings marked **secret** are encrypted at rest and never returned by the API.
 | *(statements)* | — | Not a setting: they are records on the data source. See §3. |
 | `AllowAdHocSql` | false | Lets a caller send SQL text instead of naming a statement. |
 | `LogParameterValues` | false | Logs parameter values at Debug. For a controlled test only. |
-| `ReceiveMode` | — | `bulk`, `incrementing`, `timestamp`, `timestamp+incrementing`, `marker`. §6. |
-| `ReceiveStatement` | — | The polling query. Bind the cursor as `:cursor` / `@cursor`. |
-| `CursorColumn` | — | The column the cursor follows. |
-| `KeyColumn` | — | The primary key; identifies a row for mark-processed. |
-| `MarkProcessedStatement` | — | Run per row once Bitween accepts it. Bind the key as `:key` / `@key`. |
-| `ReceiveBatchSize` | 500 | Rows one poll takes. |
+| `ReceiveMode` | — | Default for subscriptions that do not choose one. §6. |
+| `ReceiveBatchSize` | 500 | Default rows one poll takes; a subscription may override. |
+| `ReceiveStatement`, `CursorColumn`, `KeyColumn`, `MarkProcessedStatement` | — | **Legacy.** Still honoured if set, hidden from the form. See §6.1 for where each now lives. |
 
 ### 2.2 Oracle — `bitween.db.oracle`
 
@@ -376,10 +373,35 @@ Mapped onto the existing receiver session, so nothing about the pipeline changes
 | Session call | What the adapter does |
 |---|---|
 | `Initialize` | Prunes stale batches. No transaction is held open — see below. |
-| `ListFiles` | Runs `ReceiveStatement`, returns one opaque id per row |
+| `ListFiles` | Runs the named receive statement, returns one opaque id per row |
 | `GetFile(id)` | That row, as JSON |
-| `DeleteFile(id)` | Runs `MarkProcessedStatement`, then advances the cursor past that row |
+| `DeleteFile(id)` | Runs the named mark-processed statement, then advances that subscription's cursor past the row |
 | `Finalize` | Drops what the run did not get through |
+
+### 6.1 Where each receive setting lives
+
+A connection is shared by every subscription pointed at it, so nothing that varies per reader can
+sit on the data source — one connection could otherwise only ever feed one receiver. What is left
+divides on a single principle: **the SQL and the shape of its rows belong to the statement; the
+reading policy belongs to the subscription doing the reading.**
+
+| Setting | Configured on | Why there |
+|---|---|---|
+| the polling SQL | **statement** (named by the subscription's `ReceiveStatement`) | It is SQL, so it gets a statement's permission, audit trail and usage count — and a per-invocation property is never SQL text, because partner values are templated into those before the adapter sees them. |
+| `CursorColumn` | **statement** | Describes what the query returns. The same statement returns the same cursor column whoever reads it; two readers each nominating their own is two chances to be wrong with nothing to check them against. |
+| `KeyColumn` | **statement** | Same reason. |
+| `MarkProcessedStatement` | **subscription**, naming a statement | It is SQL, and it writes — so it is a statement like any other. Which one runs is the reader's business. |
+| `ReceiveMode` | **subscription** (data source default) | Reader policy: the same statement is legitimately read `bulk` once for a backfill and `incrementing` after. |
+| `ReceiveBatchSize` | **subscription** (data source default) | One subscription's appetite. |
+
+The **cursor is scoped per subscription**, for the same reason. Host state is keyed by (adapter,
+instance, name) and the instance is the data source, so a fixed name meant one cursor per
+*connection*: whichever subscription polled first advanced it and the rows it took were invisible
+to the other. The state name now carries the subscription id, and the old unscoped name is read as
+a fallback so an upgrade resumes rather than replaying.
+
+Everything falls back to the data source setting of the same name, so a receiver configured before
+the split keeps working untouched.
 
 **Modes** are Kafka Connect's vocabulary, because it is the one operators already have:
 

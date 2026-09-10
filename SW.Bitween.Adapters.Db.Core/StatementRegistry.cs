@@ -16,7 +16,23 @@ namespace SW.Bitween.Adapters.Db;
 /// </summary>
 public class StatementRegistry
 {
-    readonly Dictionary<string, string> statements =
+    /// <summary>
+    /// One configured statement. Most are just SQL; a statement a receiver polls with also carries
+    /// the shape of its rows — which column is the cursor, which identifies the row.
+    ///
+    /// Those two live with the statement rather than with the subscription reading it because they
+    /// describe what the QUERY returns. A poll statement returns the same cursor column whoever
+    /// reads it, and letting each reader nominate its own is two chances to nominate the wrong one
+    /// with nothing to check them against.
+    /// </summary>
+    public sealed class Statement
+    {
+        public string Sql { get; set; }
+        public string CursorColumn { get; set; }
+        public string KeyColumn { get; set; }
+    }
+
+    readonly Dictionary<string, Statement> statements =
         new(StringComparer.OrdinalIgnoreCase);
 
     public StatementRegistry(string json)
@@ -40,18 +56,48 @@ public class StatementRegistry
 
         foreach (var property in parsed.Properties())
         {
-            if (property.Value.Type != JTokenType.String)
-                throw new ArgumentException(
-                    $"Statement '{property.Name}' has to be a string of SQL, not a "
-                    + $"{property.Value.Type}.");
+            // Two shapes. A string is the original and still the common case; an object is a
+            // statement that also says which of its columns is the cursor and which is the key,
+            // which only a polled statement needs.
+            if (property.Value.Type == JTokenType.String)
+            {
+                statements[property.Name] = new Statement { Sql = property.Value.Value<string>() };
+                continue;
+            }
 
-            statements[property.Name] = property.Value.Value<string>();
+            if (property.Value is JObject shaped)
+            {
+                var sql = shaped.Value<string>("sql");
+                if (string.IsNullOrWhiteSpace(sql))
+                    throw new ArgumentException(
+                        $"Statement '{property.Name}' is an object without a 'sql' property, so "
+                        + "there is nothing to run.");
+
+                statements[property.Name] = new Statement
+                {
+                    Sql = sql,
+                    CursorColumn = shaped.Value<string>("cursorColumn"),
+                    KeyColumn = shaped.Value<string>("keyColumn"),
+                };
+                continue;
+            }
+
+            throw new ArgumentException(
+                $"Statement '{property.Name}' has to be a string of SQL, or an object with a "
+                + $"'sql' property — not a {property.Value.Type}.");
         }
     }
 
     public IReadOnlyCollection<string> Names => statements.Keys;
 
     public int Count => statements.Count;
+
+    /// <summary>
+    /// The whole configured statement by name, or null. For a receiver, which needs the row shape
+    /// as well as the SQL.
+    /// </summary>
+    public Statement Find(string name) =>
+        !string.IsNullOrWhiteSpace(name) && statements.TryGetValue(name, out var found) ? found : null;
 
     /// <summary>
     /// The SQL to run for this request. A name resolves against the configured set; raw SQL is
@@ -61,7 +107,7 @@ public class StatementRegistry
     {
         if (!string.IsNullOrWhiteSpace(name))
         {
-            if (statements.TryGetValue(name, out var found)) return found;
+            if (statements.TryGetValue(name, out var found)) return found.Sql;
 
             throw new InvalidOperationException(
                 $"'{name}' is not a statement this data source defines. Configured: "

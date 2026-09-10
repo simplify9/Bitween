@@ -23,7 +23,22 @@ namespace SW.Bitween.Services.DataSources;
 /// </summary>
 public class StatementUsageReader(BitweenDbContext dbContext)
 {
-    /// <summary>The adapter property that names a statement. Must match what the adapter reads.</summary>
+    /// <summary>
+    /// The adapter properties that name a statement, and what each means the statement is FOR.
+    /// Must match what the adapter reads: a handler runs <c>Statement</c>, a receiver polls with
+    /// <c>ReceiveStatement</c> and marks rows with <c>MarkProcessedStatement</c>.
+    ///
+    /// Missing one here does not fail loudly — it reports a statement that is in daily use as
+    /// unused, which is exactly the licence to delete it that the usage count exists to withhold.
+    /// </summary>
+    static readonly (string Key, string Usage)[] StatementKeys =
+    [
+        ("Statement", null),
+        ("ReceiveStatement", "polls with"),
+        ("MarkProcessedStatement", "marks rows with"),
+    ];
+
+    /// <summary>The handler property that names a statement. Kept for callers that name it.</summary>
     public const string StatementKey = "Statement";
     public const string OperationKey = "Operation";
 
@@ -58,20 +73,25 @@ public class StatementUsageReader(BitweenDbContext dbContext)
     {
         if (properties == null) return;
 
-        var name = Value(properties, StatementKey);
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        if (!usage.TryGetValue(name, out var entries))
-            usage[name] = entries = new List<DataSourceStatementUsageEntry>();
-
-        entries.Add(new DataSourceStatementUsageEntry
+        // One slot can name two statements — a receiver polls with one and marks rows with
+        // another — so each is recorded separately, and the operation says which job it does.
+        foreach (var (key, usageVerb) in StatementKeys)
         {
-            SubscriptionId = subscription.Id,
-            SubscriptionName = subscription.Name,
-            Role = role,
-            Operation = Value(properties, OperationKey) ?? "query",
-            Inactive = subscription.Inactive
-        });
+            var name = Value(properties, key);
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            if (!usage.TryGetValue(name, out var entries))
+                usage[name] = entries = new List<DataSourceStatementUsageEntry>();
+
+            entries.Add(new DataSourceStatementUsageEntry
+            {
+                SubscriptionId = subscription.Id,
+                SubscriptionName = subscription.Name,
+                Role = role,
+                Operation = usageVerb ?? Value(properties, OperationKey) ?? "query",
+                Inactive = subscription.Inactive
+            });
+        }
     }
 
     /// <summary>

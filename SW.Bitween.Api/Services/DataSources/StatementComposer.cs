@@ -37,6 +37,25 @@ public static class StatementComposer
         // reconciles would recycle a healthy connection every thirty seconds.
         return JsonConvert.SerializeObject(
             mine.OrderBy(s => s.Name, System.StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(s => s.Name, s => s.Sql));
+                .ToDictionary(s => s.Name, Value));
     }
+
+    /// <summary>
+    /// A bare SQL string, unless the statement carries the columns a receiver needs — in which
+    /// case an object.
+    ///
+    /// Both shapes on purpose. A statement that is only ever queried composes to exactly the
+    /// string it always did, so upgrading the host ahead of the adapters changes nothing for the
+    /// statements they already run; only a polled statement takes the richer form, and only an
+    /// adapter new enough to poll will ever be handed one.
+    /// </summary>
+    static object Value(DataSourceStatement statement) =>
+        string.IsNullOrWhiteSpace(statement.CursorColumn) && string.IsNullOrWhiteSpace(statement.KeyColumn)
+            ? statement.Sql
+            : new Dictionary<string, string>
+            {
+                ["sql"] = statement.Sql,
+                ["cursorColumn"] = statement.CursorColumn,
+                ["keyColumn"] = statement.KeyColumn,
+            };
 }

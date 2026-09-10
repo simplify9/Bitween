@@ -366,7 +366,15 @@ export interface ApiClient {
   listDataSourceStatements(dataSourceId: number): Promise<DataSourceStatement[]>;
   createDataSourceStatement(
     dataSourceId: number,
-    input: { name: string; sql: string; description?: string | null; workGroupId?: number | null },
+    input: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      /** Only for a statement a receiver polls with — see DataSourceStatement. */
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
+    },
   ): Promise<{ id: number }>;
   updateDataSourceStatement(
     id: number,
@@ -376,6 +384,8 @@ export interface ApiClient {
       description?: string | null;
       workGroupId?: number | null;
       inactive: boolean;
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
     },
   ): Promise<void>;
   deleteDataSourceStatement(id: number): Promise<void>;

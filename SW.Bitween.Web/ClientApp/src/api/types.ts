@@ -851,6 +851,13 @@ export interface DataSourceStatement {
   workGroupId: number | null;
   workGroupName: string | null;
   inactive: boolean;
+  /**
+   * Only for a statement a receiver polls with: which column carries the cursor, and which
+   * identifies the row. They describe what this query returns, so they belong to the statement
+   * rather than to each subscription reading it.
+   */
+  cursorColumn: string | null;
+  keyColumn: string | null;
   /** How many subscriptions name it. Zero is the number that says it is safe to delete. */
   usageCount: number;
   createdOn: string;

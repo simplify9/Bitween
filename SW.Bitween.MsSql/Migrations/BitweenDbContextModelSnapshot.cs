@@ -422,6 +422,11 @@ namespace SW.Bitween.MsSql.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CursorColumn")
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
+
                     b.Property<int>("DataSourceId")
                         .HasColumnType("int");
 
@@ -431,6 +436,11 @@ namespace SW.Bitween.MsSql.Migrations
 
                     b.Property<bool>("Inactive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("KeyColumn")
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
 
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");

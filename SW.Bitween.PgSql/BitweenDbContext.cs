@@ -150,6 +150,11 @@ public class BitweenDbContext(DbContextOptions options, RequestContext requestCo
                 st.Property(p => p.Sql).IsRequired();
                 st.Property(p => p.Description).HasMaxLength(1000);
 
+                // Column names, so the database's own identifier limit is the ceiling — 128 is
+                // above every engine's (Oracle allows 128, PostgreSQL 63).
+                st.Property(p => p.CursorColumn).HasMaxLength(128);
+                st.Property(p => p.KeyColumn).HasMaxLength(128);
+
                 // The namespacing fix, enforced by the database rather than by a check someone can
                 // forget. Case-insensitivity is handled in the handler, because collation differs
                 // per provider.

@@ -116,4 +116,45 @@ public class StatementComposerTests
 
         Assert.AreEqual(one, other);
     }
+
+    /// <summary>
+    /// A statement nothing polls composes to exactly the string it always did.
+    ///
+    /// This is what makes the richer shape safe to introduce: upgrading the host ahead of the
+    /// adapters cannot change the value handed to an adapter for any statement it already runs,
+    /// and the supervisor's fingerprint of that value does not move either — so no healthy
+    /// connection is recycled by the deployment.
+    /// </summary>
+    [TestMethod]
+    public void An_ordinary_statement_still_composes_to_a_bare_string()
+    {
+        var composed = StatementComposer.Compose(new[] { Statement(1, "getOrder", "select 1") },
+            dataSourceId: 1);
+
+        Assert.AreEqual("{\"getOrder\":\"select 1\"}", composed);
+    }
+
+    /// <summary>
+    /// A polled statement carries the shape of its rows with it, because the cursor and key
+    /// columns describe what the query returns rather than a choice its reader makes.
+    /// </summary>
+    [TestMethod]
+    public void A_polled_statement_carries_its_cursor_and_key_columns()
+    {
+        var polled = Statement(1, "outbox", "select * from outbox where id > @cursor order by id");
+        polled.CursorColumn = "id";
+        polled.KeyColumn = "id";
+
+        var composed = StatementComposer.Compose(new[] { polled, Statement(1, "getOrder", "select 1") },
+            dataSourceId: 1);
+
+        var parsed = Newtonsoft.Json.Linq.JObject.Parse(composed);
+
+        // Side by side in one payload: the ordinary one a string, the polled one an object. An
+        // adapter reads both, and only a receiver ever looks at the second form.
+        Assert.AreEqual(Newtonsoft.Json.Linq.JTokenType.String, parsed["getOrder"].Type);
+        Assert.AreEqual("id", parsed["outbox"].Value<string>("cursorColumn"));
+        Assert.AreEqual("id", parsed["outbox"].Value<string>("keyColumn"));
+        StringAssert.Contains(parsed["outbox"].Value<string>("sql"), "from outbox");
+    }
 }

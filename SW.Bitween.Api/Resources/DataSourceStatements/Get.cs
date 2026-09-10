@@ -22,6 +22,8 @@ public class Get(BitweenDbContext dbContext, RequestContext requestContext)
         {
             Name = statement.Name,
             Sql = statement.Sql,
+            CursorColumn = statement.CursorColumn,
+            KeyColumn = statement.KeyColumn,
             Description = statement.Description,
             WorkGroupId = statement.WorkGroupId,
             Inactive = statement.Inactive

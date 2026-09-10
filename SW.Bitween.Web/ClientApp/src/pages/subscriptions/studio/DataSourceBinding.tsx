@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { api } from "../../../api";
 import { keys } from "../../../api/queryKeys";
-import { Field, Select } from "../../../components/ui/forms";
+import { Field, Select, TextInput } from "../../../components/ui/forms";
 
 /**
  * Binds an adapter slot to a database: which connection, which statement, and what to do with it.
@@ -63,11 +63,23 @@ export function DataSourceBinding({
   };
 
   const available = (statements.data ?? []).filter((s) => !s.inactive);
-  const current = properties.Statement ?? "";
+
+  // A receiver names its statement under a different key, and it has to be the one the adapter
+  // reads: a receiver polls with ReceiveStatement, while every other slot runs Statement. Writing
+  // the wrong one saves cleanly and then does nothing, which is the worst way for this to fail.
+  const statementKey = slot === "receiver" ? "ReceiveStatement" : "Statement";
+  const current = properties[statementKey] ?? "";
 
   // A statement named here but gone from the connection is the case worth surfacing: it fails at
   // run time as "not a statement this data source defines", which is a long way from this screen.
   const missing = current !== "" && !available.some((s) => s.name === current);
+
+  const chosenStatement = available.find((s) => s.name === current) ?? null;
+  const mode = properties.ReceiveMode ?? "";
+  const needsCursor = ["incrementing", "timestamp", "timestamp+incrementing"].includes(mode);
+  // Without a cursor, the mark statement is the only thing that stops a poll re-reading the same
+  // rows for ever — so it is asked for rather than left to be discovered.
+  const needsMark = mode === "bulk" || mode === "marker";
 
   return (
     <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
@@ -88,7 +100,7 @@ export function DataSourceBinding({
 
             // The statement belonged to the old connection; statement names are scoped to their
             // data source, so keeping it would point at something that may not exist here.
-            if (next !== dataSourceId) setProperty("Statement", "");
+            if (next !== dataSourceId) setProperty(statementKey, "");
           }}
         />
       </Field>
@@ -107,7 +119,11 @@ export function DataSourceBinding({
         <>
           <Field
             label="Statement"
-            hint={`Which of ${chosen.name}'s statements this ${slot} runs. The SQL itself lives on the connection — a message supplies parameter values, never SQL.`}
+            hint={
+              slot === "receiver"
+                ? `Which of ${chosen.name}'s statements this receiver polls with. It also carries the columns that say which is the cursor and which identifies a row.`
+                : `Which of ${chosen.name}'s statements this ${slot} runs. The SQL itself lives on the connection — a message supplies parameter values, never SQL.`
+            }
           >
             <Select
               value={current}
@@ -121,7 +137,7 @@ export function DataSourceBinding({
                 // Kept selectable so choosing something else is a decision, not an accident.
                 ...(missing ? [{ value: current, label: `${current} — no longer on this connection` }] : []),
               ]}
-              onChange={(e) => setProperty("Statement", e.target.value)}
+              onChange={(e) => setProperty(statementKey, e.target.value)}
             />
           </Field>
 
@@ -132,21 +148,109 @@ export function DataSourceBinding({
             </p>
           )}
 
-          <Field
-            label="Operation"
-            hint="query returns rows; execute reports what it changed; call runs a stored procedure."
-          >
-            <Select
-              value={properties.Operation ?? "query"}
-              disabled={disabled}
-              options={[
-                { value: "query", label: "query" },
-                { value: "execute", label: "execute" },
-                { value: "call", label: "call" },
-              ]}
-              onChange={(e) => setProperty("Operation", e.target.value)}
-            />
-          </Field>
+          {slot !== "receiver" && (
+            <Field
+              label="Operation"
+              hint="query returns rows; execute reports what it changed; call runs a stored procedure."
+            >
+              <Select
+                value={properties.Operation ?? "query"}
+                disabled={disabled}
+                options={[
+                  { value: "query", label: "query" },
+                  { value: "execute", label: "execute" },
+                  { value: "call", label: "call" },
+                ]}
+                onChange={(e) => setProperty("Operation", e.target.value)}
+              />
+            </Field>
+          )}
+
+          {/*
+            A receiver has no operation to pick — polling is the operation. What it has instead is
+            a reading policy, and that is this subscription's, not the connection's: the same
+            statement is legitimately read in bulk once for a backfill and incrementally after.
+
+            What is NOT here is the cursor and key columns. They describe the rows the statement
+            returns, so they live on the statement, where every subscription polling it agrees on
+            them rather than each nominating its own.
+          */}
+          {slot === "receiver" && (
+            <>
+              <Field
+                label="Receive mode"
+                hint="How this subscription finds new rows. None of these can see a DELETE — that is a property of polling, not of this adapter."
+              >
+                <Select
+                  value={properties.ReceiveMode ?? ""}
+                  disabled={disabled}
+                  options={[
+                    { value: "", label: "The connection's default" },
+                    { value: "incrementing", label: "incrementing — follow an always-growing column" },
+                    { value: "timestamp", label: "timestamp — follow a modified-at column" },
+                    {
+                      value: "timestamp+incrementing",
+                      label: "timestamp+incrementing — both, for rows sharing a timestamp",
+                    },
+                    { value: "bulk", label: "bulk — re-read everything each poll" },
+                    { value: "marker", label: "marker — rows a flag says are unprocessed" },
+                  ]}
+                  onChange={(e) => setProperty("ReceiveMode", e.target.value)}
+                />
+              </Field>
+
+              {needsMark && (
+                <Field
+                  label="Mark processed"
+                  hint="Run against each row once Bitween has accepted it: set a flag, move the row, delete it. Bind the row's key as the key parameter."
+                >
+                  <Select
+                    value={properties.MarkProcessedStatement ?? ""}
+                    disabled={disabled || statements.isLoading}
+                    options={[
+                      { value: "", label: "None — the connection's own, if it has one" },
+                      ...available.map((s) => ({ value: s.name, label: s.name })),
+                    ]}
+                    onChange={(e) => setProperty("MarkProcessedStatement", e.target.value)}
+                  />
+                </Field>
+              )}
+
+              {needsMark && !properties.MarkProcessedStatement && (
+                <p className="text-[12px] text-warn-700">
+                  {properties.ReceiveMode} has no cursor, so without a mark-processed statement
+                  every poll reads the same rows again, forever.
+                </p>
+              )}
+
+              <Field
+                label="Batch size"
+                hint="Rows one poll may take. The next poll takes the next batch. Blank uses the connection's default."
+              >
+                <TextInput
+                  type="number"
+                  min={1}
+                  value={properties.ReceiveBatchSize ?? ""}
+                  disabled={disabled}
+                  onChange={(e) => setProperty("ReceiveBatchSize", e.target.value)}
+                />
+              </Field>
+
+              {chosenStatement && !chosenStatement.keyColumn && (
+                <p className="text-[12px] text-warn-700">
+                  “{chosenStatement.name}” does not say which of its columns identifies a row, so
+                  polling it will fail. Set its key column on the connection.
+                </p>
+              )}
+
+              {chosenStatement && needsCursor && !chosenStatement.cursorColumn && (
+                <p className="text-[12px] text-warn-700">
+                  {properties.ReceiveMode} follows a column, but “{chosenStatement.name}” does not
+                  say which of its columns is the cursor.
+                </p>
+              )}
+            </>
+          )}
 
           <p className="text-[12px] text-ink-500">
             <Link className="text-accent-600 hover:underline" to={`/data-sources/${chosen.id}`}>

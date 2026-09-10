@@ -13,6 +13,8 @@ interface RawStatement {
   dataSourceId: number;
   name: string;
   sql: string;
+  cursorColumn: string | null;
+  keyColumn: string | null;
   description: string | null;
   workGroupId: number | null;
   workGroupName: string | null;
@@ -33,6 +35,8 @@ const toStatement = (raw: RawStatement): DataSourceStatement => ({
   workGroupId: raw.workGroupId,
   workGroupName: raw.workGroupName,
   inactive: raw.inactive,
+  cursorColumn: raw.cursorColumn ?? null,
+  keyColumn: raw.keyColumn ?? null,
   usageCount: raw.usageCount,
   createdOn: raw.createdOn,
   createdBy: raw.createdBy,
@@ -58,7 +62,14 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
 
   async createDataSourceStatement(
     dataSourceId: number,
-    input: { name: string; sql: string; description?: string | null; workGroupId?: number | null },
+    input: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
+    },
   ): Promise<{ id: number }> {
     // The data source travels in the body, not the route: POST /datasourcestatements/{id} already
     // means "update that statement", so a keyed create would collide with it.
@@ -68,6 +79,8 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       sql: input.sql,
       description: input.description ?? null,
       workGroupId: input.workGroupId ?? null,
+      cursorColumn: input.cursorColumn || null,
+      keyColumn: input.keyColumn || null,
       inactive: false,
     });
     return { id };
@@ -81,6 +94,8 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       description?: string | null;
       workGroupId?: number | null;
       inactive: boolean;
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
     },
   ): Promise<void> {
     await post(`/datasourcestatements/${id}`, {
@@ -88,6 +103,8 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       sql: changes.sql,
       description: changes.description ?? null,
       workGroupId: changes.workGroupId ?? null,
+      cursorColumn: changes.cursorColumn || null,
+      keyColumn: changes.keyColumn || null,
       inactive: changes.inactive,
     });
   },

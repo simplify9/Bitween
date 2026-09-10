@@ -76,34 +76,51 @@ public abstract class DbOptionsBase
 
     // ------------------------------------------------------------------ receiving
 
+    // Where these live is the point, and it is not all one place.
+    //
+    // A connection is shared by every subscription pointed at it, so anything that varies per
+    // reader cannot sit here — one data source could otherwise only ever feed one receiver. What
+    // is left divides cleanly: the SQL and the shape of its rows belong to the STATEMENT, and the
+    // reading policy belongs to the SUBSCRIPTION doing the reading.
+    //
+    // So the four below that describe SQL are legacy: still honoured when set, so a receiver
+    // configured before the split keeps working, but hidden from the form because the answer is
+    // now a statement's name and the statement's own columns. Mode and batch size stay, as the
+    // default a subscription may override.
+
     [AdapterSetting(
         AllowedValues = new[] { "bulk", "incrementing", "timestamp", "timestamp+incrementing", "marker" },
         Hint =
-        "How the receiver finds new rows. bulk re-reads everything each poll; incrementing follows "
-        + "an always-growing column; timestamp follows a modified-at column; marker reads rows a "
-        + "flag says are unprocessed. None of them can see a DELETE.")]
+        "Default for subscriptions that do not choose their own. How the receiver finds new rows: "
+        + "bulk re-reads everything each poll; incrementing follows an always-growing column; "
+        + "timestamp follows a modified-at column; marker reads rows a flag says are unprocessed. "
+        + "None of them can see a DELETE.")]
     public string ReceiveMode { get; set; }
 
-    [AdapterSetting(Hint =
-        "The statement the receiver polls with. Reference the cursor as :cursor — it is bound from "
-        + "the last value consumed. Order by the cursor column, or rows will be skipped.")]
+    /// <summary>
+    /// Superseded by naming one of the data source's statements as the subscription's
+    /// ReceiveStatement. Kept because a receiver configured before the split has its SQL here.
+    /// </summary>
+    [AdapterSetting(Hidden = true)]
     public string ReceiveStatement { get; set; }
 
-    [AdapterSetting(Hint =
-        "The column carrying the cursor: the incrementing id, or the timestamp. Its value in the "
-        + "last row read is what gets saved.")]
+    /// <summary>Superseded by the polled statement's own CursorColumn.</summary>
+    [AdapterSetting(Hidden = true)]
     public string CursorColumn { get; set; }
 
-    [AdapterSetting(Hint =
-        "The primary key column, used to identify a row for mark-processed and for deduplication.")]
+    /// <summary>Superseded by the polled statement's own KeyColumn.</summary>
+    [AdapterSetting(Hidden = true)]
     public string KeyColumn { get; set; }
 
-    [AdapterSetting(Hint =
-        "Run against each row once Bitween has accepted it — Camel's onConsume: set a flag, move "
-        + "the row, delete it. Bind the row's key as :key. Required for marker mode, and the only "
-        + "thing that stops bulk mode reading the same rows forever.")]
+    /// <summary>
+    /// Superseded by naming a statement as the subscription's MarkProcessedStatement — Camel's
+    /// onConsume, run against each row once Bitween has accepted it.
+    /// </summary>
+    [AdapterSetting(Hidden = true)]
     public string MarkProcessedStatement { get; set; }
 
-    [AdapterSetting(Default = "500", Hint = "Rows one poll may take. The next poll takes the next batch.")]
+    [AdapterSetting(Default = "500", Hint =
+        "Default rows one poll may take, which a subscription may override. The next poll takes "
+        + "the next batch.")]
     public int ReceiveBatchSize { get; set; } = 500;
 }

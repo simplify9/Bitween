@@ -471,6 +471,66 @@ public class PostgreSqlAdapterTests : IClassFixture<PostgreSqlDbFixture>
         Assert.Contains(forNewcomer, id => KeyOf(id) <= 5);
     }
 
+    /// <summary>
+    /// One connection, two receivers, different statements — the case the settings could not
+    /// express while they lived on the data source.
+    ///
+    /// What each reads and how comes from the invocation: the statement by name, the mode and
+    /// batch size as this reader's policy. The cursor and key columns come from the statement,
+    /// because they describe its rows.
+    /// </summary>
+    [SkippableFact]
+    public async Task Two_receivers_on_one_connection_poll_different_statements()
+    {
+        var adapter = await AdapterAsync();
+
+        // Same connection, different questions, different batch sizes.
+        var early = Subscription(401);
+        early["ReceiveStatement"] = "earlyOrders";
+        early["ReceiveMode"] = "incrementing";
+        early["ReceiveBatchSize"] = "3";
+
+        var late = Subscription(402);
+        late["ReceiveStatement"] = "lateOrders";
+        late["ReceiveMode"] = "incrementing";
+        late["ReceiveBatchSize"] = "2";
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: early);
+        var forEarly = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: early);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: early);
+
+        await adapter.InvokeAsync<object>("Initialize", timeoutSeconds: 60, properties: late);
+        var forLate = await adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60,
+            properties: late);
+        await adapter.InvokeAsync<object>("Finalize", timeoutSeconds: 60, properties: late);
+
+        // Its own statement, and its own batch size.
+        Assert.Equal(new[] { 1, 2, 3 }, forEarly.Select(KeyOf).OrderBy(i => i));
+        Assert.Equal(new[] { 21, 22 }, forLate.Select(KeyOf).OrderBy(i => i));
+    }
+
+    /// <summary>
+    /// A named statement that does not exist is refused by name, rather than being run as SQL.
+    /// That distinction is the security property: a per-invocation property has partner values
+    /// templated into it before the adapter sees it, so treating one as SQL would make every
+    /// poll steerable by ordinary partner data.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_receive_statement_that_is_not_configured_is_refused()
+    {
+        var adapter = await AdapterAsync();
+
+        var me = Subscription(403);
+        me["ReceiveStatement"] = "select * from orders";
+        me["ReceiveMode"] = "bulk";
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() =>
+            adapter.InvokeAsync<List<string>>("ListFiles", timeoutSeconds: 60, properties: me));
+
+        Assert.Contains("is not a statement this data source defines", error.Message);
+    }
+
     static int KeyOf(string fileId) => int.Parse(fileId.Substring(fileId.IndexOf(':') + 1));
 
     /// <summary>What the host stamps on every invocation, and what scopes the cursor.</summary>
@@ -551,7 +611,18 @@ public class PostgreSqlAdapterTests : IClassFixture<PostgreSqlDbFixture>
             ""ordersByCustomerFunction"": ""select * from orders_by_customer(@customer)"",
             ""processedOrders"":          ""select * from {PostgreSqlDbFixture.Table} where processed order by id"",
             ""insertOrder"":              ""insert into {PostgreSqlDbFixture.Table} (id, customer, amount) values (@id, @customer, @amount)"",
-            ""insertOrderReturning"":     ""insert into {PostgreSqlDbFixture.Table} (id, customer, amount) values (@id, @customer, @amount) returning *""
+            ""insertOrderReturning"":     ""insert into {PostgreSqlDbFixture.Table} (id, customer, amount) values (@id, @customer, @amount) returning *"",
+
+            ""earlyOrders"": {{
+                ""sql"":          ""select * from {PostgreSqlDbFixture.Table} where id > @cursor and id <= 10 order by id"",
+                ""cursorColumn"": ""id"",
+                ""keyColumn"":    ""id""
+            }},
+            ""lateOrders"": {{
+                ""sql"":          ""select * from {PostgreSqlDbFixture.Table} where id > @cursor and id > 20 order by id"",
+                ""cursorColumn"": ""id"",
+                ""keyColumn"":    ""id""
+            }}
         }}",
 
         ["ReceiveMode"] = "incrementing",

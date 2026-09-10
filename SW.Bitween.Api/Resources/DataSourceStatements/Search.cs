@@ -34,6 +34,8 @@ public class Search(BitweenDbContext dbContext, RequestContext requestContext,
                 DataSourceId = statement.DataSourceId,
                 Name = statement.Name,
                 Sql = statement.Sql,
+                CursorColumn = statement.CursorColumn,
+                KeyColumn = statement.KeyColumn,
                 Description = statement.Description,
                 WorkGroupId = statement.WorkGroupId,
                 WorkGroupName = dbContext.Set<WorkGroup>()

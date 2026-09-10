@@ -132,6 +132,105 @@ public abstract partial class DbResidentAdapterBase
     }
 
     /// <summary>
+    /// What this poll is: which SQL, read how, with which columns meaning what.
+    ///
+    /// Resolved per invocation rather than read from <see cref="Options"/>, because one resident
+    /// instance serves every subscription bound to the data source. The connection is shared; what
+    /// to poll and how is not.
+    ///
+    /// Where each part comes from is the whole argument:
+    ///
+    /// * <b>The SQL</b> is a named statement, exactly like every other statement. It is a name and
+    ///   never text, because a per-invocation property has <c>{{partner.X}}</c> substituted into it
+    ///   before the adapter sees it — SQL there would be steerable by ordinary partner data.
+    /// * <b>The cursor and key columns</b> come from that statement, because they describe what the
+    ///   query returns. The same statement returns the same cursor column whoever reads it.
+    /// * <b>The mode and batch size</b> come from the subscription, because they are the reader's
+    ///   policy: the same statement is legitimately read in bulk once for a backfill and
+    ///   incrementally thereafter, and batch size is one subscription's appetite.
+    ///
+    /// Every part falls back to the data source setting of the same name, so a receiver configured
+    /// before any of this moved keeps working untouched.
+    /// </summary>
+    sealed class ReceivePlan
+    {
+        public string Mode { get; set; }
+        public string Sql { get; set; }
+        public string CursorColumn { get; set; }
+        public string KeyColumn { get; set; }
+        public string MarkProcessedSql { get; set; }
+        public int BatchSize { get; set; }
+
+        public bool NeedsCursor =>
+            Mode is "incrementing" or "timestamp" or "timestamp+incrementing";
+    }
+
+    ReceivePlan Plan()
+    {
+        // Deliberately NOT Context.ValueOf, which falls back to the startup values. Startup values
+        // are the DATA SOURCE's settings, and for two of these the two sources mean different
+        // things: an invocation's ReceiveStatement is a statement NAME, while the data source's
+        // legacy setting of that name is raw SQL. Reading through a fallback would take the second
+        // and try to look it up as the first.
+        //
+        // So the invocation is read on its own, and Options is the explicit fallback below.
+        var mine = Context.InvocationValues ?? new Dictionary<string, string>();
+        string Given(string name) => mine.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+
+        var plan = new ReceivePlan
+        {
+            Mode = (Given("ReceiveMode") ?? Options.ReceiveMode ?? "").Trim().ToLowerInvariant(),
+            CursorColumn = Options.CursorColumn,
+            KeyColumn = Options.KeyColumn,
+            Sql = Options.ReceiveStatement,
+            MarkProcessedSql = Options.MarkProcessedStatement,
+            BatchSize = Options.ReceiveBatchSize,
+        };
+
+        if (int.TryParse(Given("ReceiveBatchSize"), out var parsed) && parsed > 0)
+            plan.BatchSize = parsed;
+
+        // A named statement supersedes the data source's own receive settings entirely — SQL and
+        // row shape together, because taking the SQL from one place and the cursor column from
+        // another is how they come to disagree.
+        var name = Given("ReceiveStatement");
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var statement = statements.Find(name)
+                ?? throw new InvalidOperationException(
+                    $"'{name}' is not a statement this data source defines, so there is nothing to "
+                    + "poll with. Configured: "
+                    + (statements.Count == 0
+                        ? "none."
+                        : string.Join(", ", statements.Names.OrderBy(n => n))));
+
+            plan.Sql = statement.Sql;
+            if (!string.IsNullOrWhiteSpace(statement.CursorColumn))
+                plan.CursorColumn = statement.CursorColumn;
+            if (!string.IsNullOrWhiteSpace(statement.KeyColumn))
+                plan.KeyColumn = statement.KeyColumn;
+        }
+
+        var markName = Given("MarkProcessedStatement");
+        if (!string.IsNullOrWhiteSpace(markName))
+        {
+            var statement = statements.Find(markName)
+                ?? throw new InvalidOperationException(
+                    $"'{markName}' is not a statement this data source defines, so accepted rows "
+                    + "cannot be marked processed. Configured: "
+                    + (statements.Count == 0
+                        ? "none."
+                        : string.Join(", ", statements.Names.OrderBy(n => n))));
+
+            plan.MarkProcessedSql = statement.Sql;
+        }
+
+        return plan;
+    }
+
+    /// <summary>
     /// Nothing to do. The transaction a mark-processed statement might want cannot live here: the
     /// pipeline calls Initialize, then ListFiles, then a GetFile and DeleteFile per row, then
     /// Finalize — and holding one transaction open across all of that would pin a pooled connection
@@ -152,48 +251,52 @@ public abstract partial class DbResidentAdapterBase
     /// </summary>
     public virtual async Task<IEnumerable<string>> ListFiles()
     {
-        var mode = (Options.ReceiveMode ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(mode))
-            throw new InvalidOperationException(
-                "This data source has no ReceiveMode, so it cannot be used as a receiver. Set one of "
-                + "bulk, incrementing, timestamp, timestamp+incrementing or marker.");
+        var plan = Plan();
 
-        if (string.IsNullOrWhiteSpace(Options.ReceiveStatement))
+        if (string.IsNullOrEmpty(plan.Mode))
             throw new InvalidOperationException(
-                "ReceiveMode is set but ReceiveStatement is not, so there is nothing to poll with.");
+                "No ReceiveMode, so this cannot be used as a receiver. Set one on the subscription "
+                + "(or on the data source, as a default) — one of bulk, incrementing, timestamp, "
+                + "timestamp+incrementing or marker.");
 
-        if (string.IsNullOrWhiteSpace(Options.KeyColumn))
+        if (string.IsNullOrWhiteSpace(plan.Sql))
+            throw new InvalidOperationException(
+                "ReceiveMode is set but no statement was named, so there is nothing to poll with. "
+                + "Name one of this data source's statements as ReceiveStatement.");
+
+        if (string.IsNullOrWhiteSpace(plan.KeyColumn))
             throw new InvalidOperationException(
                 "KeyColumn is required for receiving: without it a row cannot be identified, so it "
-                + "cannot be marked processed and it cannot be deduplicated.");
+                + "cannot be marked processed and it cannot be deduplicated. Set it on the "
+                + "statement being polled.");
 
-        var needsCursor = mode is "incrementing" or "timestamp" or "timestamp+incrementing";
-        if (needsCursor && string.IsNullOrWhiteSpace(Options.CursorColumn))
+        if (plan.NeedsCursor && string.IsNullOrWhiteSpace(plan.CursorColumn))
             throw new InvalidOperationException(
-                $"ReceiveMode '{mode}' follows a column, so CursorColumn is required.");
+                $"ReceiveMode '{plan.Mode}' follows a column, so the statement being polled has to "
+                + "say which column is its cursor.");
 
-        if (mode is "bulk" or "marker" && string.IsNullOrWhiteSpace(Options.MarkProcessedStatement))
+        if (plan.Mode is "bulk" or "marker" && string.IsNullOrWhiteSpace(plan.MarkProcessedSql))
             throw new InvalidOperationException(
-                $"ReceiveMode '{mode}' has no cursor, so MarkProcessedStatement is what stops the "
-                + "same rows being read again on every poll. Set it, or use a cursor mode.");
+                $"ReceiveMode '{plan.Mode}' has no cursor, so MarkProcessedStatement is what stops "
+                + "the same rows being read again on every poll. Name one, or use a cursor mode.");
 
         var parameters = new Dictionary<string, object>();
-        if (needsCursor)
+        if (plan.NeedsCursor)
         {
             var saved = await ReadCursorAsync();
-            parameters["cursor"] = ParseCursor(saved, mode);
+            parameters["cursor"] = ParseCursor(saved, plan.Mode);
 
-            Logger.LogDebug("Polling from cursor {Cursor} ({Mode}).", saved ?? "(none)", mode);
+            Logger.LogDebug("Polling from cursor {Cursor} ({Mode}).", saved ?? "(none)", plan.Mode);
         }
 
         var page = await QueryCore(new StatementRequest
         {
-            Sql = Options.ReceiveStatement,
+            Sql = plan.Sql,
             Parameters = parameters,
-            MaxRows = Options.ReceiveBatchSize,
+            MaxRows = plan.BatchSize,
 
-            // The receive statement is configuration on the data source, not something a message
-            // supplied, so it does not go through the ad-hoc gate — it IS the allow-list entry.
+            // Already resolved from the allow-list by Plan(), so this is configured SQL rather
+            // than SQL a message supplied — it does not go through the ad-hoc gate again.
             Name = null
         }, adHocAllowed: true);
 
@@ -209,15 +312,15 @@ public abstract partial class DbResidentAdapterBase
 
         foreach (var row in page.Rows)
         {
-            if (!row.TryGetValue(Options.KeyColumn, out var key) || key == null)
+            if (!row.TryGetValue(plan.KeyColumn, out var key) || key == null)
                 throw new InvalidOperationException(
-                    $"A row came back with no value in the key column '{Options.KeyColumn}'. The "
+                    $"A row came back with no value in the key column '{plan.KeyColumn}'. The "
                     + "receive statement has to select it, spelled as the database returns it.");
 
             var id = $"{batchId}:{key}";
             batch.Rows[id] = row;
 
-            if (needsCursor && row.TryGetValue(Options.CursorColumn, out var cursorValue))
+            if (plan.NeedsCursor && row.TryGetValue(plan.CursorColumn, out var cursorValue))
                 batch.Cursors[id] = cursorValue;
 
             ids.Add(id);
@@ -248,10 +351,11 @@ public abstract partial class DbResidentAdapterBase
     {
         var row = Locate(fileId, out var batch);
         var key = KeyOf(fileId);
+        var plan = Plan();
 
-        if (!string.IsNullOrWhiteSpace(Options.MarkProcessedStatement))
+        if (!string.IsNullOrWhiteSpace(plan.MarkProcessedSql))
         {
-            var parameters = new Dictionary<string, object> { ["key"] = RawKey(row) };
+            var parameters = new Dictionary<string, object> { ["key"] = RawKey(row, plan) };
 
             // Every column is offered as a parameter too, so a mark statement can use more than the
             // key — a status column, a batch id, the row's own timestamp.
@@ -259,7 +363,7 @@ public abstract partial class DbResidentAdapterBase
 
             await Execute(new StatementRequest
             {
-                Sql = Options.MarkProcessedStatement,
+                Sql = plan.MarkProcessedSql,
                 Parameters = parameters
             }, adHocAllowed: true);
         }
@@ -311,8 +415,12 @@ public abstract partial class DbResidentAdapterBase
 
     static string KeyOf(string fileId) => fileId.Substring(fileId.IndexOf(':') + 1);
 
-    object RawKey(Dictionary<string, object> row) =>
-        row.TryGetValue(Options.KeyColumn, out var value) ? value : null;
+    /// <summary>
+    /// The row's key as the database returned it — not the string from the file id, which has been
+    /// through JSON and would bind a number as text.
+    /// </summary>
+    static object RawKey(Dictionary<string, object> row, ReceivePlan plan) =>
+        row.TryGetValue(plan.KeyColumn, out var value) ? value : null;
 
     /// <summary>
     /// A cursor comes back from the host as text, and has to go into the query as the type the

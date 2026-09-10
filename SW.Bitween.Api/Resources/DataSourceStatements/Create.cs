@@ -47,6 +47,8 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext)
             DataSourceId = dataSourceId,
             Name = model.Name.Trim(),
             Sql = model.Sql,
+            CursorColumn = model.CursorColumn,
+            KeyColumn = model.KeyColumn,
             Description = model.Description,
             WorkGroupId = model.WorkGroupId,
             Inactive = model.Inactive

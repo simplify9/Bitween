@@ -34,6 +34,19 @@ public class DataSourceStatementCreate : IName
     /// inactive statement fails loudly, which is the point: retiring is meant to be noticed.
     /// </summary>
     public bool Inactive { get; set; }
+
+    /// <summary>
+    /// Only for a statement a receiver polls with: the column carrying the cursor — the
+    /// incrementing id or the modified-at timestamp. It describes what this query returns, so it
+    /// belongs to the statement rather than to each subscription reading it.
+    /// </summary>
+    public string? CursorColumn { get; set; }
+
+    /// <summary>
+    /// Only for a polled statement: the column identifying a row, for mark-processed and for
+    /// deduplication.
+    /// </summary>
+    public string? KeyColumn { get; set; }
 }
 
 public class DataSourceStatementUpdate : DataSourceStatementCreate

@@ -41,6 +41,8 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext)
 
         entity.Name = model.Name.Trim();
         entity.Sql = model.Sql;
+        entity.CursorColumn = model.CursorColumn;
+        entity.KeyColumn = model.KeyColumn;
         entity.Description = model.Description;
         entity.WorkGroupId = model.WorkGroupId;
         entity.Inactive = model.Inactive;
