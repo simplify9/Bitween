@@ -207,6 +207,15 @@ export function ExchangeStatusBadge({
  * the width empty, so what the exchange actually *was* never made it to the
  * screen.
  */
+/**
+ * Promoted properties only name an exchange when at least one of them carries a value. An
+ * information type can promote three paths that a payload never filled, and
+ * "merchant= orderRef= destination=" then names every exchange of that type equally — so a
+ * caller with room for one identity is better off showing the id.
+ */
+export const namesSomething = (properties: Record<string, string | null> | null) =>
+  properties != null && Object.values(properties).some((v) => v != null && v !== "");
+
 export function PromotedProps({
   properties,
   max = 3,
@@ -226,7 +235,12 @@ export function PromotedProps({
   // that resolved to nothing arrives as a null value rather than as an empty
   // string. Normalise once, here, so nothing downstream has to keep asking.
   const entries: [string, string][] = Object.entries(properties ?? {}).map(([k, v]) => [k, v ?? ""]);
-  if (entries.length === 0)
+
+  // Keys whose values are all empty are treated like no promoted properties at all. An
+  // information type can promote three paths that a payload never filled, and
+  // "merchant= orderRef= destination=" then names every exchange of that type equally — three
+  // chips that say which fields exist and nothing about which record this is.
+  if (!namesSomething(properties))
     return fallbackId ? (
       <span className="font-mono text-xs text-ink-400" title={fallbackId}>
         {fallbackId.slice(0, 8)}…
