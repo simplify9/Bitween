@@ -416,14 +416,22 @@ Almost free, because the data-source form generates itself from the adapter's at
 
 1. **Data sources page** — already lists providers by `Kind`; a Relational source just appears once
    the adapters are published. Health card shows the pool counters from §8.
-2. **Schema browser** — new panel on the data source detail, backed by `Inspect` →
-   `Describe` + `Discover`. Tree by schema → object type → object; columns and routine parameters on
-   demand. This is the "what's in there" the request asks for, and it is read-only by construction.
+2. **Schema browser** — DONE. `SchemaBrowser.tsx` on the data source detail, backed by `Inspect` →
+   `Describe` + `Discover`. Grouped by schema, filtered by object type and searched by name — the
+   search goes to the database as `nameLike`, not to the page in hand, so it answers for the whole
+   catalog. Columns and routine parameters on demand, one object at a time. Read-only by
+   construction: `Inspect`'s allow-list holds only Describe, Discover and GetStats.
+
+   Two things it needed that did not exist. `Inspect` invoked the command with no argument, so
+   Discover's filters were unreachable — `DataSourceInspectRequest.Arguments` now carries them.
+   And "use in a statement" writes a draft into the statements panel above it, which is item 4's
+   picker arriving early, because a browser that cannot start a statement is a catalog viewer.
 3. **Capability chips** — `Describe` output rendered as enabled/disabled features with the reason
    ("stored procedure result sets: needs a REF CURSOR on Oracle", "log-based CDC: not supported").
-4. **Statement editor** — in the subscription adapter editor, beside `ScheduleEditor`: named
-   statements, parameter list with types, a Preview that runs `Explain` (never `Query`) and a
-   picker fed by `Discover` so a table or procedure is chosen, not typed.
+4. **Statement editor** — PARTLY DONE. The picker fed by `Discover` is built (see 2): a table,
+   view, procedure, function or sequence hands a drafted statement to the form, so the common case
+   is reviewed rather than typed. Still missing: the parameter list with types, and a Preview that
+   runs `Explain` (never `Query`).
 5. **Receive mode form** — mode, cursor column, marker statement; with the deletes-are-invisible
    caveat stated in the form, not buried in docs.
 

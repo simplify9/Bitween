@@ -157,8 +157,15 @@ export const dataSourceMethods = {
     await request(`/datasources/${id}`, { method: "DELETE" });
   },
 
-  async inspectDataSource(id: number, command: string): Promise<DataSourceInspectResult> {
-    return post<DataSourceInspectResult>(`/datasources/${id}/inspect`, { command });
+  async inspectDataSource(
+    id: number,
+    command: string,
+    args?: Record<string, string>,
+  ): Promise<DataSourceInspectResult> {
+    return post<DataSourceInspectResult>(`/datasources/${id}/inspect`, {
+      command,
+      arguments: args,
+    });
   },
 
   /** Live, from the heartbeat. Scoped to the node that answers — see the backend handler. */

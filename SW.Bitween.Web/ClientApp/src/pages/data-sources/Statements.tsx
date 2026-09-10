@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { Plus, Trash2 } from "lucide-react";
@@ -22,7 +22,20 @@ import { Panel } from "../../components/ui/Panel";
  * these controls answer to `data-source-statements.*` instead. That separation is the whole reason
  * a statement is a record rather than a field.
  */
-export function Statements({ dataSourceId }: { dataSourceId: number }) {
+export function Statements({
+  dataSourceId,
+  seed,
+  onSeedConsumed,
+}: {
+  dataSourceId: number;
+  /**
+   * A statement written for the operator by the schema browser, waiting to be reviewed. It opens
+   * the form rather than saving anything: generated SQL is a starting point, and the name and the
+   * row limit are exactly the parts worth changing before it becomes a record with an audit trail.
+   */
+  seed?: StatementSeed | null;
+  onSeedConsumed?: () => void;
+}) {
   const queryClient = useQueryClient();
   const canCreate = useSessionCan("data-source-statements.create");
   const canEdit = useSessionCan("data-source-statements.edit");
@@ -30,6 +43,12 @@ export function Statements({ dataSourceId }: { dataSourceId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<DataSourceStatement | null>(null);
+
+  // A seed arriving means the operator pressed "use in a statement" somewhere below; the form has
+  // to be open for them to see what it wrote.
+  useEffect(() => {
+    if (seed) setAdding(true);
+  }, [seed]);
 
   const statements = useQuery({
     queryKey: keys.dataSourceStatements.forDataSource(dataSourceId),
@@ -78,10 +97,18 @@ export function Statements({ dataSourceId }: { dataSourceId: number }) {
       {adding && canCreate && (
         <div className="px-4 pb-3">
           <StatementForm
+            // Remounts when a different object is picked, so the fields take the new draft
+            // instead of keeping what the previous one seeded.
+            key={seed ? `${seed.name}:${seed.sql}` : "blank"}
             dataSourceId={dataSourceId}
-            onClose={() => setAdding(false)}
+            seed={seed}
+            onClose={() => {
+              setAdding(false);
+              onSeedConsumed?.();
+            }}
             onSaved={() => {
               setAdding(false);
+              onSeedConsumed?.();
               void invalidate();
             }}
             onError={setError}
@@ -245,22 +272,33 @@ function StatementRow({
   );
 }
 
+/** A statement the schema browser wrote, for the operator to review before it is saved. */
+export interface StatementSeed {
+  name: string;
+  sql: string;
+  description: string;
+}
+
 function StatementForm({
   statement,
+  seed,
   dataSourceId,
   onClose,
   onSaved,
   onError,
 }: {
   statement?: DataSourceStatement;
+  seed?: StatementSeed | null;
   dataSourceId: number;
   onClose: () => void;
   onSaved: () => void;
   onError: (message: string) => void;
 }) {
-  const [name, setName] = useState(statement?.name ?? "");
-  const [sql, setSql] = useState(statement?.sql ?? "");
-  const [description, setDescription] = useState(statement?.description ?? "");
+  const [name, setName] = useState(statement?.name ?? seed?.name ?? "");
+  const [sql, setSql] = useState(statement?.sql ?? seed?.sql ?? "");
+  const [description, setDescription] = useState(
+    statement?.description ?? seed?.description ?? "",
+  );
   const [inactive, setInactive] = useState(statement?.inactive ?? false);
 
   const save = useMutation({

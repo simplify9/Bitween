@@ -86,6 +86,14 @@ export const keys = {
     detail: (id: number | string) => ["data-sources", "detail", id] as const,
     /** Live heartbeat, polled — deliberately its own key so refreshing it never refetches the form. */
     telemetry: (id: number | string) => ["data-sources", "telemetry", id] as const,
+    /** What the engine says it can do. Fixed for the life of a connection, so cached hard. */
+    capabilities: (id: number | string) => ["data-sources", "capabilities", id] as const,
+    /** One page of the catalog. The filters are part of the key — each is a different question. */
+    schema: (id: number | string, params: Record<string, unknown>) =>
+      ["data-sources", "schema", id, params] as const,
+    /** One object's columns or parameters, fetched only when its row is opened. */
+    schemaObject: (id: number | string, type: string, schema: string, name: string) =>
+      ["data-sources", "schema-object", id, type, schema, name] as const,
   },
 
   workGroups: {

@@ -193,6 +193,18 @@ public class DataSourceTelemetry
 public class DataSourceInspectRequest
 {
     public string Command { get; set; } = null!;
+
+    /// <summary>
+    /// Passed to the command as its argument. Discover reads objectType, schema, nameLike,
+    /// includeColumns, includeRowCounts, skip and take from here; Describe and GetStats take
+    /// nothing and ignore whatever is sent.
+    ///
+    /// Strings, and deliberately so: this crosses two serialization boundaries to reach an
+    /// adapter that binds it to a typed request, and "200"/"true" coerce cleanly while an
+    /// untyped object graph would not survive the trip unchanged. Nothing here can widen what
+    /// the command does — the allow-list decides that, and every command on it is read-only.
+    /// </summary>
+    public Dictionary<string, string>? Arguments { get; set; }
 }
 
 public class DataSourceInspectResult

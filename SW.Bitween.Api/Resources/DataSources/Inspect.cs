@@ -11,7 +11,8 @@ using SW.Serverless.Resident;
 namespace SW.Bitween.Resources.DataSources;
 
 /// <summary>
-/// Asks the RUNNING adapter what it can see on the broker right now.
+/// Asks the RUNNING adapter what it can see right now — the broker's topology, or the
+/// database's catalog.
 ///
 /// Deliberately not the same shape as <see cref="Test"/>. A test starts a throwaway instance,
 /// because its whole job is to answer "would these settings work" before anything depends on them.
@@ -45,8 +46,12 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
             throw new SWException(
                 $"'{command}' is not something this endpoint relays. Allowed: {string.Join(", ", Allowed)}.");
 
-        var exists = await dbContext.Set<DataSource>().AsNoTracking().AnyAsync(d => d.Id == key);
-        if (!exists)
+        var kind = await dbContext.Set<DataSource>().AsNoTracking()
+            .Where(d => d.Id == key)
+            .Select(d => (DataSourceKind?)d.Kind)
+            .FirstOrDefaultAsync();
+
+        if (kind == null)
             throw new SWNotFoundException($"DataSource with id '{key}' was not found");
 
         var instance = adapters?.Describe()
@@ -56,11 +61,18 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
             return new DataSourceInspectResult
             {
                 Ran = false,
-                // A broker connection is exclusive, so "not here" is the normal answer on every
-                // node but one — not a fault, and worth saying in those words.
-                Error = "This node is not running the adapter for this data source, so it has "
-                      + "nothing to ask. A broker connection is exclusive: only the node holding "
-                      + "it can answer.",
+                // Why "not here" happened depends on the kind, and the two answers call for
+                // opposite reactions. An exclusive broker connection is held by one node, so this
+                // is the normal answer everywhere else and nothing is wrong. A pooled database
+                // connection is held by every node that runs work, so "not here" means it is not
+                // running at all — which is a fault worth chasing.
+                Error = kind == DataSourceKind.Relational
+                    ? "This node is not running the adapter for this data source. A connection "
+                    + "pool is held by every node, so this means it has not started — check the "
+                    + "live connection panel for why."
+                    : "This node is not running the adapter for this data source, so it has "
+                    + "nothing to ask. A broker connection is exclusive: only the node holding "
+                    + "it can answer.",
             };
 
         try
@@ -69,7 +81,9 @@ public class Inspect(BitweenDbContext dbContext, RequestContext requestContext,
             if (live == null)
                 return new DataSourceInspectResult { Ran = false, Error = "The adapter went away." };
 
-            var raw = await live.InvokeAsync<JObject>(command, timeoutSeconds: 30);
+            // Arguments reach the command as-is. They cannot widen what it does: the allow-list
+            // above decides which commands exist here, and each of those only reads.
+            var raw = await live.InvokeAsync<JObject>(command, request?.Arguments, timeoutSeconds: 30);
             return new DataSourceInspectResult
             {
                 Ran = true,

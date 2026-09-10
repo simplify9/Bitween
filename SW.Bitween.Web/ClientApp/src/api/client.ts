@@ -355,7 +355,12 @@ export interface ApiClient {
   testDataSource(id: number): Promise<DataSourceTestResult>;
   getDataSourceTelemetry(id: number): Promise<DataSourceTelemetry>;
   /** Relays a read-only command (Discover, GetStats) to the adapter actually serving traffic. */
-  inspectDataSource(id: number, command: string): Promise<DataSourceInspectResult>;
+  inspectDataSource(
+    id: number,
+    command: string,
+    /** Discover's filters: objectType, schema, nameLike, includeColumns, skip, take. */
+    args?: Record<string, string>,
+  ): Promise<DataSourceInspectResult>;
 
   // ——— data source statements: the SQL a relational data source may run ———
   listDataSourceStatements(dataSourceId: number): Promise<DataSourceStatement[]>;

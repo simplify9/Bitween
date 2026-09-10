@@ -19,7 +19,8 @@ import { keys } from "../../api/queryKeys";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { isSecretName, providerOf, settingOf, useDataSourceProviders, orderedSettingNames } from "./providers";
 import { LiveConnection } from "./LiveConnection";
-import { Statements } from "./Statements";
+import { Statements, type StatementSeed } from "./Statements";
+import { SchemaBrowser } from "./SchemaBrowser";
 import { draftOf, editableFingerprint, type Draft } from "./draft";
 
 /** A draft is the whole editable surface, so the save bar can compare against what was loaded. */
@@ -51,6 +52,12 @@ export function DataSourcePage() {
   const [result, setResult] = useState<DataSourceTestResult | null>(null);
   const [newKey, setNewKey] = useState("");
   const [inspect, setInspect] = useState<DataSourceInspectResult | null>(null);
+
+  // A statement the schema browser wrote, handed up here because the panel that shows it sits
+  // above the browser that produced it.
+  const [seed, setSeed] = useState<StatementSeed | null>(null);
+  const statementsRef = useRef<HTMLDivElement>(null);
+  const canCreateStatements = useSessionCan("data-source-statements.create");
   const [removing, setRemoving] = useState(false);
 
   // Re-seed when the server's copy of the SETTINGS changes — saving re-masks the secrets, so the
@@ -189,9 +196,15 @@ export function DataSourcePage() {
                 <Plug className="size-4" /> {test.isPending ? "Testing…" : "Test connection"}
               </Button>
             </Can>
-            <Button onClick={() => ask.mutate("Discover")} disabled={ask.isPending}>
-              <Telescope className="size-4" /> Discover
-            </Button>
+            {/* A relational source has the schema browser below, which is this answer made
+                usable — two ways to ask the same question, one of them 1,800 lines of JSON, is
+                one too many. A broker has no browser, so Discover is still how its topology is
+                seen. */}
+            {source.data?.kind !== "Relational" && (
+              <Button onClick={() => ask.mutate("Discover")} disabled={ask.isPending}>
+                <Telescope className="size-4" /> Discover
+              </Button>
+            )}
             <Button onClick={() => ask.mutate("GetStats")} disabled={ask.isPending}>
               <Gauge className="size-4" /> Stats
             </Button>
@@ -298,9 +311,37 @@ export function DataSourcePage() {
       {/* Only a relational source runs SQL, and the server refuses a statement on anything else —
           so offering the panel on a broker would be offering a thing that cannot work. */}
       {source.data?.kind === "Relational" && (
-        <Can permission="data-source-statements.view">
-          <Statements dataSourceId={dataSourceId} />
-        </Can>
+        <>
+          <div ref={statementsRef}>
+            <Can permission="data-source-statements.view">
+              <Statements
+                dataSourceId={dataSourceId}
+                seed={seed}
+                onSeedConsumed={() => setSeed(null)}
+              />
+            </Can>
+          </div>
+
+          {/* Below the statements it feeds, because that is the direction the work runs: find the
+              table, then write the statement. The browser is gated on data-sources.view like the
+              rest of this page; handing a draft to the form is gated separately, since writing
+              SQL is a different job from reading a catalog. */}
+          <div className="mb-4">
+            <SchemaBrowser
+              dataSourceId={dataSourceId}
+              onUseInStatement={
+                canCreateStatements
+                  ? (draft) => {
+                      setSeed(draft);
+                      // The form is above the browser, and a draft appearing off-screen reads as
+                      // a button that did nothing.
+                      statementsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        </>
       )}
 
       {/* ——— what the live adapter says it can see ——— */}
