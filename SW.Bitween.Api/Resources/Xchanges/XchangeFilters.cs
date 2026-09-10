@@ -100,6 +100,21 @@ internal static class XchangeFilters
             condition.Filters.Remove(statusFilter);
         }
 
+        // "Only the newest attempt of each chain." An exchange that has been retried is superseded
+        // by that retry, so a list of failures otherwise counts one piece of work as many rows —
+        // a chain retried nine times fills nine of them, none of which is the current state.
+        //
+        // NOT EXISTS rather than a left join for the same reason the still-running status uses it:
+        // Postgres estimates an anti-join, and RetryFor is indexed.
+        var latestFilters = condition.Filters.Where(f => f.Field == "LatestOnly").ToList();
+        foreach (var latestFilter in latestFilters)
+        {
+            if (latestFilter.Value?.ToString()?.ToLower() is "true" or "1")
+                query = query.Where(i => !dbContext.Set<Xchange>().Any(r => r.RetryFor == i.Id));
+
+            condition.Filters.Remove(latestFilter);
+        }
+
         var propertiesFilters = condition.Filters
             .Where(f => f.Field == "PromotedPropertiesRaw").ToList();
         foreach (var propertyFilter in propertiesFilters)

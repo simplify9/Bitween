@@ -20,6 +20,18 @@ interface RawXchangeForDashboard {
 interface RawAlert {
   severity: "Info" | "Warning" | "Critical";
 }
+interface RawRetrySummary {
+  retriesLast7Days: { finished: number; succeeded: number };
+  failingChains: {
+    id: string;
+    attempts: number;
+    subscriptionId: number | null;
+    subscriptionName: string | null;
+    informationTypeCode: string | null;
+    startedOn: string;
+    exception: string | null;
+  }[];
+}
 
 const isBad = (raw: Pick<RawXchangeForDashboard, "status" | "responseBad">) =>
   raw.status === false || (raw.status === true && raw.responseBad === true);
@@ -40,11 +52,18 @@ export const dashboardMethods = {
     // request, and exact rather than approximated. Bounded to a generous page
     // size for what's a modest-scale ops tool; a very high-volume deployment
     // would need real pagination here.
-    const [xchangeRes, delayedRes, alertsRaw, subscriptionRows] = await Promise.all([
+    const [xchangeRes, delayedRes, failuresRes, retrySummary, alertsRaw, subscriptionRows] = await Promise.all([
       get<SearchyResponse<RawXchangeForDashboard>>(
         `/xchanges?filter=${encodeURIComponent(`StartedOn:6:${new Date(windowStart).toISOString()}`)}&size=1000&sort=StartedOn:1`,
       ),
       get<SearchyResponse<unknown>>("/delayedretries?size=1"),
+      // Counted by the search rather than from the rows above, for two reasons: those are capped
+      // at a page of 1000 and at 14 days, and this number has to agree with the list the tile
+      // opens — which carries no date bound. Only the total is wanted, so no rows are fetched.
+      get<SearchyResponse<unknown>>(
+        `/xchanges?filter=${encodeURIComponent("StatusFilter:1:3")}&filter=${encodeURIComponent("LatestOnly:1:true")}&size=1`,
+      ),
+      get<RawRetrySummary>("/dashboard/retrysummary"),
       // Depends on RabbitMQ management being configured on the backend — don't let it take the
       // rest of the dashboard down when it isn't; the "Queue alerts" tile flags it instead.
       get<RawAlert[]>("/ops/alerts").catch(() => null),
@@ -117,6 +136,9 @@ export const dashboardMethods = {
         processing: todayRows.filter(isProcessing).length,
       },
       yesterdayTotal: yesterdayRows.length,
+      failuresToActOn: failuresRes.totalCount,
+      failingChains: retrySummary.failingChains ?? [],
+      retriesLast7Days: retrySummary.retriesLast7Days ?? { finished: 0, succeeded: 0 },
       successRate7d,
       pendingRetries: delayedRes.totalCount,
       queueAlerts: alertsRaw === null ? null : alertsRaw.filter((a) => a.severity !== "Info").length,

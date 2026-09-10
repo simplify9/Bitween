@@ -936,6 +936,11 @@ export interface ExchangeQuery {
   /** Comma/pipe/newline separated; matches id, retryFor OR aggregationXchangeId. */
   ids?: string;
   correlationId?: string;
+  /**
+   * Only the newest attempt of each retry chain. A chain is one piece of work however many
+   * attempts it took, so this turns a list of failures into a list of things still to deal with.
+   */
+  latest?: boolean;
   /** Substring match against promoted property keys and values. */
   property?: string;
   /**
@@ -1094,7 +1099,34 @@ export interface QueueHealthSnapshot {
 
 // ——— Dashboard ———
 
+/** One chain that has been retried repeatedly and is still failing. */
+export interface FailingChain {
+  /** The newest attempt — where this chain got to, and the one a retry continues from. */
+  id: string;
+  /** How many attempts it has taken, counting the original as one. */
+  attempts: number;
+  subscriptionId: number | null;
+  subscriptionName: string | null;
+  informationTypeCode: string | null;
+  startedOn: string;
+  exception: string | null;
+}
+
 export interface DashboardData {
+  /** Worst first. Empty when nothing has been retried more than once and left failing. */
+  failingChains: FailingChain[];
+  /**
+   * Retries started in the last 7 days: how many have finished, and how many of those worked.
+   * Says whether retrying achieves anything here, which is what makes a long chain either bad
+   * luck or a configuration problem.
+   */
+  retriesLast7Days: { finished: number; succeeded: number };
+  /**
+   * Failures that are the newest attempt of their chain. Counts problems rather than attempts: a
+   * chain retried nine times is one of these, not nine. Subject to the search's count cap, so a
+   * value above it means "at least this many".
+   */
+  failuresToActOn: number;
   today: { total: number; failed: number; processing: number };
   yesterdayTotal: number;
   /** Percentage 0–100 across the last 7 days of finished exchanges. */

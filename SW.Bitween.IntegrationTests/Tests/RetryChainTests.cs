@@ -383,6 +383,54 @@ public class RetryChainTests
         Assert.False(await db.Set<Xchange>().AnyAsync(x => x.RetryFor == xchange.Id));
     }
 
+    // ─── What the dashboard reads ─────────────────────────────────────────────
+
+    /// <summary>
+    /// The dashboard's retry panel: which chains have been retried repeatedly and are still
+    /// failing, and whether retrying is achieving anything.
+    /// </summary>
+    [Fact]
+    public async Task RetrySummary_ranks_the_chains_that_keep_failing_and_says_whether_retries_work()
+    {
+        await using var scope = _fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+        var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
+        var ctx = scope.Superuser();
+
+        // A chain of four failed attempts.
+        var (_, deep) = await FailedXchange(db, xs, "Summary Deep Doc");
+        var second = await RetryOnce(db, xs, ctx, deep.Id);
+        var third = await RetryOnce(db, xs, ctx, second.Id);
+        var fourth = await RetryOnce(db, xs, ctx, third.Id);
+
+        // And one that was retried once, where the retry worked.
+        var (_, healed) = await FailedXchange(db, xs, "Summary Healed Doc");
+        await new Resources.Xchanges.Retry(db, ctx, xs).Handle(healed.Id, new XchangeRetry());
+        await db.SaveChangesAsync();
+        var healedRetry = await db.Set<Xchange>().FirstAsync(x => x.RetryFor == healed.Id);
+        db.Set<XchangeResult>().Add(new XchangeResult(healedRetry.Id, null, null));
+        await db.SaveChangesAsync();
+
+        var summary = await new Resources.Dashboard.RetrySummary(db, ctx).Handle();
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(summary);
+
+        // The still-failing chain is listed, at its true length. The one that came good is not:
+        // its newest attempt succeeded, so there is nothing left to act on.
+        var chains = json.GetProperty("FailingChains").EnumerateArray().ToList();
+        var listed = chains.FirstOrDefault(c => c.GetProperty("Id").GetString() == fourth.Id);
+        Assert.Equal(4, listed.GetProperty("Attempts").GetInt32());
+        Assert.DoesNotContain(chains, c => c.GetProperty("Id").GetString() == healedRetry.Id);
+
+        // Superseded attempts are not listed either — only where each chain got to.
+        foreach (var stale in new[] { deep.Id, second.Id, third.Id })
+            Assert.DoesNotContain(chains, c => c.GetProperty("Id").GetString() == stale);
+
+        // And retries that worked are counted among the ones that finished.
+        var retries = json.GetProperty("RetriesLast7Days");
+        Assert.True(retries.GetProperty("Succeeded").GetInt32() >= 1);
+        Assert.True(retries.GetProperty("Finished").GetInt32() >= retries.GetProperty("Succeeded").GetInt32());
+    }
+
     // ─── Reading the chain back ───────────────────────────────────────────────
 
     [Fact]
@@ -408,6 +456,47 @@ public class RetryChainTests
             Assert.Equal([null, xchange.Id, second.Id], tree.Nodes.Select(n => n.RetryFor));
             Assert.All(tree.Nodes.Skip(1), n => Assert.True(n.ManualRetry));
         }
+    }
+
+    /// <summary>
+    /// A chain is one piece of work, however many attempts it took. Asking for the newest attempt
+    /// only is what turns a list of failures into a list of things still to deal with — and, used
+    /// with a bulk retry, means the selection is already the attempts that can be retried.
+    /// </summary>
+    [Fact]
+    public async Task Exchange_search_can_return_only_the_newest_attempt_of_each_chain()
+    {
+        await using var scope = _fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+        var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
+        var ctx = scope.Superuser();
+
+        var (sub, first) = await FailedXchange(db, xs, "Latest Only Doc");
+        var second = await RetryOnce(db, xs, ctx, first.Id);
+        var third = await RetryOnce(db, xs, ctx, second.Id);
+
+        // A second, unrelated failure on the same subscription that was never retried.
+        var alone = await xs.CreateXchange(sub, new XchangeFile("{}"));
+        await db.SaveChangesAsync();
+        db.Set<XchangeResult>().Add(new XchangeResult(alone.Id, null, null, exception: "boom"));
+        await db.SaveChangesAsync();
+
+        var search = new Resources.Xchanges.Search(db, xs, ctx);
+
+        var all = (SearchyResponse<XchangeRow>)await search.Handle(
+            new SearchyRequest($"filter=SubscriptionId:1:{sub.Id}") { PageSize = 50 });
+        Assert.Equal(4, all.Result.Count());
+
+        var latest = (SearchyResponse<XchangeRow>)await search.Handle(
+            new SearchyRequest($"filter=SubscriptionId:1:{sub.Id}&filter=LatestOnly:1:true") { PageSize = 50 });
+
+        // The chain collapses to its own end, and the standalone failure is its own end too.
+        var ids = latest.Result.Select(r => r.Id).ToList();
+        Assert.Equal(2, ids.Count);
+        Assert.Contains(third.Id, ids);
+        Assert.Contains(alone.Id, ids);
+        Assert.Equal(2, latest.TotalCount);
+        Assert.All(latest.Result, r => Assert.False(r.HasRetry));
     }
 
     [Fact]
