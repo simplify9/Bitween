@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using SW.Bitween.Domain;
 using SW.Bitween.Model;
@@ -33,42 +31,18 @@ public class Catalog(
     BitweenDbContext dbContext,
     RequestContext requestContext) : IQueryHandler<AdapterSearchRequest, object>
 {
-    /// <summary>
-    /// How many adapters are described at once when none of them are cached yet.
-    /// <para>
-    /// Describing a published adapter starts a child process, so this is a limit on how many of
-    /// those exist at the same moment. Six is what a browser was already doing per host, so a cold
-    /// catalogue is no slower than it used to be without being any heavier on the server.
-    /// </para>
-    /// </summary>
-    private const int DescribeConcurrency = 6;
-
     public async Task<object> Handle(AdapterSearchRequest request)
     {
         await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.View);
 
         var adapters = await listing.List(request.Prefix);
 
-        var described = new ConcurrentDictionary<string, IDictionary<string, StartupValue>>();
-
-        await Parallel.ForEachAsync(
-            adapters,
-            new ParallelOptions { MaxDegreeOfParallelism = DescribeConcurrency },
-            async (adapter, _) =>
-            {
-                try
-                {
-                    described[adapter.Key] = await startupValues.Describe(adapter.Key);
-                }
-                catch (Exception)
-                {
-                    // One adapter that cannot be described — its runtime is missing locally, say —
-                    // must not blank out the rest of the catalogue, including the native ones that
-                    // resolved perfectly well. It comes back with no properties, as it did when the
-                    // caller was asking row by row and swallowing the failure itself.
-                    described[adapter.Key] = new Dictionary<string, StartupValue>();
-                }
-            });
+        // Asked for all at once and left unthrottled on purpose. The native ones answer by
+        // reflection and should not be made to queue, and how many published adapters may be
+        // running at a time is capped in ServerlessAdapterDescriber — process-wide, which is the
+        // only place it can be, since this handler knows nothing of the other requests in flight.
+        var described = await Task.WhenAll(adapters.Select(async a => (a.Key, Values: await Describe(a.Key))));
+        var byKey = described.ToDictionary(d => d.Key, d => d.Values);
 
         return adapters.Select(a => new
         {
@@ -78,7 +52,23 @@ public class Catalog(
             // older shape passed through and what made a version read as an object rather than
             // "1.2.3" to anything trying to label it.
             Versions = a.VersionPaths.Select(v => v.Split('/').Last()).ToList(),
-            StartupValues = described.GetValueOrDefault(a.Key) ?? new Dictionary<string, StartupValue>()
+            StartupValues = byKey[a.Key]
         });
+    }
+
+    private async Task<IDictionary<string, StartupValue>> Describe(string adapterId)
+    {
+        try
+        {
+            return await startupValues.Describe(adapterId);
+        }
+        catch (Exception)
+        {
+            // One adapter that cannot be described — its runtime is missing locally, say — must not
+            // blank out the rest of the catalogue, including the native ones that resolved
+            // perfectly well. It comes back with no properties, as it did when the caller was
+            // asking row by row and swallowing the failure itself.
+            return new Dictionary<string, StartupValue>();
+        }
     }
 }

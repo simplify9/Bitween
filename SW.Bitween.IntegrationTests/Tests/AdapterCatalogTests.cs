@@ -41,6 +41,12 @@ public class AdapterCatalogTests
             .Describe(adapterId);
     }
 
+    private async Task Forget(string adapterId)
+    {
+        await using var scope = _fixture.CreateScope();
+        scope.ServiceProvider.GetRequiredService<AdapterStartupValues>().Forget(adapterId);
+    }
+
     [Fact]
     public async Task A_published_adapter_reports_the_values_it_expects()
     {
@@ -62,10 +68,32 @@ public class AdapterCatalogTests
     [Fact]
     public async Task Describing_a_published_adapter_twice_only_runs_it_once()
     {
+        // From a known-cold cache, so the first ask is the one that runs the adapter however the
+        // other tests in this collection happened to be ordered.
+        await Forget(PublishedAdapter);
+
         var first = await Describe(PublishedAdapter);
         var second = await Describe(PublishedAdapter);
 
         Assert.Same(first, second);
+    }
+
+    /// <summary>
+    /// Several requests arriving together on a cold cache still only run the adapter once.
+    /// </summary>
+    /// <remarks>
+    /// They all come back with the same instance, which is only possible if one of them did the
+    /// work and the rest waited for it — each separate run of the adapter builds its own dictionary.
+    /// </remarks>
+    [Fact]
+    public async Task Describing_the_same_adapter_from_several_requests_at_once_runs_it_once()
+    {
+        await Forget(PublishedAdapter);
+
+        var asks = Enumerable.Range(0, 8).Select(_ => Task.Run(() => Describe(PublishedAdapter)));
+        var results = await Task.WhenAll(asks);
+
+        Assert.All(results, r => Assert.Same(results[0], r));
     }
 
     /// <summary>
