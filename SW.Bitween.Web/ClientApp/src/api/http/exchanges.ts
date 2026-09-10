@@ -175,6 +175,7 @@ function buildExchangeFilters(query: ExchangeQuery): URLSearchParams {
     params.append("filter", `Id:4:text|${ids.join("|")}`);
   }
   if (query.correlationId?.trim()) params.append("filter", `CorrelationId:1:${query.correlationId.trim()}`);
+  if (query.latest) params.append("filter", "LatestOnly:1:true");
   // PromotedPropertiesRaw is stored as "key:value,key:value", so prefixing the key turns
   // the same substring match into a scoped one — no schema or endpoint change needed.
   // Typing "merchant:Acme" into the value box has therefore always worked; the picker

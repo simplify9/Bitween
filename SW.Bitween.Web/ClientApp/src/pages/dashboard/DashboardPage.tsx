@@ -20,16 +20,20 @@ function StatTile({
   sub,
   to,
   accent,
+  title,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   to: string;
   accent?: "danger" | "warn";
+  /** For a number whose meaning its label cannot carry on its own. */
+  title?: string;
 }) {
   return (
     <Link
       to={to}
+      title={title}
       className={`rounded-xl border bg-white px-4 py-3 transition-colors hover:bg-ink-50 ${
         accent === "danger" ? "border-danger-200" : accent === "warn" ? "border-warn-100" : "border-ink-200"
       }`}
@@ -88,7 +92,7 @@ export function DashboardPage() {
       />
 
       {/* — KPI row — */}
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Exchanges today"
           value={data.today.total}
@@ -113,6 +117,19 @@ export function DashboardPage() {
           sub={data.today.failed > 0 ? "open the failures" : "nothing failed yet"}
           to="/exchanges?status=failed"
           accent={data.today.failed > 0 ? "danger" : undefined}
+        />
+        {/* "Failed today" counts attempts, and a chain retried nine times is nine of them —
+            none of which is the current state of anything. This counts the ends of chains, so
+            it is the number of problems, and it opens exactly that list. */}
+        <StatTile
+          label="Failures to act on"
+          // The search stops counting past its cap and reports the cap + 1, which would read as a
+          // precise 10,001 here (see COUNT_CAP in ExchangesPage).
+          value={data.failuresToActOn > 10_000 ? "10,000+" : data.failuresToActOn}
+          sub={data.failuresToActOn > 0 ? "newest attempt of each chain" : "every failure was retried"}
+          to="/exchanges?status=failed&latest=1"
+          accent={data.failuresToActOn > 0 ? "danger" : undefined}
+          title="Failures that nothing has been retried from yet, over the last 14 days. A chain of nine failed attempts counts once — as the attempt at the end of it, which is the one still to deal with."
         />
         <StatTile
           label="Pending auto-retries"
@@ -213,6 +230,71 @@ export function DashboardPage() {
             </tbody>
           </table>
         </details>
+      </Panel>
+
+      {/* — chains that keep failing —
+          "Latest failures" answers what broke most recently. This answers which of them is not
+          getting better however often it is retried — the difference between bad luck and
+          something a person has to go and fix. The retry success rate sits in the description,
+          because a long chain only means "broken" where retries usually work. */}
+      <Panel
+        title="Chains that keep failing"
+        description={
+          data.retriesLast7Days.finished === 0
+            ? "Retried repeatedly and still failing."
+            : `Retried repeatedly and still failing. Of retries in the last 7 days, ${data.retriesLast7Days.succeeded} of ${data.retriesLast7Days.finished} eventually worked.`
+        }
+        className="mb-4"
+      >
+        {data.failingChains.length === 0 ? (
+          <EmptyState title="No chain is stuck">
+            Nothing has been retried more than once and left failing.
+          </EmptyState>
+        ) : (
+          <ul className="space-y-2.5">
+            {data.failingChains.map((c) => (
+              <li key={c.id} className="text-sm">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Link
+                    to={`/exchanges?ids=${encodeURIComponent(c.id)}`}
+                    title="Open the newest attempt, where its whole chain is listed"
+                    className="shrink-0"
+                  >
+                    <Badge
+                      tone="danger"
+                      title={`${c.attempts} attempts have been made at this piece of work, and the newest one still failed`}
+                    >
+                      {c.attempts} attempts
+                    </Badge>
+                  </Link>
+                  {c.informationTypeCode && (
+                    <span className="font-medium text-ink-800">{c.informationTypeCode}</span>
+                  )}
+                  {c.subscriptionName && (
+                    <Link
+                      to={`/subscriptions/${c.subscriptionId}`}
+                      className="text-ink-600 hover:text-crimson-700 hover:underline"
+                    >
+                      {c.subscriptionName}
+                    </Link>
+                  )}
+                  <span className="ml-auto text-xs text-ink-400">{timeAgo(c.startedOn)}</span>
+                </div>
+                {c.exception && (
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-ink-500" title={c.exception}>
+                    {c.exception.split("\n")[0]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <Link
+          to="/exchanges?status=failed&latest=1"
+          className="mt-3 inline-block text-[13px] font-medium text-crimson-700 hover:underline"
+        >
+          All failures to act on →
+        </Link>
       </Panel>
 
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
