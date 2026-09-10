@@ -124,6 +124,8 @@ export function NewScheduledJobPage() {
     retryPolicyId: null,
     validatorId: null,
     validatorProperties: {},
+    // A new subscription binds no connection until an adapter that needs one is chosen.
+    dataSourceId: null,
     matchExpression: null,
   };
 

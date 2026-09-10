@@ -23,21 +23,14 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// from every screen.
 /// </remarks>
 [Collection("Bitween")]
-public class ApiGatewayTests
+public class ApiGatewayTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public ApiGatewayTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     private async Task<int> CreateGateway(string urlName)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.ApiGateways.Create>(scope.ServiceProvider);
         return (int)await handler.Handle(new ApiGatewayCreate { Name = Unique("Gateway"), UrlName = urlName });
@@ -45,7 +38,7 @@ public class ApiGatewayTests
 
     private async Task AddPartner(int gatewayId, ApiGatewayPartnerCreate model)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.ApiGateways.AddPartner>(scope.ServiceProvider);
         await handler.Handle(gatewayId, model);
@@ -54,7 +47,7 @@ public class ApiGatewayTests
     /// <summary>A partner, an information type, and an integration of the type attachments demand.</summary>
     private async Task<(int partnerId, int documentId, int subscriptionId)> Groundwork()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var partner = new Partner(Unique("Gateway partner"));
@@ -105,7 +98,7 @@ public class ApiGatewayTests
         var gatewayId = await CreateGateway(Unique("gw").ToLowerInvariant());
 
         int wrongKindId;
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             // A perfectly good integration — of a kind that is started by its own schedule, not
@@ -143,14 +136,14 @@ public class ApiGatewayTests
         await AddPartner(gatewayId, new ApiGatewayPartnerCreate
             { PartnerId = partnerId, SubscriptionId = subscriptionId });
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.ApiGateways.Delete>(scope.ServiceProvider);
             await handler.Handle(gatewayId);
         }
 
-        await using var check = _fixture.CreateScope();
+        await using var check = fixture.CreateScope();
         var db = check.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await db.Set<ApiGateway>().AnyAsync(g => g.Id == gatewayId));
         Assert.False(await db.Set<ApiGatewayPartner>().AnyAsync(p => p.ApiGatewayId == gatewayId));
@@ -193,7 +186,7 @@ public class ApiGatewayTests
             NewIntegration = new InlineIntegrationCreate { Name = integrationName, DocumentId = documentId },
         });
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var created = await db.Set<Subscription>().SingleAsync(s => s.Name == integrationName);
 
@@ -228,7 +221,7 @@ public class ApiGatewayTests
             }));
         Assert.StartsWith("INVALID_BUS_TYPE_NAME", ex.Message);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         // Both rows go in on one save, so a refusal cannot leave a half-made integration that

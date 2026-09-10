@@ -14,19 +14,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// can be persisted and retrieved from the real PostgreSQL container.
 /// </summary>
 [Collection("Bitween")]
-public class EntityTests
+public class EntityTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public EntityTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Can_create_and_read_document()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, "Integration Test Doc", DocumentFormat.Json);
@@ -42,7 +35,7 @@ public class EntityTests
     [Fact]
     public async Task Can_create_partner()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         // Partner.Id is auto-generated (ValueGeneratedOnAdd)
@@ -61,7 +54,7 @@ public class EntityTests
     [Fact]
     public async Task Can_create_receiving_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         // Create a document for the subscription to reference
@@ -86,7 +79,7 @@ public class EntityTests
     [Fact]
     public async Task Seed_data_exists_after_migration()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var systemPartner = await db.Set<Partner>().FindAsync(Partner.SystemId);

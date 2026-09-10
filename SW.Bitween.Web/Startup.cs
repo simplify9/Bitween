@@ -30,6 +30,9 @@ using Npgsql;
 using SW.Bitween.Domain;
 using SW.Bitween.Resources.Accounts;
 using SW.Bitween.Services;
+using SW.Bitween.Services.Cluster;
+using SW.Bitween.Services.DataSources;
+using SW.Serverless.Resident;
 using SW.CqApi.AuthOptions;
 using SW.Logger.Console;
 using SW.Logger.ElasticSerach;
@@ -43,21 +46,16 @@ using SW.Scheduler.PgSql;
 using SW.Scheduler.SqlServer;
 using SqlAuthenticationProvider = Microsoft.Data.SqlClient.SqlAuthenticationProvider;
 using SqlAuthenticationMethod = Microsoft.Data.SqlClient.SqlAuthenticationMethod;
+using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween.Web
 {
-    public class Startup
+    public class Startup(IConfiguration configuration, IWebHostEnvironment environment)
     {
         private static readonly string ApiXchangeCreatedEventQueueName = "XchangeService.ApiXchangeCreatedEvent";
 
-        public Startup(IConfiguration configuration, IWebHostEnvironment environment)
-        {
-            Configuration = configuration;
-            Environment = environment;
-        }
-
-        private IConfiguration Configuration { get; }
-        private IWebHostEnvironment Environment { get; }
+        private IConfiguration Configuration { get; } = configuration;
+        private IWebHostEnvironment Environment { get; } = environment;
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -81,7 +79,12 @@ namespace SW.Bitween.Web
             services.AddScoped<Resources.Adapters.AdapterListing>();
             services.AddScoped<AdapterSecretProperties>();
             services.AddScoped<RetryUsageReport>();
-            services.AddScoped<AdapterInvoker>();
+            // Registration ORDER is the routing order: each runtime is asked whether an
+            // adapter is its own, and the classic one claims everything, so it must be asked last.
+            services.AddScoped<IAdapterRuntime, NativeAdapterRuntime>();
+            services.AddScoped<IAdapterRuntime, ResidentAdapterRuntime>();
+            services.AddScoped<IAdapterRuntime, ClassicAdapterRuntime>();
+            services.AddScoped<IAdapterInvoker, AdapterInvoker>();
             services.AddScoped<MappingContextFactory>();
             services.AddScoped<XchangeService>();
             services.AddScoped<Resources.Ops.LaneResolver>();
@@ -163,6 +166,36 @@ namespace SW.Bitween.Web
                 configure.CommandTimeout = bitweenOptions.ServerlessCommandTimeout;
                 configure.AdapterRemotePath = bitweenOptions.AdapterPath;
             });
+
+            // Describes what each bus provider accepts, read from the adapter packages. Not
+            // behind BusProvidersEnabled: a node that does not run connections still configures
+            // them, and describing an adapter never starts one.
+            services.AddSingleton<DataSourceProviderCatalog>();
+
+            // Scoped: it reads subscriptions through the request's DbContext.
+            services.AddScoped<StatementUsageReader>();
+
+            // Scoped for the same reason: it reads the data source through the request's DbContext.
+            // IResidentAdapterHost is an optional dependency, so this resolves on a node with
+            // resident adapters turned off too — it just never has anyone to ask.
+            services.AddScoped<StatementValidator>();
+
+            // Resident data source providers — brokers and databases both. Off by default because
+            // it is opt-in, not because it is unsafe to run on more than one node: a broker
+            // connection is exclusive, and every
+            // data source is held through a lease with a database-issued fencing term, so only
+            // one node consumes any given source. See BusProviderSupervisor and ILeaderElection.
+            if (bitweenOptions.BusProvidersEnabled)
+            {
+                services.AddResidentAdapters<BusProviderEventSink, BitweenAdapterStateStore>(configure =>
+                {
+                    configure.HeartbeatInterval = TimeSpan.FromSeconds(15);
+                    configure.MaxInFlight = bitweenOptions.BusProviderMaxInFlight;
+                });
+                // One election implementation, deliberately — see ILeaderElection's remarks.
+                services.AddSingleton<ILeaderElection, RabbitMqLeaderElection>();
+                services.AddHostedService<BusProviderSupervisor>();
+            }
             services.AddScoped<RequestContext>();
 
             // Get and validate connection string

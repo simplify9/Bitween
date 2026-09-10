@@ -1,3 +1,27 @@
 [*.{yml,yaml}] 
 indent_style = space
 indent_size = 2
+[*.cs]
+# Code style, enforced by the IDE and by `dotnet format`. These are the choices we have made
+# deliberately; anything not listed here is left to the compiler's defaults on purpose.
+
+# A constructor whose whole body is assigning its parameters to fields is ceremony. Primary
+# constructors say the same thing in the class header. (IDE0290)
+csharp_style_prefer_primary_constructors = true:suggestion
+
+# The rest of the modern-C# defaults we already write by hand, stated so the IDE stops
+# suggesting the older form and so `dotnet format` does not undo them.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_prefer_not_pattern = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion

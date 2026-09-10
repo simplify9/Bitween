@@ -7,22 +7,13 @@ using SW.Bitween.Model;
 
 namespace SW.Bitween.Resources.ApiGateways
 {
-    public class Get : IGetHandler<int, object>
+    public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Get(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.View);
 
-            var gateway = await _dbContext.Set<ApiGateway>()
+            var gateway = await dbContext.Set<ApiGateway>()
                 .AsNoTracking()
                 .Include(ag => ag.Partners)
                     .ThenInclude(p => p.Partner)

@@ -15,6 +15,9 @@ namespace SW.Bitween
             DatabaseType = "MySql";
             AdminDatabaseName = "defaultdb";
             ServerlessCommandTimeout = 300;
+            BusProvidersEnabled = false;
+            BusProviderMaxInFlight = 16;
+            InboundMessagePruneCron = "0 30 3 * * ?";
             ApiCallSubscriptionResponseAcceptedStatusCode = 202;
             StorageProvider = "S3";
             JwtExpiryMinutes = 60;
@@ -36,6 +39,25 @@ namespace SW.Bitween
         public string AdminCredentials { get; set; }
         public string DocumentPrefix { get; set; }
         public int ServerlessCommandTimeout { get; set; }
+
+        /// <summary>
+        /// Runs resident data source providers on this node — brokers and databases alike.
+        ///
+        /// Named for brokers because it predates database sources; renaming it would break every
+        /// deployment that already sets it, so operator-facing messages say what it gates rather
+        /// than repeating the name.
+        ///
+        /// Safe on every node: each data source is owned through a lease, so exactly one node
+        /// consumes it and the rest stand by. Still opt-in, because it opens outbound connections
+        /// to third-party systems and that should be a decision rather than a default.
+        /// </summary>
+        public bool BusProvidersEnabled { get; set; }
+
+        /// <summary>Unacknowledged messages one bus adapter may have in flight with the host.</summary>
+        public int BusProviderMaxInFlight { get; set; }
+
+        /// <summary>When to forget dedupe keys past their data source's window. Nightly by default.</summary>
+        public string InboundMessagePruneCron { get; set; }
         public bool AreXChangeFilesPrivate { get; set; } = false;
         public int? ApiCallSubscriptionResponseAcceptedStatusCode { get; set; }
 

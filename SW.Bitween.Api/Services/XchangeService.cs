@@ -11,11 +11,16 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SW.Bitween.Services.Adapters;
 using SW.Bus.RabbitMqExtensions;
 
 namespace SW.Bitween;
 
-public class XchangeService :
+public class XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
+    FilterService filterService,
+    ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
+    IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
+    IAdapterInvoker adapterInvoker, NativeAdapterDiscoveryService nativeAdapterDiscovery) :
     // IConsume<ApiXchangeCreatedEvent>,
     // IConsume<InternalXchangeCreatedEvent>,
     // IConsume<AggregateXchangeCreatedEvent>,
@@ -26,57 +31,29 @@ public class XchangeService :
 
 {
     public const string ResultQueueSuffix = "-Result";
-    private readonly BitweenOptions _BitweenSettings;
-    private readonly BitweenDbContext _dbContext;
-    private readonly FilterService _filterService;
-    private readonly ICloudFilesService _cloudFiles;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IPublish _publish;
-    private readonly ILogger _logger;
-    private readonly IInfolinkCache _BitweenCache;
-    private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-    private readonly AdapterInvoker _adapterInvoker;
-
-    public XchangeService(BitweenOptions BitweenSettings, BitweenDbContext dbContext,
-        FilterService filterService,
-        ICloudFilesService cloudFiles, IServiceProvider serviceProvider,
-        IPublish publish, ILogger<XchangeService> logger, IInfolinkCache BitweenCache,
-        NativeAdapterDiscoveryService nativeAdapterDiscovery, AdapterInvoker adapterInvoker)
-    {
-        _adapterInvoker = adapterInvoker;
-        _BitweenSettings = BitweenSettings;
-        _dbContext = dbContext;
-        _filterService = filterService;
-        _cloudFiles = cloudFiles;
-        _nativeAdapterDiscovery = nativeAdapterDiscovery;
-        _serviceProvider = serviceProvider;
-        _publish = publish;
-        _logger = logger;
-        _BitweenCache = BitweenCache;
-    }
 
     public async Task<string> SubmitSubscriptionXchange(int subscriptionId, XchangeFile file,
         string[] references = null, Partner gatewayPartner = null,
         GlobalAdapterValuesSet[] globalAdapterValuesSets = null)
     {
-        var subscription = await _BitweenCache.SubscriptionByIdAsync(subscriptionId);
+        var subscription = await BitweenCache.SubscriptionByIdAsync(subscriptionId);
 
         var xchange = await CreateXchange(subscription, file, references, Guid.NewGuid().ToString("N"), gatewayPartner,
             globalAdapterValuesSets);
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
         return xchange.Id;
     }
 
     public async Task SubmitFilterXchange(int documentId, XchangeFile file, string[] references = null,
         string correlationId = null)
     {
-        var document = await _BitweenCache.DocumentByIdAsync(documentId);
+        var document = await BitweenCache.DocumentByIdAsync(documentId);
         Xchange xchange;
 
         if (document?.DisregardsUnfilteredMessages ?? false)
         {
             xchange = new Xchange(documentId, null, file, references, SubscriptionType.Internal, correlationId);
-            var result = await _filterService.Filter(xchange.DocumentId, file);
+            var result = await filterService.Filter(xchange.DocumentId, file);
             await CreateXchangesForHits(xchange, result, file);
         }
         else
@@ -84,7 +61,7 @@ public class XchangeService :
             xchange = await CreateXchange(document, null, file, references, correlationId);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task CreateXchange(Xchange xchange, XchangeFile file, WorkGroup workGroup,
@@ -93,7 +70,7 @@ public class XchangeService :
         await EnsureNotAlreadyRetried(xchange.Id);
         var newXchange = new Xchange(xchange, file, workGroup, manualRetry);
         await AddFile(newXchange.Id, XchangeFileType.Input, file);
-        _dbContext.Add(newXchange);
+        dbContext.Add(newXchange);
     }
 
     public async Task CreateXchange(Subscription subscription, Xchange xchange, XchangeFile file,
@@ -101,12 +78,12 @@ public class XchangeService :
     {
         await EnsureNotAlreadyRetried(xchange.Id);
         var partnerId = xchange.PartnerId ?? subscription.PartnerId;
-        var partner = partnerId.HasValue ? await _dbContext.FindAsync<Partner>(partnerId.Value) : null;
-        var globalAdapterValuesSets = await _BitweenCache.ListGlobalAdapterValuesSetsAsync();
+        var partner = partnerId.HasValue ? await dbContext.FindAsync<Partner>(partnerId.Value) : null;
+        var globalAdapterValuesSets = await BitweenCache.ListGlobalAdapterValuesSetsAsync();
         var newXchange = new Xchange(subscription, xchange, file, partner, globalAdapterValuesSets,
             groupAttemptCounts, manualRetry);
         await AddFile(newXchange.Id, XchangeFileType.Input, file);
-        _dbContext.Add(newXchange);
+        dbContext.Add(newXchange);
     }
 
     public async Task<Xchange> CreateXchange(Document document, WorkGroup workGroup, XchangeFile file,
@@ -115,7 +92,7 @@ public class XchangeService :
     {
         var xchange = new Xchange(document.Id, workGroup, file, references, SubscriptionType.Internal, correlationId);
         await AddFile(xchange.Id, XchangeFileType.Input, file);
-        _dbContext.Add(xchange);
+        dbContext.Add(xchange);
         return xchange;
     }
 
@@ -127,7 +104,7 @@ public class XchangeService :
         // aggregation, manual "create exchange", plain internal subscription fan-out) leave
         // this null — resolve it here so {{globals.…}} always gets a chance to translate,
         // instead of silently no-op'ing for whichever caller forgot to load it.
-        globalAdapterValuesSets ??= await _BitweenCache.ListGlobalAdapterValuesSetsAsync();
+        globalAdapterValuesSets ??= await BitweenCache.ListGlobalAdapterValuesSetsAsync();
 
         // And the same for the partner, for the same reason. Only a caller that learned the
         // partner from somewhere other than the subscription — a bus gateway route, a partner
@@ -137,13 +114,13 @@ public class XchangeService :
         // the Xchange is attributed to either way (see PartnerId below), so filling from it
         // adds a resolution that was missing rather than changing whose exchange it is.
         gatewayPartner ??= subscription.PartnerId.HasValue
-            ? await _dbContext.FindAsync<Partner>(subscription.PartnerId.Value)
+            ? await dbContext.FindAsync<Partner>(subscription.PartnerId.Value)
             : null;
 
         var xchange = new Xchange(subscription, file, references, correlationId, gatewayPartner,
             globalAdapterValuesSets);
         await AddFile(xchange.Id, XchangeFileType.Input, file);
-        _dbContext.Add(xchange);
+        dbContext.Add(xchange);
         return xchange;
     }
 
@@ -156,23 +133,23 @@ public class XchangeService :
     /// DelayedRetry record is removed as an orphan in that case); <c>true</c> on success.</returns>
     public async Task<bool> ExecuteDelayedRetry(DelayedRetry delayedRetry)
     {
-        var xchange = await _dbContext.FindAsync<Xchange>(delayedRetry.Id);
+        var xchange = await dbContext.FindAsync<Xchange>(delayedRetry.Id);
         if (xchange == null)
         {
-            _dbContext.Remove(delayedRetry);
+            dbContext.Remove(delayedRetry);
             return false;
         }
 
-        var subscription = await _dbContext.Set<Subscription>()
+        var subscription = await dbContext.Set<Subscription>()
             .FirstOrDefaultAsync(s => s.Id == xchange.SubscriptionId);
         if (subscription == null)
         {
             // Recorded on the result like the unreadable-input case below, rather than only dropping
             // the schedule: the exchange is still there for someone to look at, so leaving it with no
             // reason means the retry simply stopped happening with nothing to explain it.
-            _dbContext.Remove(delayedRetry);
+            dbContext.Remove(delayedRetry);
 
-            var orphaned = await _dbContext.FindAsync<XchangeResult>(xchange.Id);
+            var orphaned = await dbContext.FindAsync<XchangeResult>(xchange.Id);
             orphaned?.SetRetryBlocked(
                 "The scheduled retry was dropped: the subscription it belonged to no longer exists.");
             return false;
@@ -185,9 +162,9 @@ public class XchangeService :
             // retry is scheduled, so it takes a race to arrive here. Dropped like the cases below
             // rather than left to throw: an exception here would leave the schedule in place and
             // the job would pick the same impossible retry up again on every pass, forever.
-            _dbContext.Remove(delayedRetry);
+            dbContext.Remove(delayedRetry);
 
-            var retried = await _dbContext.FindAsync<XchangeResult>(xchange.Id);
+            var retried = await dbContext.FindAsync<XchangeResult>(xchange.Id);
             retried?.SetRetryBlocked(
                 $"The scheduled retry was dropped: this exchange had already been retried, as {alreadyRetried}.");
             return false;
@@ -199,15 +176,15 @@ public class XchangeService :
             // The input is what a retry re-sends, so without it there is nothing to retry with. Handled
             // like a missing subscription — drop the schedule and move on — but recorded on the result
             // as well, because unlike a deleted subscription this needs someone to look into it.
-            _dbContext.Remove(delayedRetry);
+            dbContext.Remove(delayedRetry);
 
-            var result = await _dbContext.FindAsync<XchangeResult>(xchange.Id);
+            var result = await dbContext.FindAsync<XchangeResult>(xchange.Id);
             result?.SetRetryBlocked("The scheduled retry was dropped: the input file could not be read.");
             return false;
         }
 
         await CreateXchange(subscription, xchange, inputFile);
-        _dbContext.Remove(delayedRetry);
+        dbContext.Remove(delayedRetry);
         return true;
     }
 
@@ -223,7 +200,7 @@ public class XchangeService :
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "The input file of xchange {XchangeId} could not be read.", xchange.Id);
+            logger.LogWarning(ex, "The input file of xchange {XchangeId} could not be read.", xchange.Id);
             return null;
         }
     }
@@ -231,7 +208,7 @@ public class XchangeService :
     private Task CreateOnHoldXchange(Subscription subscription, XchangeFile file, string[] references = null)
     {
         var xchange = new OnHoldXchange(subscription, file.Data, file.Filename, file.BadData, references);
-        _dbContext.Add(xchange);
+        dbContext.Add(xchange);
         return Task.CompletedTask;
     }
 
@@ -247,14 +224,14 @@ public class XchangeService :
     /// </para>
     /// <para>
     /// Global values come from the cache, not a fresh query. The enrichment path reads them with
-    /// <c>_dbContext.Set&lt;GlobalAdapterValuesSet&gt;()</c> on every exchange while the rest of this
-    /// service goes through <c>_BitweenCache</c>; that is left alone rather than corrected, because
+    /// <c>dbContext.Set&lt;GlobalAdapterValuesSet&gt;()</c> on every exchange while the rest of this
+    /// service goes through <c>BitweenCache</c>; that is left alone rather than corrected, because
     /// changing when existing subscriptions see an edited value is not this change's business.
     /// </para>
     /// </remarks>
     private async Task<string> BuildMappingContextJson(Xchange xchange)
     {
-        var factory = _serviceProvider.GetRequiredService<MappingContextFactory>();
+        var factory = serviceProvider.GetRequiredService<MappingContextFactory>();
         return JsonConvert.SerializeObject(await factory.Build(xchange.PartnerId, xchange.Id));
     }
 
@@ -270,7 +247,7 @@ public class XchangeService :
         // XML or CSV has to be able to opt out of this entire block.
         string mappingContextJson = null;
 
-        if (_nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
+        if (nativeAdapterDiscovery.MapperReceivesOwnContext(xchange.MapperId))
         {
             mappingContextJson = await BuildMappingContextJson(xchange);
         }
@@ -287,7 +264,7 @@ public class XchangeService :
             {
                 if (xchange.PartnerId.HasValue)
                 {
-                    var partner = await _dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
+                    var partner = await dbContext.FindAsync<Partner>(xchange.PartnerId.Value);
                     if (partner?.AdapterProperties?.Count > 0)
                     {
                         jObjEnriched["__partner__"] = JObject.FromObject(partner.AdapterProperties);
@@ -297,7 +274,7 @@ public class XchangeService :
 
                 // Inject __globals__ — all global adapter values sets
                 // so templates can use {{ __globals__?.setId?.key }}
-                var globalSets = await _dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
+                var globalSets = await dbContext.Set<GlobalAdapterValuesSet>().ToListAsync();
                 if (globalSets.Any(s => s.Values?.Count > 0))
                 {
                     var globalsObj = new JObject();
@@ -319,18 +296,12 @@ public class XchangeService :
             mapperProperties[NativeAdapters.Mapper.NativeMapper.ContextKey] = mappingContextJson;
 
         // Check if it's a native adapter
-        if (xchange.MapperId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var handler = _nativeAdapterDiscovery.GetNativeMapper(xchange.MapperId, mapperProperties);
-            xchangeFile = await handler.Handle(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(xchange.MapperId, xchange.CorrelationId ?? xchange.Id, mapperProperties);
-            xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle), xchangeFile);
-        }
+        // No branching on the adapter's kind: the invoker decides which of the three runtimes
+        // owns this id — in-process, spawned, or a rented resident instance — and the pipeline
+        // only says what it wants run.
+        xchangeFile = await adapterInvoker.InvokeAsync<XchangeFile>(
+            xchange.MapperId, AdapterRole.Mapper, nameof(IInfolinkHandler.Handle), xchangeFile,
+            mapperProperties, xchange.CorrelationId ?? xchange.Id);
 
         if (xchangeFile is null)
             throw new BitweenException(
@@ -345,23 +316,9 @@ public class XchangeService :
     {
         if (validatorId == null) return;
 
-        InfolinkValidatorResult result;
-
-        // Check if it's a native adapter
-        if (validatorId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var validator = _nativeAdapterDiscovery.GetNativeValidator(validatorId, properties);
-
-            result = await validator.Validate(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(validatorId, null, properties);
-            result = await serverless.InvokeAsync<InfolinkValidatorResult>(nameof(IInfolinkValidator.Validate),
-                xchangeFile);
-        }
+        var result = await adapterInvoker.InvokeAsync<InfolinkValidatorResult>(
+            validatorId, AdapterRole.Validator, nameof(IInfolinkValidator.Validate),
+            xchangeFile, properties);
 
         if (!result.Success)
             throw new SWValidationException(result.Validations);
@@ -374,19 +331,9 @@ public class XchangeService :
         var handlerProperties = xchange.HandlerProperties.ToDictionary();
         handlerProperties["xchangeid"] = xchange.Id;
 
-        // Check if it's a native adapter
-        if (xchange.HandlerId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            var handler = _nativeAdapterDiscovery.GetNativeHandler(xchange.HandlerId, handlerProperties);
-            xchangeFile = await handler.Handle(xchangeFile);
-        }
-        else
-        {
-            // Use serverless for external adapters
-            var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(xchange.HandlerId, xchange.CorrelationId ?? xchange.Id, handlerProperties);
-            xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkHandler.Handle), xchangeFile);
-        }
+        xchangeFile = await adapterInvoker.InvokeAsync<XchangeFile>(
+            xchange.HandlerId, AdapterRole.Handler, nameof(IInfolinkHandler.Handle), xchangeFile,
+            handlerProperties, xchange.CorrelationId ?? xchange.Id);
 
         if (xchangeFile != null)
             await AddFile(xchange.Id, XchangeFileType.Response, xchangeFile);
@@ -395,7 +342,7 @@ public class XchangeService :
 
     // private T InstantiateNativeAdapter<T>(string adapterId, IDictionary<string, string> properties)
     // {
-    //     var adapterInfo = _nativeAdapterDiscovery.GetNativeAdapterInfo(adapterId);
+    //     var adapterInfo = nativeAdapterDiscovery.GetNativeAdapterInfo(adapterId);
     //     if (adapterInfo == null)
     //         throw new BitweenException($"Native adapter not found: {adapterId}");
     //
@@ -447,42 +394,42 @@ public class XchangeService :
 
     private async Task AddFile(string xchangeId, XchangeFileType type, XchangeFile file)
     {
-        await _cloudFiles.WriteTextAsync(file.Data, new WriteFileSettings
+        await cloudFiles.WriteTextAsync(file.Data, new WriteFileSettings
         {
-            Public = !_BitweenSettings.AreXChangeFilesPrivate,
+            Public = !BitweenSettings.AreXChangeFilesPrivate,
             Key = GetFileKey(xchangeId, type)
         });
     }
 
     public string GetFileUrl(string xchangeId, XchangeFileType type)
     {
-        return _cloudFiles.GetUrl(GetFileKey(xchangeId, type));
+        return cloudFiles.GetUrl(GetFileKey(xchangeId, type));
     }
 
     public string GetFileUrl(string xchangeId, int? fileSize, XchangeFileType type)
     {
-        return fileSize is null or 0 ? null : _cloudFiles.GetUrl(GetFileKey(xchangeId, type));
+        return fileSize is null or 0 ? null : cloudFiles.GetUrl(GetFileKey(xchangeId, type));
     }
 
     public string GetFileKey(string xchangeId, int? fileSize, XchangeFileType type)
     {
         if (fileSize is null or 0)
             return null;
-        var key = $"{_BitweenSettings.DocumentPrefix}/{xchangeId}/{type.ToString().ToLower()}";
-        _logger.LogInformation($"the file key is:'{key}'");
+        var key = $"{BitweenSettings.DocumentPrefix}/{xchangeId}/{type.ToString().ToLower()}";
+        logger.LogInformation($"the file key is:'{key}'");
         return key;
     }
 
     private string GetFileKey(string xchangeId, XchangeFileType type)
     {
-        var key = $"{_BitweenSettings.DocumentPrefix}/{xchangeId}/{type.ToString().ToLower()}";
-        _logger.LogInformation($"the file key is:'{key}'");
+        var key = $"{BitweenSettings.DocumentPrefix}/{xchangeId}/{type.ToString().ToLower()}";
+        logger.LogInformation($"the file key is:'{key}'");
         return key;
     }
 
     public async Task<string> GetFile(string xchangeId, XchangeFileType type)
     {
-        await using var cloudStream = await _cloudFiles.OpenReadAsync(GetFileKey(xchangeId, type));
+        await using var cloudStream = await cloudFiles.OpenReadAsync(GetFileKey(xchangeId, type));
         using var reader = new StreamReader(cloudStream);
         return await reader.ReadToEndAsync();
     }
@@ -493,20 +440,20 @@ public class XchangeService :
         XchangeFile outputFile = null;
         XchangeFile responseFile = null;
         WorkGroup workGroup = null;
-        var xchange = await _dbContext.FindAsync<Xchange>(message.Id);
+        var xchange = await dbContext.FindAsync<Xchange>(message.Id);
 
         if (xchange == null) throw new BitweenException($"Xchange '{message.Id}' not found.");
 
         try
         {
             var inputFile = new XchangeFile(await GetFile(xchange.Id, XchangeFileType.Input), xchange.InputName);
-            var result = await _filterService.Filter(xchange.DocumentId, inputFile);
+            var result = await filterService.Filter(xchange.DocumentId, inputFile);
 
-            _dbContext.Add(new XchangePromotedProperties(xchange.Id, result));
+            dbContext.Add(new XchangePromotedProperties(xchange.Id, result));
 
             if (xchange.SubscriptionId != null)
             {
-                workGroup = await _BitweenCache.WorkGroupBySubscriptionIdAsync(xchange.SubscriptionId.Value);
+                workGroup = await BitweenCache.WorkGroupBySubscriptionIdAsync(xchange.SubscriptionId.Value);
                 if (xchange.MapperId == null)
                     responseFile = await RunHandler(xchange, inputFile);
                 else
@@ -518,7 +465,7 @@ public class XchangeService :
                 if (xchange.ResponseSubscriptionId != null && responseFile != null)
                 {
                     var subscription =
-                        await _BitweenCache.SubscriptionByIdAsync(xchange.ResponseSubscriptionId.Value);
+                        await BitweenCache.SubscriptionByIdAsync(xchange.ResponseSubscriptionId.Value);
 
                     responseXchange = await CreateXchange(subscription, responseFile, null, xchange.CorrelationId);
                 }
@@ -526,7 +473,7 @@ public class XchangeService :
                 if (!string.IsNullOrWhiteSpace(xchange.ResponseMessageTypeName) && responseFile != null &&
                     !responseFile.BadData)
                 {
-                    await _publish.Publish(xchange.ResponseMessageTypeName, responseFile.Data);
+                    await publish.Publish(xchange.ResponseMessageTypeName, responseFile.Data);
                 }
             }
             else if (xchange.SubscriptionId == null)
@@ -536,21 +483,21 @@ public class XchangeService :
 
             var xchangeResult = new XchangeResult(xchange.Id, workGroup, outputFile, responseFile,
                 responseXchange?.Id);
-            _dbContext.Add(xchangeResult);
+            dbContext.Add(xchangeResult);
             if (responseFile?.BadData == true)
                 await TrySchedulingWithoutLosingTheResult(xchange, XchangeResultType.BadResult, responseFile.Data,
                     xchangeResult);
             else
                 await TryClearingRetryBudgetAfterSuccess(xchange);
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
         catch (Exception ex)
         {
             var xchangeResult = new XchangeResult(xchange.Id, workGroup, outputFile, responseFile,
                 responseXchange?.Id, ex.ToString());
-            _dbContext.Add(xchangeResult);
+            dbContext.Add(xchangeResult);
             await TrySchedulingWithoutLosingTheResult(xchange, XchangeResultType.Error, ex.ToString(), xchangeResult);
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
     }
 
@@ -572,7 +519,7 @@ public class XchangeService :
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Auto-retry evaluation failed for xchange {XchangeId}; the failure result is still recorded.",
+            logger.LogError(ex, "Auto-retry evaluation failed for xchange {XchangeId}; the failure result is still recorded.",
                 xchange.Id);
         }
     }
@@ -595,12 +542,12 @@ public class XchangeService :
         {
             // The exchange's own start time is the watermark: anything charged after this run began
             // belongs to a failure this success knows nothing about, and is left where it is.
-            await new RetryGroupBudget(_dbContext, _serviceProvider, xchange.SubscriptionId.Value)
+            await new RetryGroupBudget(dbContext, serviceProvider, xchange.SubscriptionId.Value)
                 .ReleaseExhaustedBudgets(xchange.StartedOn);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
+            logger.LogError(ex,
                 "Retry budget of subscription {SubscriptionId} could not be cleared after a success; " +
                 "it may still refuse retries until it is reset.", xchange.SubscriptionId.Value);
         }
@@ -626,10 +573,10 @@ public class XchangeService :
         // evaluated and already spent a slot of the group's total budget. Re-evaluating it
         // (e.g. on an at-least-once redelivery) would both violate the PK on Add and spend a
         // second slot for the same failure.
-        var alreadyScheduled = await _dbContext.Set<DelayedRetry>().FindAsync(xchange.Id);
+        var alreadyScheduled = await dbContext.Set<DelayedRetry>().FindAsync(xchange.Id);
         if (alreadyScheduled != null) return;
 
-        var subscription = await _dbContext.Set<Subscription>()
+        var subscription = await dbContext.Set<Subscription>()
             .Include(s => s.RetryPolicy)
             .FirstOrDefaultAsync(s => s.Id == xchange.SubscriptionId.Value);
 
@@ -637,7 +584,7 @@ public class XchangeService :
         if (policy?.Groups == null || policy.Groups.Count == 0) return;
 
         var evaluator = new RetryPolicyEvaluator(policy,
-            new RetryGroupBudget(_dbContext, _serviceProvider, xchange.SubscriptionId.Value));
+            new RetryGroupBudget(dbContext, serviceProvider, xchange.SubscriptionId.Value));
 
         var attemptIndex = await CountRetryChainDepth(xchange);
         var decision = await evaluator.Evaluate(resultType, content, attemptIndex);
@@ -648,7 +595,7 @@ public class XchangeService :
             xchangeResult.SetRetryEvaluation(decision.MatchedGroup.Id, attemptIndex);
 
         if (decision.ShouldRetry)
-            _dbContext.Add(new DelayedRetry
+            dbContext.Add(new DelayedRetry
             {
                 Id = xchange.Id,
                 On = DateTime.UtcNow + decision.Delay
@@ -673,7 +620,7 @@ public class XchangeService :
     /// The retry, if any, already made from <paramref name="xchangeId"/>.
     /// </summary>
     private Task<string> FindRetryOf(string xchangeId) =>
-        _dbContext.Set<Xchange>().AsNoTracking()
+        dbContext.Set<Xchange>().AsNoTracking()
             .Where(x => x.RetryFor == xchangeId)
             .Select(x => x.Id)
             .FirstOrDefaultAsync();
@@ -708,7 +655,7 @@ public class XchangeService :
         while (retryFor != null)
         {
             depth++;
-            var parent = await _dbContext.Set<Xchange>()
+            var parent = await dbContext.Set<Xchange>()
                 .AsNoTracking()
                 .Where(x => x.Id == retryFor)
                 .Select(x => x.RetryFor)
@@ -718,12 +665,11 @@ public class XchangeService :
         return depth;
     }
 
-
     async Task CreateXchangesForHits(Xchange xchange, FilterResult result, XchangeFile inputFile)
     {
         foreach (var subscriptionId in result.Hits)
         {
-            var subscription = await _BitweenCache.SubscriptionByIdAsync(subscriptionId);
+            var subscription = await BitweenCache.SubscriptionByIdAsync(subscriptionId);
             if (subscription.PausedOn != null)
             {
                 await CreateOnHoldXchange(subscription, inputFile);
@@ -739,20 +685,20 @@ public class XchangeService :
 
         // Bus-gateway routes: run the assigned subscription with the route's optional partner values,
         // reusing the same xchange path the API gateway uses (partner + globals injection).
-        var globalAdapterValuesSets = await _dbContext.Set<GlobalAdapterValuesSet>().ToArrayAsync();
+        var globalAdapterValuesSets = await dbContext.Set<GlobalAdapterValuesSet>().ToArrayAsync();
         foreach (var hit in result.GatewayHits)
         {
-            var subscription = await _BitweenCache.SubscriptionByIdAsync(hit.SubscriptionId);
+            var subscription = await BitweenCache.SubscriptionByIdAsync(hit.SubscriptionId);
             if (subscription == null)
             {
-                _logger.LogWarning(
+                logger.LogWarning(
                     "Bus gateway route references subscription {SubscriptionId}, which is not active; skipping.",
                     hit.SubscriptionId);
                 continue;
             }
 
             var partner = hit.PartnerId.HasValue
-                ? await _dbContext.FindAsync<Partner>(hit.PartnerId.Value)
+                ? await dbContext.FindAsync<Partner>(hit.PartnerId.Value)
                 : null;
 
             if (subscription.PausedOn != null)
@@ -767,15 +713,14 @@ public class XchangeService :
         }
     }
 
-
     private async Task ProcessResult(XchangeMessage message)
     {
-        var notifiers = await _BitweenCache.ListNotifiersAsync();
+        var notifiers = await BitweenCache.ListNotifiersAsync();
 
-        var xchangeResult = await _dbContext.FindAsync<XchangeResult>(message.Id);
+        var xchangeResult = await dbContext.FindAsync<XchangeResult>(message.Id);
         if (xchangeResult == null)
             throw new BitweenException($"Xchange Result '{message.Id}' not found.");
-        var xchange = await _dbContext.FindAsync<Xchange>(message.Id);
+        var xchange = await dbContext.FindAsync<Xchange>(message.Id);
         if (xchange == null)
             throw new BitweenException($"Xchange '{message.Id}' not found.");
 
@@ -788,7 +733,6 @@ public class XchangeService :
             {
                 continue;
             }
-
 
             switch (xchangeResult.Success)
             {
@@ -807,9 +751,9 @@ public class XchangeService :
 
         if (notifier?.HandlerId == null) return;
 
-        var xchange = await _dbContext.FindAsync<Xchange>(xchangeResult.Id);
-        var subscription = await _BitweenCache.SubscriptionByIdAsync(xchange!.SubscriptionId!.Value);
-        var document = await _BitweenCache.DocumentByIdAsync(xchange.DocumentId);
+        var xchange = await dbContext.FindAsync<Xchange>(xchangeResult.Id);
+        var subscription = await BitweenCache.SubscriptionByIdAsync(xchange!.SubscriptionId!.Value);
+        var document = await BitweenCache.DocumentByIdAsync(xchange.DocumentId);
 
         var notificationData = new XchangeResultNotification
         {
@@ -827,42 +771,43 @@ public class XchangeService :
             CorrelationId = xchange.CorrelationId
         };
 
-
         var handlerProperties = notifier.HandlerProperties.ToDictionary();
         handlerProperties["xchangeid"] = xchangeResult.Id;
 
         try
         {
-            await _adapterInvoker.Handle(notifier.HandlerId, handlerProperties, correlationId,
-                new XchangeFile(JsonConvert.SerializeObject(notificationData), xchangeResult.Id));
+            await adapterInvoker.InvokeAsync<XchangeFile>(
+                notifier.HandlerId, AdapterRole.Handler, nameof(IInfolinkHandler.Handle),
+                new XchangeFile(JsonConvert.SerializeObject(notificationData), xchangeResult.Id),
+                handlerProperties, correlationId);
 
-            _dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name));
+            dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name));
         }
         catch (Exception ex)
         {
-            _dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name, ex.ToString()));
+            dbContext.Add(new XchangeNotification(xchangeResult.Id, notifier.Id, notifier.Name, ex.ToString()));
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task Process(SubscriptionUnpausedEvent message)
     {
-        var subscription = await _BitweenCache.SubscriptionByIdAsync(message.Id);
+        var subscription = await BitweenCache.SubscriptionByIdAsync(message.Id);
 
         if (subscription == null || subscription.Inactive || subscription.PausedOn != null) return;
 
-        var xchangesDetails = await _dbContext.Set<OnHoldXchange>().Where(x => x.SubscriptionId == subscription.Id)
+        var xchangesDetails = await dbContext.Set<OnHoldXchange>().Where(x => x.SubscriptionId == subscription.Id)
             .ToListAsync();
 
         foreach (var xchangeDetails in xchangesDetails)
         {
             var file = new XchangeFile(xchangeDetails.Data, xchangeDetails.FileName, xchangeDetails.BadData);
             await CreateXchange(subscription, file, xchangeDetails.References);
-            _dbContext.Remove(xchangeDetails);
+            dbContext.Remove(xchangeDetails);
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task<IEnumerable<string>> GetMessageTypeNames()
@@ -870,7 +815,6 @@ public class XchangeService :
         var messageTypeNamesWithOptions = await GetMessageTypeNamesWithOptions();
         return messageTypeNamesWithOptions.Keys;
     }
-
 
     public Task Process(string messageTypeName, string message)
     {
@@ -881,8 +825,8 @@ public class XchangeService :
 
     public async Task<IDictionary<string, ConsumerOptions>> GetMessageTypeNamesWithOptions()
     {
-        // var workgroups = (await _BitweenCache.ListWorkGroupsAsync()).ToList();
-        var workgroups = await _dbContext.Set<WorkGroup>().ToListAsync();
+        // var workgroups = (await BitweenCache.ListWorkGroupsAsync()).ToList();
+        var workgroups = await dbContext.Set<WorkGroup>().ToListAsync();
         workgroups.Add(WorkGroup.None);
         var messageTypeNamesWithOptions = new Dictionary<string, ConsumerOptions>();
         foreach (var workGroup in workgroups)
@@ -901,7 +845,7 @@ public class XchangeService :
             };
         }
 
-        if (!_BitweenSettings.ConsumeLegacyEventMessages) return messageTypeNamesWithOptions;
+        if (!BitweenSettings.ConsumeLegacyEventMessages) return messageTypeNamesWithOptions;
 
         messageTypeNamesWithOptions.Add(nameof(ApiXchangeCreatedEvent), new ConsumerOptions() { Priority = 10 });
         messageTypeNamesWithOptions.Add(nameof(InternalXchangeCreatedEvent), new ConsumerOptions());

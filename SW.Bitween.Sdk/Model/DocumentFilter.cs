@@ -19,19 +19,11 @@ namespace SW.Bitween.Model
     }
 
 
-    public class PropertyFilter
+    public class PropertyFilter(string path)
     {
-
-        public PropertyFilter(string path)
-        {
-            Path = path;
-            Ignored = new List<int>();
-            SubscribersByValues = new Dictionary<string, ICollection<int>>();
-        }
-
-        public string Path { get; set; }
-        public ICollection<int> Ignored { get; }
-        public IDictionary<string, ICollection<int>> SubscribersByValues { get; }
+        public string Path { get; set; } = path;
+        public ICollection<int> Ignored { get; } = new List<int>();
+        public IDictionary<string, ICollection<int>> SubscribersByValues { get; } = new Dictionary<string, ICollection<int>>();
     }
 
 

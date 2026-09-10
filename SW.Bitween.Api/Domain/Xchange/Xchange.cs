@@ -53,9 +53,10 @@ namespace SW.Bitween.Domain
             ResponseSubscriptionId = subscription.ResponseSubscriptionId;
             ResponseMessageTypeName = subscription.ResponseMessageTypeName;
             PartnerId = gatewayPartner?.Id ?? subscription.PartnerId;
-            MapperProperties = (subscription.MapperProperties ?? new Dictionary<string, string>()).ToDictionary().Fill(gatewayPartner, globalAdapterValuesSets);
+            MapperProperties = (subscription.MapperProperties ?? new Dictionary<string, string>()).ToDictionary()
+                .Fill(gatewayPartner, globalAdapterValuesSets).WithDataSource(subscription.DataSourceId);
             HandlerProperties = (subscription.HandlerProperties ?? new Dictionary<string, string>()).ToDictionary()
-                .Fill(gatewayPartner, globalAdapterValuesSets);
+                .Fill(gatewayPartner, globalAdapterValuesSets).WithDataSource(subscription.DataSourceId);
             CorrelationId = correlationId;
         }
 
@@ -86,8 +87,10 @@ namespace SW.Bitween.Domain
             PartnerId = xchange.PartnerId ?? subscription.PartnerId;
             MapperId = subscription.MapperId;
             HandlerId = subscription.HandlerId;
-            MapperProperties = (subscription.MapperProperties ?? new Dictionary<string, string>()).ToDictionary().Fill(gatewayPartner, globalAdapterValuesSets);
-            HandlerProperties = (subscription.HandlerProperties ?? new Dictionary<string, string>()).ToDictionary().Fill(gatewayPartner, globalAdapterValuesSets);
+            MapperProperties = (subscription.MapperProperties ?? new Dictionary<string, string>()).ToDictionary()
+                .Fill(gatewayPartner, globalAdapterValuesSets).WithDataSource(subscription.DataSourceId);
+            HandlerProperties = (subscription.HandlerProperties ?? new Dictionary<string, string>()).ToDictionary()
+                .Fill(gatewayPartner, globalAdapterValuesSets).WithDataSource(subscription.DataSourceId);
             ResponseSubscriptionId = subscription.ResponseSubscriptionId;
             RetryFor = xchange.Id;
             CorrelationId = xchange.CorrelationId;

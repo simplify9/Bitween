@@ -24,15 +24,8 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// at the handler instead, with a cache that records the call.
 /// </remarks>
 [Collection("Bitween")]
-public class CacheRevocationTests
+public class CacheRevocationTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public CacheRevocationTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
@@ -40,7 +33,7 @@ public class CacheRevocationTests
     public async Task Pausing_announces_the_write_so_the_receiving_path_stops_seeing_it_as_running()
     {
         int subscriptionId;
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var document = new Document(null, Unique("Pause revoke doc"), DocumentFormat.Json);
@@ -54,7 +47,7 @@ public class CacheRevocationTests
         }
 
         var recorder = new RecordingCache();
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var pause = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Pause>(
@@ -72,10 +65,10 @@ public class CacheRevocationTests
     [Fact]
     public async Task Revoking_clears_global_values_too()
     {
-        var cache = _fixture.App.Services.GetRequiredService<IInfolinkCache>();
+        var cache = fixture.App.Services.GetRequiredService<IInfolinkCache>();
         var id = Unique("global-revoke");
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             db.Set<GlobalAdapterValuesSet>().Add(new GlobalAdapterValuesSet
@@ -90,7 +83,7 @@ public class CacheRevocationTests
         cache.Revoke();
         Assert.Equal("Before", (await cache.GlobalAdapterValuesSetById(id))?.Name);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var entity = await db.Set<GlobalAdapterValuesSet>().FindAsync(id);

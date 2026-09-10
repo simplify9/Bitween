@@ -6,7 +6,9 @@ namespace SW.Bitween.Model;
 public class RoleCreate
 {
     public required string Name { get; set; }
-    public string Description { get; set; }
+
+    /// <summary>Free text shown beside the role; optional.</summary>
+    public string? Description { get; set; }
     public List<string> Permissions { get; set; } = [];
 }
 
@@ -16,8 +18,8 @@ public class RoleUpdate : RoleCreate;
 public class RoleRow
 {
     public int Id { get; set; }
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string Name { get; set; } = null!;
+    public string? Description { get; set; }
 
     /// <summary>Built-in roles can be assigned, but not edited or deleted.</summary>
     public bool IsSystem { get; set; }

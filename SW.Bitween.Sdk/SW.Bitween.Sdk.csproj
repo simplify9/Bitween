@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
     <PackageId>SimplyWorks.Bitween.Sdk</PackageId>
     <Product>SimplyWorks.Bitween.Sdk</Product>
     <Authors>Simplify9</Authors>

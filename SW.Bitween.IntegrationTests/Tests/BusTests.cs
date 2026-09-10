@@ -12,19 +12,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// These tests confirm the AMQP channel is open and messages are accepted.
 /// </summary>
 [Collection("Bitween")]
-public class BusTests
+public class BusTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public BusTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task IPublish_is_resolvable_from_di()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var publish = scope.ServiceProvider.GetRequiredService<IPublish>();
 
         Assert.NotNull(publish);
@@ -33,7 +26,7 @@ public class BusTests
     [Fact]
     public async Task Can_publish_message_to_broker()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var publish = scope.ServiceProvider.GetRequiredService<IPublish>();
 
         // Publish a simple JSON payload. The routing key mirrors the pattern used
@@ -47,7 +40,7 @@ public class BusTests
     [Fact]
     public async Task Can_publish_multiple_messages_in_sequence()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var publish = scope.ServiceProvider.GetRequiredService<IPublish>();
 
         for (var i = 0; i < 5; i++)

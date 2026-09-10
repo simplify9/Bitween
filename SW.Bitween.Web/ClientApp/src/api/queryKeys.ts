@@ -69,6 +69,33 @@ export const keys = {
     detail: (id: number | string) => ["bus-gateways", "detail", id] as const,
   },
 
+  /** Statements are their own resource, keyed by the data source they belong to. */
+  dataSourceStatements: {
+    all: ["data-source-statements"] as const,
+    forDataSource: (dataSourceId: number | string) =>
+      ["data-source-statements", "for", dataSourceId] as const,
+    usage: (id: number | string) => ["data-source-statements", "usage", id] as const,
+  },
+
+  dataSources: {
+    all: ["data-sources"] as const,
+    /** The provider catalog, described by the adapters themselves. Rarely changes; cached hard. */
+    providers: ["data-sources", "providers"] as const,
+    list: ["data-sources", "list"] as const,
+    search: (params: Record<string, unknown>) => ["data-sources", "search", params] as const,
+    detail: (id: number | string) => ["data-sources", "detail", id] as const,
+    /** Live heartbeat, polled — deliberately its own key so refreshing it never refetches the form. */
+    telemetry: (id: number | string) => ["data-sources", "telemetry", id] as const,
+    /** What the engine says it can do. Fixed for the life of a connection, so cached hard. */
+    capabilities: (id: number | string) => ["data-sources", "capabilities", id] as const,
+    /** One page of the catalog. The filters are part of the key — each is a different question. */
+    schema: (id: number | string, params: Record<string, unknown>) =>
+      ["data-sources", "schema", id, params] as const,
+    /** One object's columns or parameters, fetched only when its row is opened. */
+    schemaObject: (id: number | string, type: string, schema: string, name: string) =>
+      ["data-sources", "schema-object", id, type, schema, name] as const,
+  },
+
   workGroups: {
     all: ["work-groups"] as const,
     list: ["work-groups", "list"] as const,

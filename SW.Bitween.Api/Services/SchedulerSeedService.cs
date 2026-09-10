@@ -1,3 +1,4 @@
+using SW.Bitween.Services.DataSources;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -32,6 +33,12 @@ public class SchedulerSeedService(IServiceProvider sp, ILogger<SchedulerSeedServ
         // is correct instead, since it naturally waits however long is actually needed rather
         // than guessing, and still fails loudly if the lock truly can't be obtained after 3 tries.
         await ScheduleWithRetry(() => scheduleRepo.Schedule<RetryJob>(options.RetryJobCron), nameof(RetryJob), stoppingToken);
+
+        // Dedupe keys are remembered per data source and would otherwise accumulate one row per
+        // inbound message for ever.
+        await ScheduleWithRetry(
+            () => scheduleRepo.Schedule<InboundMessagePruneJob>(options.InboundMessagePruneCron),
+            nameof(InboundMessagePruneJob), stoppingToken);
         await ScheduleWithRetry(() => scheduleRepo.Schedule<ReceiveAttemptCleanupJob>(options.ReceiveAttemptCleanupCron), nameof(ReceiveAttemptCleanupJob), stoppingToken);
 
         var subscriptions = await dbContext.Set<Subscription>()

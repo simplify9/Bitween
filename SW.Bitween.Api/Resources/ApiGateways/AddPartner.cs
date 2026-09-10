@@ -10,27 +10,14 @@ using SW.Bitween.Resources.Subscriptions;
 namespace SW.Bitween.Resources.ApiGateways
 {
     [HandlerName(nameof(AddPartner))]
-    public class AddPartner : ICommandHandler<int, ApiGatewayPartnerCreate, object>
+    public class AddPartner(BitweenDbContext dbContext, RequestContext requestContext,
+        AdapterRequirements adapterRequirements, IInfolinkCache cache) : ICommandHandler<int, ApiGatewayPartnerCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly AdapterRequirements _adapterRequirements;
-        private readonly IInfolinkCache _cache;
-
-        public AddPartner(BitweenDbContext dbContext, RequestContext requestContext,
-            AdapterRequirements adapterRequirements, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _adapterRequirements = adapterRequirements;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(int gatewayId, ApiGatewayPartnerCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.Edit);
 
-            var gateway = await _dbContext.Set<ApiGateway>()
+            var gateway = await dbContext.Set<ApiGateway>()
                 .Include(ag => ag.Partners)
                 .FirstOrDefaultAsync(ag => ag.Id == gatewayId);
 
@@ -54,14 +41,14 @@ namespace SW.Bitween.Resources.ApiGateways
                 // An API gateway is not bound to an information type the way a bus gateway is,
                 // so this one comes from the caller.
                 var integration = await InlineIntegration.Stage(
-                    _dbContext, _adapterRequirements, model.NewIntegration,
+                    dbContext, adapterRequirements, model.NewIntegration,
                     model.NewIntegration.DocumentId, SubscriptionType.GatewayApiCall);
                 partnerLink.Subscription = integration;
             }
             else
             {
                 // Validate subscription exists and is of type GatewayApiCall
-                var subscription = await _dbContext.Set<Subscription>()
+                var subscription = await dbContext.Set<Subscription>()
                     .FirstOrDefaultAsync(s => s.Id == model.SubscriptionId.Value);
 
                 if (subscription == null)
@@ -81,11 +68,11 @@ namespace SW.Bitween.Resources.ApiGateways
                 partnerLink.SubscriptionId = model.SubscriptionId.Value;
             }
 
-            _dbContext.Add(partnerLink);
-            await _dbContext.SaveChangesAsync();
+            dbContext.Add(partnerLink);
+            await dbContext.SaveChangesAsync();
             // Attaching an existing integration changes nothing the cache holds, but staging a new
             // one above creates a Subscription — and unconditional is what AddRoute does.
-            await _cache.BroadcastRevoke();
+            await cache.BroadcastRevoke();
 
             return null;
         }

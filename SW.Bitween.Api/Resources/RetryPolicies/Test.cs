@@ -11,21 +11,13 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// so the management UI can show "will this retry, and when" before saving.
 /// </summary>
 [HandlerName("test")]
-public class Test : ICommandHandler<TestRetryPolicyRequest, object>
+public class Test(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<TestRetryPolicyRequest, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Test(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle(TestRetryPolicyRequest request)
     {
         // A pure simulation with no side effects, so viewing a policy is enough to dry-run one.
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.View);
 
         if (request.ResultType == XchangeResultType.Success)
             throw new SWValidationException("INVALID_RESULT_TYPE",

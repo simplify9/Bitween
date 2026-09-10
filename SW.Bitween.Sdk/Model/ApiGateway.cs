@@ -5,8 +5,10 @@ namespace SW.Bitween.Model
 {
     public class ApiGatewayCreate : IName
     {
-        public string Name { get; set; }
-        public string UrlName { get; set; }
+        /// <summary>Both required; the server rejects a create without them.</summary>
+        public string Name { get; set; } = null!;
+
+        public string UrlName { get; set; } = null!;
 
         /// <summary>Off but kept, with its partner attachments. Calls to it are refused.</summary>
         public bool Inactive { get; set; }
@@ -20,15 +22,15 @@ namespace SW.Bitween.Model
 
     public class ApiGatewayUpdate : ApiGatewayCreate
     {
-        public ICollection<ApiGatewayPartnerDto> Partners { get; set; }
+        public ICollection<ApiGatewayPartnerDto> Partners { get; set; } = [];
     }
 
     public class ApiGatewayPartnerDto
     {
         public int PartnerId { get; set; }
         public int SubscriptionId { get; set; }
-        public string PartnerName { get; set; }
-        public string SubscriptionName { get; set; }
+        public string PartnerName { get; set; } = null!;
+        public string SubscriptionName { get; set; } = null!;
     }
 
     public class ApiGatewayPartnerCreate
@@ -41,13 +43,14 @@ namespace SW.Bitween.Model
 
         /// <summary>Define the integration here instead of creating it first. It is created as a
         /// GatewayApiCall in the same transaction as the attachment.</summary>
-        public InlineIntegrationCreate NewIntegration { get; set; }
+        public InlineIntegrationCreate? NewIntegration { get; set; }
     }
 
     public class SearchApiGatewayAttachmentsModel
     {
         public int ApiGatewayId { get; set; }
-        public string Search { get; set; }
+        /// <summary>Optional filter; null matches everything.</summary>
+        public string? Search { get; set; }
         public int? Offset { get; set; }
         public int? Limit { get; set; }
     }

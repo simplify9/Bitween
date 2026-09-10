@@ -4,17 +4,11 @@ using System.Linq;
 
 namespace SW.Bitween.Model;
 
-public class OneOfSpec : IPropertyMatchSpecification
+public class OneOfSpec(string path, IEnumerable<string> values) : IPropertyMatchSpecification
 {
-    public OneOfSpec(string path, IEnumerable<string> values)
-    {
-        Path = path;
-        Values = values.ToArray();
-    }
+    public string Path { get; private set; } = path;
 
-    public string Path { get; private set; }
-
-    public string[] Values { get; private set; }
+    public string[] Values { get; private set; } = values.ToArray();
 
     public override string ToString()
     {

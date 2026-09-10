@@ -14,18 +14,24 @@ namespace SW.Bitween.Model
 
     public class DocumentCreate : IName
     {
-        public string Code { get; set; }
+        /// <summary>Required; the server rejects a create without it.</summary>
+        public string Code { get; set; } = null!;
         public DocumentFormat DocumentFormat { get; set; }
-        public string Name { get; set; }
+        /// <summary>Required; the server rejects a create without it.</summary>
+        public string Name { get; set; } = null!;
         public bool BusEnabled { get; set; }
-        public string BusMessageTypeName { get; set; }
+        /// <summary>Only meaningful when BusEnabled; null otherwise.</summary>
+        public string? BusMessageTypeName { get; set; }
         public int DuplicateInterval { get; set; }
 
         public bool DisregardsUnfilteredMessages { get; set; }
 
         /// <summary>Carried on create too, so a new type arrives complete rather than
         /// needing a second save before it can be filtered on.</summary>
-        public ICollection<KeyAndValue> PromotedProperties { get; set; }
+        /// <summary>
+        /// Null leaves the existing promoted properties alone; an empty collection clears them.
+        /// </summary>
+        public ICollection<KeyAndValue>? PromotedProperties { get; set; }
     }
 
     public class DocumentUpdate : DocumentCreate

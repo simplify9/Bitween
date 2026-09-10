@@ -8,22 +8,13 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.BusGateways
 {
-    public class Get : IGetHandler<int, object>
+    public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Get(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.View);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.View);
 
-            var gateway = await _dbContext.Set<BusGateway>()
+            var gateway = await dbContext.Set<BusGateway>()
                 .AsNoTracking()
                 .Include(bg => bg.Routes)
                     .ThenInclude(r => r.Subscription)
@@ -34,10 +25,18 @@ namespace SW.Bitween.Resources.BusGateways
             if (gateway == null)
                 throw new SWNotFoundException($"BusGateway with id '{key}' was not found");
 
-            var documentName = await _dbContext.Set<Document>()
+            var documentName = await dbContext.Set<Document>()
                 .Where(d => d.Id == gateway.DocumentId)
                 .Select(d => d.Name)
                 .FirstOrDefaultAsync();
+
+            var dataSource = gateway.DataSourceId == null
+                ? null
+                : await dbContext.Set<Domain.DataSources.DataSource>()
+                    .AsNoTracking()
+                    .Where(d => d.Id == gateway.DataSourceId)
+                    .Select(d => new { d.Name, d.LastKnownState })
+                    .FirstOrDefaultAsync();
 
             return new BusGatewayRow
             {
@@ -46,6 +45,11 @@ namespace SW.Bitween.Resources.BusGateways
                 DocumentId = gateway.DocumentId,
                 Inactive = gateway.Inactive,
                 DocumentName = documentName,
+                DataSourceId = gateway.DataSourceId,
+                DataSourceName = dataSource?.Name,
+                DataSourceState = dataSource?.LastKnownState,
+                Endpoint = gateway.Endpoint,
+                EndpointProperties = gateway.EndpointProperties ?? new(),
                 RoutesCount = gateway.Routes.Count,
                 Routes = gateway.Routes.Select(r => new BusGatewayRouteDto
                 {

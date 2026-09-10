@@ -15,27 +15,19 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// column without asking per row.
 /// </summary>
 [HandlerName("lastruns")]
-public class GetLastRuns : IQueryHandler<SearchSubscriptionLastRunsModel, object>
+public class GetLastRuns(
+    BitweenDbContext dbContext,
+    RequestContext requestContext,
+    IScheduleRepository scheduleRepo,
+    SchedulerOptions schedulerOptions) : IQueryHandler<SearchSubscriptionLastRunsModel, object>
 {
     /// <summary>How many recent runs the success ratio is measured over.</summary>
     private const int RecentWindow = 20;
 
-    private readonly BitweenDbContext dbContext;
-    private readonly RequestContext requestContext;
-    private readonly IScheduleRepository scheduleRepo;
-    private readonly SchedulerOptions schedulerOptions;
-
-    public GetLastRuns(
-        BitweenDbContext dbContext,
-        RequestContext requestContext,
-        IScheduleRepository scheduleRepo,
-        SchedulerOptions schedulerOptions)
-    {
-        this.dbContext = dbContext;
-        this.requestContext = requestContext;
-        this.scheduleRepo = scheduleRepo;
-        this.schedulerOptions = schedulerOptions;
-    }
+    private readonly BitweenDbContext dbContext = dbContext;
+    private readonly RequestContext requestContext = requestContext;
+    private readonly IScheduleRepository scheduleRepo = scheduleRepo;
+    private readonly SchedulerOptions schedulerOptions = schedulerOptions;
 
     public async Task<object> Handle(SearchSubscriptionLastRunsModel request)
     {

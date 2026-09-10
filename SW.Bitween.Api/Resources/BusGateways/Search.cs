@@ -9,27 +9,19 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.BusGateways
 {
-    public class Search : ISearchyHandler
+    public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Search(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {
             // Lookup returns only id/name pairs, which pickers across the app rely on;
             // the full list is the data, so that's what the view permission covers.
             if (!lookup)
-                await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.View);
+                await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.View);
 
-            var documents = _dbContext.Set<Document>();
+            var documents = dbContext.Set<Document>();
+            var dataSources = dbContext.Set<Domain.DataSources.DataSource>();
 
-            var query = from gateway in _dbContext.Set<BusGateway>()
+            var query = from gateway in dbContext.Set<BusGateway>()
                         select new BusGatewayRow
                         {
                             Id = gateway.Id,
@@ -38,6 +30,16 @@ namespace SW.Bitween.Resources.BusGateways
                             Inactive = gateway.Inactive,
                             DocumentName = documents.Where(d => d.Id == gateway.DocumentId)
                                 .Select(d => d.Name).FirstOrDefault(),
+
+                            // Null name means the internal bus, which is what the list column
+                            // reads — an operator should be able to tell at a glance which of
+                            // their gateways reach outside.
+                            DataSourceId = gateway.DataSourceId,
+                            DataSourceName = dataSources.Where(d => d.Id == gateway.DataSourceId)
+                                .Select(d => d.Name).FirstOrDefault(),
+                            DataSourceState = dataSources.Where(d => d.Id == gateway.DataSourceId)
+                                .Select(d => d.LastKnownState).FirstOrDefault(),
+                            Endpoint = gateway.Endpoint,
                             RoutesCount = gateway.Routes.Count
                         };
 
@@ -57,7 +59,7 @@ namespace SW.Bitween.Resources.BusGateways
             // so hydrate it with one grouped query instead of Get.cs's per-row
             // Include (gateways are few, so this stays a single round trip).
             var ids = result.Select(r => r.Id).ToList();
-            var routesByGateway = (await _dbContext.Set<BusGatewayRoute>()
+            var routesByGateway = (await dbContext.Set<BusGatewayRoute>()
                 .AsNoTracking()
                 .Where(r => ids.Contains(r.BusGatewayId))
                 .Include(r => r.Subscription)

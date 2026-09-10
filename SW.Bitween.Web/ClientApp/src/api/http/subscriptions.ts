@@ -72,6 +72,8 @@ interface RawSubscription {
   handlerId: string | null;
   mapperId: string | null;
   receiverId: string | null;
+  /** The connection this subscription's adapters run through. Null for adapters that need none. */
+  dataSourceId: number | null;
   validatorId: string | null;
   inactive: boolean;
   temporary: boolean;
@@ -160,6 +162,7 @@ function toSubscription(raw: RawSubscription, idOverride?: number): Subscription
     mapperProperties: toRecord(raw.mapperProperties),
     handlerId: raw.handlerId ?? null,
     handlerProperties: toRecord(raw.handlerProperties),
+    dataSourceId: raw.dataSourceId ?? null,
     matchExpression: toMatchGroup(raw.matchExpression),
     schedules: toSchedules(raw.schedules),
     responseSubscriptionId: raw.responseSubscriptionId ?? null,
@@ -201,6 +204,7 @@ type UpdatableFields = Partial<
     | "mapperProperties"
     | "handlerId"
     | "handlerProperties"
+    | "dataSourceId"
     | "matchExpression"
     | "schedules"
     | "responseSubscriptionId"
@@ -241,6 +245,7 @@ async function applyChanges(id: number, current: RawSubscription, changes: Updat
     mapperProperties: toKvArray(changes.mapperProperties ?? toRecord(current.mapperProperties)),
     handlerId: changes.handlerId !== undefined ? changes.handlerId : current.handlerId,
     handlerProperties: toKvArray(changes.handlerProperties ?? toRecord(current.handlerProperties)),
+    dataSourceId: changes.dataSourceId !== undefined ? changes.dataSourceId : current.dataSourceId,
     documentFilter: current.documentFilter ?? [],
     matchExpression:
       changes.matchExpression !== undefined ? toRawMatchExpression(changes.matchExpression) : current.matchExpression,

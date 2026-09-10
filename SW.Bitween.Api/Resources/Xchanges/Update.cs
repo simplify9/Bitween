@@ -14,43 +14,27 @@ using Newtonsoft.Json;
 namespace SW.Bitween.Resources.Xchanges
 {
     [Unprotect]
-    public class Update : ICommandHandler<string, object,object>
+    public class Update(RequestContext requestContext, XchangeService xchangeService, BitweenDbContext dbContext,
+        BitweenOptions BitweenSettings, IInfolinkCache cache) : ICommandHandler<string, object,object>
     {
-        private readonly RequestContext _requestContext;
-        private readonly XchangeService _xchangeService;
-        private readonly BitweenDbContext _dbContext;
-        private readonly BitweenOptions _BitweenSettings;
-        private readonly IInfolinkCache _cache;
-
-        public Update(RequestContext requestContext, XchangeService xchangeService, BitweenDbContext dbContext,
-            BitweenOptions BitweenSettings, IInfolinkCache cache)
-        {
-            _requestContext = requestContext;
-            _xchangeService = xchangeService;
-            _dbContext = dbContext;
-            _BitweenSettings = BitweenSettings;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(string documentIdOrName, dynamic request)
         {
             Document document;
 
             //Inject external request context values into the object
-            request._ExternalRequestContext = JsonConvert.SerializeObject(_requestContext.Values);
+            request._ExternalRequestContext = JsonConvert.SerializeObject(requestContext.Values);
 
             if (int.TryParse(documentIdOrName, out var documentId))
-                document = await _cache.DocumentByIdAsync(documentId);
+                document = await cache.DocumentByIdAsync(documentId);
             else
-                document = await _cache.DocumentByNameAsync(documentIdOrName);
+                document = await cache.DocumentByNameAsync(documentIdOrName);
 
             if (document is null)
                 throw new SWNotFoundException("Document");
 
-            var par = await _dbContext.AuthorizePartner(_requestContext);
+            var par = await dbContext.AuthorizePartner(requestContext);
 
-
-            var subs = (await _cache.ListSubscriptionsByDocumentAsync(document.Id))
+            var subs = (await cache.ListSubscriptionsByDocumentAsync(document.Id))
                 .Where(i => i.PartnerId == par.Partner.Id)
                 .ToList();
 
@@ -62,17 +46,16 @@ namespace SW.Bitween.Resources.Xchanges
 
             if (par.Partner.Id == Partner.SystemId && sub is null)
             {
-                await _xchangeService.SubmitFilterXchange(document.Id,new XchangeFile(request.ToString()));
+                await xchangeService.SubmitFilterXchange(document.Id,new XchangeFile(request.ToString()));
                 return null;
             }
 
             if (sub is null)
                 throw new SWNotFoundException("No subscription of type ApiCall was found for this document");
 
-
             var xchangeReferences = new List<string> { $"partnerkey: {par.KeyName}" };
 
-            var waitResponseHeader = _requestContext.Values
+            var waitResponseHeader = requestContext.Values
                 .Where(item => item.Name.ToLower() == "waitresponse")
                 .Select(item => item.Value).FirstOrDefault();
 
@@ -85,19 +68,18 @@ namespace SW.Bitween.Resources.Xchanges
 
             var xchangeFile = new XchangeFile(request.ToString());
 
-            var globalAdapterValuesSets = await _cache.ListGlobalAdapterValuesSetsAsync();
+            var globalAdapterValuesSets = await cache.ListGlobalAdapterValuesSetsAsync();
             var validatorProperties = sub.ValidatorProperties.ToDictionary().Fill(par.Partner, globalAdapterValuesSets);
-            await _xchangeService.RunValidator(sub.ValidatorId, validatorProperties, xchangeFile);
+            await xchangeService.RunValidator(sub.ValidatorId, validatorProperties, xchangeFile);
 
             var xchangeId =
-                await _xchangeService.SubmitSubscriptionXchange(sub.Id, xchangeFile, xchangeReferences.ToArray());
+                await xchangeService.SubmitSubscriptionXchange(sub.Id, xchangeFile, xchangeReferences.ToArray());
 
             if (waitResponse <= 0)
                 return new CqApiResult<string>(xchangeId)
                 {
                     Status = CqApiResultStatus.Ok
                 };
-
 
             var currentFibTerm = 1;
             var previousTerm = 1;
@@ -109,8 +91,7 @@ namespace SW.Bitween.Resources.Xchanges
                 currentFibTerm = nextTerm;
                 if (!await IsResultAvailable(xchangeId)) continue;
 
-                var xchangeResult = await _dbContext.FindAsync<XchangeResult>(xchangeId);
-
+                var xchangeResult = await dbContext.FindAsync<XchangeResult>(xchangeId);
 
                 switch (xchangeResult!.Success)
                 {
@@ -118,14 +99,14 @@ namespace SW.Bitween.Resources.Xchanges
                     {
                         return new CqApiResult<string>(xchangeId)
                         {
-                            Status = _BitweenSettings.ApiCallSubscriptionResponseAcceptedStatusCode == 200
+                            Status = BitweenSettings.ApiCallSubscriptionResponseAcceptedStatusCode == 200
                                 ? CqApiResultStatus.Ok
                                 : CqApiResultStatus.UnderProcessing
                         };
                     }
                     case true when xchangeResult.ResponseSize != 0:
                     {
-                        var response = await _xchangeService.GetFile(xchangeId, XchangeFileType.Response);
+                        var response = await xchangeService.GetFile(xchangeId, XchangeFileType.Response);
                         var result = new CqApiResult<string>(response);
                         result.AddHeader("location", xchangeId);
                         result.Status = xchangeResult.ResponseBad ? CqApiResultStatus.Error : CqApiResultStatus.Ok;
@@ -137,7 +118,6 @@ namespace SW.Bitween.Resources.Xchanges
                 }
             }
 
-
             return new CqApiResult<string>(xchangeId)
             {
                 Status = CqApiResultStatus.UnderProcessing
@@ -146,7 +126,7 @@ namespace SW.Bitween.Resources.Xchanges
 
         private async Task<bool> IsResultAvailable(string xchangeId)
         {
-            return await _dbContext.Set<XchangeResult>()
+            return await dbContext.Set<XchangeResult>()
                 .AsNoTracking()
                 .AnyAsync(i => i.Id == xchangeId);
         }

@@ -12,16 +12,10 @@ using SW.Bitween.Model;
 namespace SW.Bitween.Resources.Xchanges
 {
     [HandlerName("internal")]
-    public class GetInternal : IGetHandler<int,object>
+    public class GetInternal(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public GetInternal(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         async public Task<object> Handle(int key)
         {

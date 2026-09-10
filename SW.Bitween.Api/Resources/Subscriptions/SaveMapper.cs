@@ -9,23 +9,13 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Subscriptions
 {
     [HandlerName("savemapper")]
-    public class SaveMapper : ICommandHandler<int, SubscriptionSaveMapper, object>
+    public class SaveMapper(BitweenDbContext dbContext, IInfolinkCache BitweenCache,
+        RequestContext requestContext) : ICommandHandler<int, SubscriptionSaveMapper, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-
-        public SaveMapper(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(int key, SubscriptionSaveMapper model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Edit);
-            var entity = await _dbContext.FindAsync<Subscription>(key);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Edit);
+            var entity = await dbContext.FindAsync<Subscription>(key);
 
             entity.MapperId = model.MapperId;
             entity.SetDictionaries(
@@ -36,8 +26,8 @@ namespace SW.Bitween.Resources.Subscriptions
                 entity.ValidatorProperties
             );
 
-            await _dbContext.SaveChangesAsync();
-            await _BitweenCache.BroadcastRevoke();
+            await dbContext.SaveChangesAsync();
+            await BitweenCache.BroadcastRevoke();
             return null;
         }
 

@@ -7,8 +7,14 @@ namespace SW.Bitween.JsonConverters;
 
 public class DelayStrategyJsonConverter : JsonConverter<DelayStrategy>
 {
-    public override void WriteJson(JsonWriter writer, DelayStrategy value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, DelayStrategy? value, JsonSerializer serializer)
     {
+        if (value is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
         writer.WriteStartObject();
 
         switch (value)
@@ -47,7 +53,7 @@ public class DelayStrategyJsonConverter : JsonConverter<DelayStrategy>
         writer.WriteEndObject();
     }
 
-    public override DelayStrategy ReadJson(JsonReader reader, Type objectType, DelayStrategy existingValue,
+    public override DelayStrategy? ReadJson(JsonReader reader, Type objectType, DelayStrategy? existingValue,
         bool hasExistingValue, JsonSerializer serializer)
     {
         var jObject = serializer.Deserialize<JObject>(reader);

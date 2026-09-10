@@ -8,24 +8,15 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Dashboard;
 
 [HandlerName("ChartsDataPoints")]
-public class ChartsDataPoints : IQueryHandler<object>
+public class ChartsDataPoints(BitweenDbContext dbContext, RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-    private readonly DateTime _dataDateLimit;
-
-    public ChartsDataPoints(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-        _dataDateLimit = DateTime.UtcNow.AddMonths(-3);
-    }
+    private readonly DateTime _dataDateLimit = DateTime.UtcNow.AddMonths(-3);
 
     public async Task<object> Handle()
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Dashboard.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Dashboard.View);
 
-        var xChangesPerDay = await _dbContext.Set<Xchange>()
+        var xChangesPerDay = await dbContext.Set<Xchange>()
             .AsNoTracking()
             .Where(i => i.StartedOn >= _dataDateLimit)
             .GroupBy(i => i.StartedOn.Date)
@@ -36,7 +27,7 @@ public class ChartsDataPoints : IQueryHandler<object>
                 Count = i.Count()
             }).ToListAsync();
 
-        var subscriptionsUsageCount = await _dbContext.Set<Xchange>()
+        var subscriptionsUsageCount = await dbContext.Set<Xchange>()
             .AsNoTracking()
             .Where(i => i.SubscriptionId != null)
             .Where(i => i.StartedOn >= _dataDateLimit)

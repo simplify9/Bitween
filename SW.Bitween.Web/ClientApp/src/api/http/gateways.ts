@@ -54,6 +54,13 @@ interface RawBusGateway {
   routesCount: number | null;
   inactive: boolean | null;
   routes: RawBusGatewayRoute[] | null;
+  // Null dataSourceId is the internal bus. Optional rather than nullable because a bare POST
+  // response carries none of these.
+  dataSourceId?: number | null;
+  dataSourceName?: string | null;
+  dataSourceState?: string | null;
+  endpoint?: string | null;
+  endpointProperties?: Record<string, string> | null;
 }
 
 const toApiGatewayAttachment = (p: RawApiGatewayPartner): ApiGatewayAttachment => ({
@@ -91,6 +98,14 @@ const toBusGatewayRoute = (r: RawBusGatewayRoute): BusGatewayRoute => ({
   matchExpression: toMatchGroup(r.matchExpression),
 });
 
+/** Where the gateway reads from, shared by the row and the detail shapes. */
+const toSource = (raw: RawBusGateway) => ({
+  dataSourceId: raw.dataSourceId ?? null,
+  dataSourceName: raw.dataSourceName ?? null,
+  dataSourceState: raw.dataSourceState ?? null,
+  endpoint: raw.endpoint ?? null,
+});
+
 const toBusGatewayRow = (raw: RawBusGateway): BusGatewayRow => ({
   id: raw.id,
   name: raw.name,
@@ -100,6 +115,7 @@ const toBusGatewayRow = (raw: RawBusGateway): BusGatewayRow => ({
   informationTypeCode: raw.documentName ?? "UNKNOWN",
   routeCount: raw.routesCount ?? raw.routes?.length ?? 0,
   routes: (raw.routes ?? []).map(toBusGatewayRoute),
+  ...toSource(raw),
 });
 
 const toBusGatewayDetail = (raw: RawBusGateway): BusGatewayDetail => ({
@@ -111,6 +127,7 @@ const toBusGatewayDetail = (raw: RawBusGateway): BusGatewayDetail => ({
   informationTypeCode: raw.documentName ?? "UNKNOWN",
   informationTypeName: raw.documentName ?? "Unknown",
   routes: (raw.routes ?? []).map(toBusGatewayRoute),
+  ...toSource(raw),
 });
 
 /** The attachment always points at a subscription that already exists — a new one is
@@ -261,21 +278,47 @@ export const gatewayMethods = {
       documentId: informationTypeId,
       inactive: false,
     });
-    return { id, name, informationTypeId, inactive: false, createdOn: "" };
+    // A gateway is created on the internal bus and moved onto a broker afterwards, on its own
+    // page — the source is a decision about an existing gateway, not a hurdle to creating one.
+    return {
+      id,
+      name,
+      informationTypeId,
+      inactive: false,
+      createdOn: "",
+      dataSourceId: null,
+      dataSourceName: null,
+      dataSourceState: null,
+      endpoint: null,
+    };
   },
 
   async updateBusGateway(
     id: number,
-    changes: { name: string; inactive: boolean },
+    changes: { name: string; inactive: boolean; dataSourceId?: number | null; endpoint?: string | null },
   ): Promise<BusGateway> {
     // The bound information type is fixed at creation — Update.cs silently
     // ignores documentId — but the request DTO still requires a value, so
     // fetch the current one to round-trip it rather than sending a bogus 0.
     const current = await get<RawBusGateway>(`/busgateways/${id}`);
+
+    // The source is round-tripped the same way: a caller renaming the gateway must not silently
+    // move it back onto the internal bus by omitting the field.
+    const dataSourceId =
+      changes.dataSourceId !== undefined ? changes.dataSourceId : (current.dataSourceId ?? null);
+    const endpoint =
+      dataSourceId == null
+        ? null
+        : changes.endpoint !== undefined
+          ? changes.endpoint
+          : (current.endpoint ?? null);
+
     await post(`/busgateways/${id}`, {
       name: changes.name,
       documentId: current.documentId,
       inactive: changes.inactive,
+      dataSourceId,
+      endpoint,
     });
     return {
       id,
@@ -283,6 +326,10 @@ export const gatewayMethods = {
       informationTypeId: current.documentId,
       inactive: changes.inactive,
       createdOn: "",
+      dataSourceId,
+      dataSourceName: dataSourceId === (current.dataSourceId ?? null) ? (current.dataSourceName ?? null) : null,
+      dataSourceState: null,
+      endpoint,
     };
   },
 

@@ -8,17 +8,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Notifiers
 {
-    public class Get: IGetHandler<int,object>
+    public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
-        public Get(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
-        
         public async Task<object> Handle(int key)
         {
             await requestContext.EnsurePermission(dbContext, Model.Permissions.Notifiers.View);

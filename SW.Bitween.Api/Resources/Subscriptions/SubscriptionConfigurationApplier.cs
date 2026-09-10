@@ -33,6 +33,7 @@ internal static class SubscriptionConfigurationApplier
         entity.ValidatorId = model.ValidatorId;
         entity.MapperId = model.MapperId;
         entity.HandlerId = model.HandlerId;
+        entity.DataSourceId = model.DataSourceId;
         entity.CategoryId = model.CategoryId;
         entity.WorkGroupId = model.WorkGroupId;
         entity.ResponseSubscriptionId = model.ResponseSubscriptionId;

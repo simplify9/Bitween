@@ -12,9 +12,23 @@ namespace SW.Bitween
         private const int SaltSize = 16;
 
         /// <summary>
-        /// Size of hash.
+        /// What a stored hash looks like. V1 derived 20 bytes with PBKDF2-HMAC-SHA1 at 10,000
+        /// iterations; V2 derives 32 with SHA256 at 210,000. New passwords are written as V2 and
+        /// V1 is still verified, so accounts created before the change keep working.
         /// </summary>
-        private const int HashSize = 20;
+        private const string V1Prefix = "$SWHASH$V1$";
+
+        private const string V2Prefix = "$SWHASH$V2$";
+
+        private const int V1HashSize = 20;
+
+        private const int V2HashSize = 32;
+
+        /// <summary>
+        /// OWASP's floor for PBKDF2-HMAC-SHA256. The cost is the point: it is what makes an offline
+        /// guess against a stolen table expensive.
+        /// </summary>
+        private const int DefaultIterations = 210_000;
 
         /// <summary>
         /// Creates a hash from a password.
@@ -24,35 +38,27 @@ namespace SW.Bitween
         /// <returns>The hash.</returns>
         private static string Hash(string password, int iterations)
         {
-            // Create salt
-            byte[] salt;
-            RandomNumberGenerator.Create().GetBytes(salt = new byte[SaltSize]);
-            //new RNGCryptoServiceProvider().GetBytes(salt = new byte[SaltSize]);
+            var salt = RandomNumberGenerator.GetBytes(SaltSize);
 
-            // Create hash
-            var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations);
-            var hash = pbkdf2.GetBytes(HashSize);
+            var hash = Rfc2898DeriveBytes.Pbkdf2(
+                password, salt, iterations, HashAlgorithmName.SHA256, V2HashSize);
 
-            // Combine salt and hash
-            var hashBytes = new byte[SaltSize + HashSize];
-            Array.Copy(salt, 0, hashBytes, 0, SaltSize);
-            Array.Copy(hash, 0, hashBytes, SaltSize, HashSize);
+            // Salt first, then hash — Verify reads them back by the same offsets.
+            var hashBytes = new byte[SaltSize + V2HashSize];
+            salt.CopyTo(hashBytes, 0);
+            hash.CopyTo(hashBytes, SaltSize);
 
-            // Convert to base64
-            var base64Hash = Convert.ToBase64String(hashBytes);
-
-            // Format hash with extra information
-            return $"$SWHASH$V1${iterations}${base64Hash}";
+            return $"{V2Prefix}{iterations}${Convert.ToBase64String(hashBytes)}";
         }
 
         /// <summary>
-        /// Creates a hash from a password with 10000 iterations
+        /// Creates a hash from a password.
         /// </summary>
         /// <param name="password">The password.</param>
         /// <returns>The hash.</returns>
         public static string Hash(string password)
         {
-            return Hash(password, 10000);
+            return Hash(password, DefaultIterations);
         }
 
         /// <summary>
@@ -62,7 +68,9 @@ namespace SW.Bitween
         /// <returns>Is supported?</returns>
         public static bool IsHashSupported(string hashString)
         {
-            return hashString.Contains("$SWHASH$V1$");
+            return hashString != null
+                   && (hashString.StartsWith(V1Prefix, StringComparison.Ordinal)
+                       || hashString.StartsWith(V2Prefix, StringComparison.Ordinal));
         }
 
         /// <summary>
@@ -79,31 +87,36 @@ namespace SW.Bitween
                 throw new NotSupportedException("The hashtype is not supported");
             }
 
-            // Extract iteration and Base64 string
-            var splittedHashString = hashedPassword.Replace("$SWHASH$V1$", "").Split('$');
-            var iterations = int.Parse(splittedHashString[0]);
-            var base64Hash = splittedHashString[1];
+            var isV1 = hashedPassword.StartsWith(V1Prefix, StringComparison.Ordinal);
+            var algorithm = isV1 ? HashAlgorithmName.SHA1 : HashAlgorithmName.SHA256;
+            var hashSize = isV1 ? V1HashSize : V2HashSize;
 
-            // Get hash bytes
-            var hashBytes = Convert.FromBase64String(base64Hash);
-
-            // Get salt
-            var salt = new byte[SaltSize];
-            Array.Copy(hashBytes, 0, salt, 0, SaltSize);
-
-            // Create hash with given salt
-            var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations);
-            byte[] hash = pbkdf2.GetBytes(HashSize);
-
-            // Get result
-            for (var i = 0; i < HashSize; i++)
+            // Both prefixes are the same length, so one slice serves either version.
+            var splittedHashString = hashedPassword[V2Prefix.Length..].Split('$');
+            if (splittedHashString.Length != 2
+                || !int.TryParse(splittedHashString[0], out var iterations)
+                || iterations <= 0)
             {
-                if (hashBytes[i + SaltSize] != hash[i])
-                {
-                    return false;
-                }
+                return false;
             }
-            return true;
+
+            // A stored hash of the wrong length is malformed, not a wrong password. Returning
+            // false rather than throwing keeps one corrupt row from 500ing the sign-in endpoint.
+            var hashBytes = new byte[SaltSize + hashSize];
+            if (!Convert.TryFromBase64String(splittedHashString[1], hashBytes, out var decoded)
+                || decoded != hashBytes.Length)
+            {
+                return false;
+            }
+
+            var salt = hashBytes.AsSpan(0, SaltSize).ToArray();
+
+            var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, algorithm, hashSize);
+
+            // Constant time: comparing byte by byte and returning at the first difference leaks how
+            // much of the hash was guessed correctly through how long the answer took.
+            return CryptographicOperations.FixedTimeEquals(
+                hash, hashBytes.AsSpan(SaltSize, hashSize));
         }
     }
 }

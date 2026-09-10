@@ -495,12 +495,21 @@ export function AdapterConfig({
               onChange={pick}
               placeholder={`Pick a ${kind}…`}
               clearLabel={required ? undefined : noneLabel}
-              options={(catalog.data ?? []).map((a) => ({
-                value: a.id,
-                label: a.label,
-                code: a.id,
-                hint: a.native ? "Native" : a.versions.length > 0 ? `v${a.versions.at(-1)}` : "Custom",
-              }))}
+              options={[
+                ...(catalog.data ?? []).map((a) => ({
+                  value: a.id,
+                  label: a.label,
+                  code: a.id,
+                  hint: a.native ? "Native" : a.versions.length > 0 ? `v${a.versions.at(-1)}` : "Custom",
+                })),
+                // What is configured, when the catalog does not list it — an adapter that has been
+                // unpublished, or one that no longer declares this kind. Without it the select
+                // reads as empty on a subscription that is in fact wired up, and the only way to
+                // save the page is to pick something else, silently replacing a working adapter.
+                ...(adapterId && !catalog.isPending && !catalog.data?.some((a) => a.id === adapterId)
+                  ? [{ value: adapterId, label: adapterId, code: adapterId, hint: "Not in catalog" }]
+                  : []),
+              ]}
             />
           </div>
           {adapter && (

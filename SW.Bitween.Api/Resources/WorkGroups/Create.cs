@@ -9,11 +9,9 @@ namespace SW.Bitween.Resources.WorkGroups;
 public class Create(BitweenDbContext dbContext, RequestContext requestContext,IInfolinkCache _BitweenCache, IBroadcast _broadcast)
     : ICommandHandler<CreateWorkGroupModel, object>
 {
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(CreateWorkGroupModel request)
     {
-        await _requestContext.EnsurePermission(dbContext, Model.Permissions.WorkGroups.Create);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.WorkGroups.Create);
 
         var workgroup = new WorkGroup()
         {

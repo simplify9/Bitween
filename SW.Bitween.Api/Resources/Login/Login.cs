@@ -9,18 +9,12 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Login
 {
     [Unprotect]
-    public class Login : ICommandHandler<UserLogin,object>
+    public class Login(BitweenDbContext dbContext, BitweenOptions BitweenSettings,
+        JwtTokenParameters jwtTokenParameters) : ICommandHandler<UserLogin,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly BitweenOptions BitweenSettings;
-        private readonly JwtTokenParameters jwtTokenParameters;
-
-        public Login(BitweenDbContext dbContext, BitweenOptions BitweenSettings, JwtTokenParameters jwtTokenParameters)
-        {
-            this.dbContext = dbContext;
-            this.BitweenSettings = BitweenSettings;
-            this.jwtTokenParameters = jwtTokenParameters;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly BitweenOptions BitweenSettings = BitweenSettings;
+        private readonly JwtTokenParameters jwtTokenParameters = jwtTokenParameters;
 
         public Task<object> Handle(UserLogin request)
         {

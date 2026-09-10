@@ -23,6 +23,9 @@ import { EditAttachmentPage } from "./pages/api-gateways/EditAttachmentPage";
 import { BusGatewayNewPage } from "./pages/bus-gateways/BusGatewayNewPage";
 import { BusGatewayPage } from "./pages/bus-gateways/BusGatewayPage";
 import { BusGatewaysPage } from "./pages/bus-gateways/BusGatewaysPage";
+import { DataSourceNewPage } from "./pages/data-sources/DataSourceNewPage";
+import { DataSourcePage } from "./pages/data-sources/DataSourcePage";
+import { DataSourcesPage } from "./pages/data-sources/DataSourcesPage";
 import { FlowPage } from "./pages/flow/FlowPage";
 import { GlobalValueSetPage } from "./pages/global-values/GlobalValueSetPage";
 import { GlobalValueSetsPage } from "./pages/global-values/GlobalValueSetsPage";
@@ -203,6 +206,14 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: "data-sources",
+            element: (
+              <RequirePermission permission="data-sources.view">
+                <DataSourcesPage />
+              </RequirePermission>
+            ),
+          },
+          {
             path: "flow",
             element: (
               <RequirePermission permission="bus-gateways.view">
@@ -287,6 +298,23 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permission="bus-gateways.view">
                 <BusGatewayPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            // Before the :id route, or "new" is read as an id.
+            path: "data-sources/new",
+            element: (
+              <RequirePermission permission="data-sources.create">
+                <DataSourceNewPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "data-sources/:id",
+            element: (
+              <RequirePermission permission="data-sources.view">
+                <DataSourcePage />
               </RequirePermission>
             ),
           },

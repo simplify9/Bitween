@@ -6,28 +6,20 @@ namespace SW.Bitween.Resources.Settings;
 
 [Unprotect]
 [HandlerName("Config")]
-public class Config : IQueryHandler<object>
+public class Config(BitweenOptions BitweenOptions, ThemeOptions themeOptions) : IQueryHandler<object>
 {
-    private readonly BitweenOptions _BitweenOptions;
-    private readonly ThemeOptions _themeOptions;
-    public Config(BitweenOptions BitweenOptions, ThemeOptions themeOptions)
-    {
-        _BitweenOptions = BitweenOptions;
-        _themeOptions = themeOptions;
-    }
-
     public async Task<object> Handle()
     {
         return new
         {
-            _BitweenOptions.MsalClientId,
-            _BitweenOptions.MsalRedirectUri,
-            _BitweenOptions.MsalTenantId,
-            _BitweenOptions.DisableEmailPasswordLogin,
-            IsRabbitMqManagementConfigured = !string.IsNullOrWhiteSpace(_BitweenOptions.RabbitMqManagementUrl)
-                                             && !string.IsNullOrWhiteSpace(_BitweenOptions.RabbitMqManagementUsername)
-                                             && !string.IsNullOrWhiteSpace(_BitweenOptions.RabbitMqManagementPassword),
-            Theme = _themeOptions,
+            BitweenOptions.MsalClientId,
+            BitweenOptions.MsalRedirectUri,
+            BitweenOptions.MsalTenantId,
+            BitweenOptions.DisableEmailPasswordLogin,
+            IsRabbitMqManagementConfigured = !string.IsNullOrWhiteSpace(BitweenOptions.RabbitMqManagementUrl)
+                                             && !string.IsNullOrWhiteSpace(BitweenOptions.RabbitMqManagementUsername)
+                                             && !string.IsNullOrWhiteSpace(BitweenOptions.RabbitMqManagementPassword),
+            Theme = themeOptions,
             // The product defaults, so the sign-in page — which has no session and can't read the
             // settings list — can tell a brand value someone chose from one nobody has touched.
             ThemeDefaults = SettingsService.DefaultsUnder("Theme.")

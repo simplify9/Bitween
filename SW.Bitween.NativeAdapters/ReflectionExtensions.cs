@@ -31,6 +31,10 @@ public static class ReflectionExtensions
             }
         }
         
-        return (T)inputInstance;
+        // Activator.CreateInstance returns null for a Nullable<T>, which is the one shape this
+        // cast cannot survive.
+        return inputInstance is T typed
+            ? typed
+            : throw new InvalidOperationException($"Could not build an instance of {typeof(T)}.");
     }
 }

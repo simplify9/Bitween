@@ -20,19 +20,12 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// on the subscription the whole time; these tests pin down that it is now used.
 /// </remarks>
 [Collection("Bitween")]
-public class PartnerTokenTests
+public class PartnerTokenTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public PartnerTokenTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Subscription_own_partner_fills_handler_tokens()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xchangeService = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -70,7 +63,7 @@ public class PartnerTokenTests
     [Fact]
     public async Task Partner_handed_in_wins_over_the_subscriptions_own()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xchangeService = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -113,7 +106,7 @@ public class PartnerTokenTests
     [Fact]
     public async Task No_partner_anywhere_leaves_the_token_alone()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xchangeService = scope.ServiceProvider.GetRequiredService<XchangeService>();
 

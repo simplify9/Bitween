@@ -11,12 +11,15 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SW.Bitween.Domain.Accounts;
+using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Scheduler.PgSql;
 
 namespace SW.Bitween.PgSql
 {
-    public class BitweenDbContext : Bitween.BitweenDbContext
+public class BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish)
+        : Bitween.BitweenDbContext(
+        options, requestContext, publish)
     {
         public const string Schema = "infolink";
 
@@ -24,13 +27,6 @@ namespace SW.Bitween.PgSql
         {
             TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
-
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish) : base(
-            options, requestContext, publish)
-        {
-            //this.requestContext = requestContext;
-            //this.publish = publish;
-        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -133,6 +129,76 @@ namespace SW.Bitween.PgSql
                     .IsRequired().OnDelete(DeleteBehavior.Restrict);
             });
 
+            // NOTE: this context does NOT call base.OnModelCreating — it redeclares the model.
+            // Anything configured only in SW.Bitween.Api's context is inert here. DataSource
+            // reached the model anyway, by convention, through the BusGateway.DataSource
+            // navigation; InboundMessage has no such navigation and has to be declared.
+            modelBuilder.Entity<Domain.Cluster.ClusterLease>(cl =>
+            {
+                cl.ToTable("cluster_lease");
+                cl.HasKey(i => i.Id);
+                cl.Property(i => i.Id).HasMaxLength(200);
+                cl.Property(i => i.OwnerNode).HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<DataSourceStatement>(st =>
+            {
+                st.ToTable("data_source_statement");
+                st.HasKey(i => i.Id);
+                st.Property(i => i.Id).ValueGeneratedOnAdd();
+                st.Property(p => p.Name).IsRequired().HasMaxLength(200);
+                st.Property(p => p.Sql).IsRequired();
+                st.Property(p => p.Description).HasMaxLength(1000);
+
+                // Column names, so the database's own identifier limit is the ceiling — 128 is
+                // above every engine's (Oracle allows 128, PostgreSQL 63).
+                st.Property(p => p.CursorColumn).HasMaxLength(128);
+                st.Property(p => p.KeyColumn).HasMaxLength(128);
+
+                // The namespacing fix, enforced by the database rather than by a check someone can
+                // forget. Case-insensitivity is handled in the handler, because collation differs
+                // per provider.
+                st.HasIndex(p => new { p.DataSourceId, p.Name }).IsUnique();
+
+                // Cascade, unlike the subscription FK: a statement has no meaning without its
+                // connection.
+                st.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                st.HasOne<WorkGroup>().WithMany().HasForeignKey(p => p.WorkGroupId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AdapterState>(st =>
+            {
+                st.ToTable("adapter_state");
+
+                // Composite key rather than a surrogate: an adapter addresses its state by name
+                // within its instance, and there is exactly one row per address by definition.
+                st.HasKey(p => new { p.AdapterId, p.InstanceKey, p.Name });
+                st.Property(p => p.AdapterId).HasMaxLength(200);
+                st.Property(p => p.InstanceKey).HasMaxLength(200);
+                st.Property(p => p.Name).HasMaxLength(200);
+                st.Property(p => p.Value).HasMaxLength(AdapterState.MaxValueLength);
+            });
+
+            modelBuilder.Entity<InboundMessage>(im =>
+            {
+                im.ToTable("inbound_message");
+
+                // The dedupe key IS the primary key. Deduplication is decided by an insert
+                // failing, not by a lookup succeeding — see the type's remarks.
+                im.HasKey(i => i.Id);
+                im.Property(i => i.Id).HasMaxLength(400);
+                im.Property(i => i.XchangeId).HasMaxLength(50);
+
+                // Pruning scans by age; without this it table-scans a table that only grows.
+                im.HasIndex(i => i.SeenOn);
+
+                im.HasOne<DataSource>().WithMany().HasForeignKey(i => i.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<BusGateway>(bg =>
             {
                 bg.ToTable("bus_gateway");
@@ -196,6 +262,11 @@ namespace SW.Bitween.PgSql
 
                 b.Property(p => p.Type).HasConversion<byte>();
                 b.Property(p => p.AggregationTarget).HasConversion<byte>();
+
+                // Restrict, not cascade: deleting a data source that subscriptions still run
+                // through must fail loudly rather than quietly unhooking them.
+                b.HasOne<DataSource>().WithMany().HasForeignKey(p => p.DataSourceId).IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne<Subscription>().WithMany().HasForeignKey(p => p.ResponseSubscriptionId).IsRequired(false)
                     .OnDelete(DeleteBehavior.Restrict).HasConstraintName("fk_subscription_response_subscriber");

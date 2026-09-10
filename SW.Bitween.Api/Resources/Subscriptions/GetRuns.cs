@@ -17,26 +17,18 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// <see cref="SchedulerOptions.RetentionDays"/>).
 /// </summary>
 [HandlerName("runs")]
-public class GetRuns : IQueryHandler<SearchSubscriptionRunsModel, object>
+public class GetRuns(
+    BitweenDbContext dbContext,
+    RequestContext requestContext,
+    IScheduleRepository scheduleRepo,
+    SchedulerOptions schedulerOptions) : IQueryHandler<SearchSubscriptionRunsModel, object>
 {
     private const int MaxLimit = 100;
 
-    private readonly BitweenDbContext dbContext;
-    private readonly RequestContext requestContext;
-    private readonly IScheduleRepository scheduleRepo;
-    private readonly SchedulerOptions schedulerOptions;
-
-    public GetRuns(
-        BitweenDbContext dbContext,
-        RequestContext requestContext,
-        IScheduleRepository scheduleRepo,
-        SchedulerOptions schedulerOptions)
-    {
-        this.dbContext = dbContext;
-        this.requestContext = requestContext;
-        this.scheduleRepo = scheduleRepo;
-        this.schedulerOptions = schedulerOptions;
-    }
+    private readonly BitweenDbContext dbContext = dbContext;
+    private readonly RequestContext requestContext = requestContext;
+    private readonly IScheduleRepository scheduleRepo = scheduleRepo;
+    private readonly SchedulerOptions schedulerOptions = schedulerOptions;
 
     public async Task<object> Handle(SearchSubscriptionRunsModel request)
     {

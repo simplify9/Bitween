@@ -46,10 +46,12 @@ public class NativePop3Receiver : INativeInfolinkReceiver
             return new XchangeFile(message.TextBody ?? message.HtmlBody ?? string.Empty, message.Subject);
 
         using var memoryStream = new MemoryStream();
-        if (attachment is MessagePart rfc822)
-            await rfc822.Message.WriteToAsync(memoryStream);
-        else
-            await ((MimePart)attachment).Content.DecodeToAsync(memoryStream);
+        // A part can carry no content at all — a malformed or truncated message. Treating that
+        // as an empty attachment beats a NullReferenceException from inside the receive loop.
+        if (attachment is MessagePart { Message: { } embedded })
+            await embedded.WriteToAsync(memoryStream);
+        else if (attachment is MimePart { Content: { } body })
+            await body.DecodeToAsync(memoryStream);
 
         var buffer = memoryStream.ToArray();
 

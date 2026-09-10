@@ -11,6 +11,14 @@ import type {
   BusGateway,
   BusGatewayDetail,
   BusGatewayRow,
+  DataSourceProvider,
+  DataSourceDetail,
+  DataSourceInspectResult,
+  DataSourceRow,
+  DataSourceStatement,
+  DataSourceStatementUsage,
+  DataSourceTelemetry,
+  DataSourceTestResult,
   DashboardData,
   ExchangeQuery,
   ExchangeRow,
@@ -300,8 +308,91 @@ export interface ApiClient {
   }): Promise<Paged<BusGatewayRow>>;
   getBusGateway(id: number): Promise<BusGatewayDetail>;
   createBusGateway(input: { name: string; informationTypeId: number }): Promise<BusGateway>;
-  updateBusGateway(id: number, changes: { name: string; inactive: boolean }): Promise<BusGateway>;
+  updateBusGateway(
+    id: number,
+    changes: {
+      name: string;
+      inactive: boolean;
+      /** Omit to leave the source alone; null moves the gateway back onto the internal bus. */
+      dataSourceId?: number | null;
+      endpoint?: string | null;
+    },
+  ): Promise<BusGateway>;
   deleteBusGateway(id: number): Promise<void>;
+
+  // ——— Data sources ———
+  /** What Bitween can connect to, and what each provider accepts. */
+  listDataSourceProviders(): Promise<DataSourceProvider[]>;
+  listDataSources(): Promise<DataSourceRow[]>;
+  searchDataSources(query: {
+    search: string;
+    offset: number;
+    limit: number;
+  }): Promise<Paged<DataSourceRow>>;
+  getDataSource(id: number): Promise<DataSourceDetail>;
+  createDataSource(input: {
+    name: string;
+    adapterId: string;
+    properties: Record<string, string>;
+    secretProperties: string[];
+    /** Broker, Relational, Document, ObjectStore or Http — the provider declares it. */
+    kind?: string;
+  }): Promise<{ id: number }>;
+  updateDataSource(
+    id: number,
+    changes: {
+      name: string;
+      adapterId: string;
+      kind: string;
+      properties: Record<string, string>;
+      secretProperties: string[];
+      inactive: boolean;
+      deduplicationWindowDays: number;
+      softMemoryLimitMb: number;
+      hardMemoryLimitMb: number;
+      cpuPercentLimit: number;
+      cpuLimitSamples: number;
+    },
+  ): Promise<void>;
+  deleteDataSource(id: number): Promise<void>;
+  testDataSource(id: number): Promise<DataSourceTestResult>;
+  getDataSourceTelemetry(id: number): Promise<DataSourceTelemetry>;
+  /** Relays a read-only command (Discover, GetStats) to the adapter actually serving traffic. */
+  inspectDataSource(
+    id: number,
+    command: string,
+    /** Discover's filters: objectType, schema, nameLike, includeColumns, skip, take. */
+    args?: Record<string, string>,
+  ): Promise<DataSourceInspectResult>;
+
+  // ——— data source statements: the SQL a relational data source may run ———
+  listDataSourceStatements(dataSourceId: number): Promise<DataSourceStatement[]>;
+  createDataSourceStatement(
+    dataSourceId: number,
+    input: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      /** Only for a statement a receiver polls with — see DataSourceStatement. */
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
+    },
+  ): Promise<{ id: number }>;
+  updateDataSourceStatement(
+    id: number,
+    changes: {
+      name: string;
+      sql: string;
+      description?: string | null;
+      workGroupId?: number | null;
+      inactive: boolean;
+      cursorColumn?: string | null;
+      keyColumn?: string | null;
+    },
+  ): Promise<void>;
+  deleteDataSourceStatement(id: number): Promise<void>;
+  getDataSourceStatementUsage(id: number): Promise<DataSourceStatementUsage>;
   /** The subscription is either an existing id or defined inline; the endpoint commits both as one. */
   addBusRoute(id: number, input: AddBusRouteInput): Promise<void>;
   updateBusRoute(

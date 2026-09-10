@@ -2,5 +2,6 @@ namespace SW.Bitween.Model;
 
 public class GetBitweenDocModel
 {
-    public string DocumentKey { get; set; }
+    /// <summary>Required; the server rejects a request without it.</summary>
+    public string DocumentKey { get; set; } = null!;
 }

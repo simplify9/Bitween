@@ -13,15 +13,8 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class RetryJobTests
+public class RetryJobTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public RetryJobTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private RetryJob BuildJob(BitweenDbContext db, XchangeService xchangeService) =>
@@ -32,7 +25,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_does_not_process_future_delayed_retry()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -55,7 +48,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_removes_delayed_retry_when_xchange_is_missing()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -77,7 +70,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_removes_delayed_retry_when_subscription_is_missing()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -120,7 +113,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_drops_a_retry_whose_input_is_gone_and_still_runs_the_others()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -158,7 +151,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_works_through_more_than_one_batch_in_a_single_run()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -187,7 +180,7 @@ public class RetryJobTests
     [Fact]
     public async Task BulkRetry_handles_an_exchange_with_no_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -222,7 +215,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_processes_due_delayed_retry_and_creates_retry_xchange()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -263,7 +256,7 @@ public class RetryJobTests
     [Fact]
     public async Task RetryJob_processes_multiple_due_records_in_one_invocation()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 

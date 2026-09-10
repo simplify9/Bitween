@@ -24,15 +24,8 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// permanently one attempt below the threshold.
 /// </remarks>
 [Collection("Bitween")]
-public class LoginTests
+public class LoginTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public LoginTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     private const string GoodPassword = "Correct-Horse-9!";
 
     /// <summary>
@@ -43,7 +36,7 @@ public class LoginTests
     /// </summary>
     private async Task<object> Login(string email, string password)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
         accessor.HttpContext = new DefaultHttpContext();
         var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.Login>(scope.ServiceProvider);
@@ -53,7 +46,7 @@ public class LoginTests
     private async Task<Account> CreateAccount(string email, string password = GoodPassword,
         bool disabled = false)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         // A null password is the real state of an invited account and of a Microsoft-only
         // instance: the row exists purely to be matched by address, with nothing to verify against.
@@ -68,7 +61,7 @@ public class LoginTests
     /// <summary>Reads the account back through a fresh context, so it reflects what is committed.</summary>
     private async Task<Account> Reload(int accountId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         return await db.Set<Account>().AsNoTracking().SingleAsync(a => a.Id == accountId);
     }

@@ -4,19 +4,13 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.NativeAdapters.RebexFtpUploadHandler;
 
-public class NativeRebexFtpUploadHandler : INativeInfolinkHandler, IRequiresRebexLicense
+public class NativeRebexFtpUploadHandler(string? licenseKey = null) : INativeInfolinkHandler, IRequiresRebexLicense
 {
-    private readonly string? _licenseKey;
     private RebexFtpUploadHandlerInput _options = new();
-
-    public NativeRebexFtpUploadHandler(string? licenseKey = null)
-    {
-        _licenseKey = licenseKey;
-    }
 
     public async Task<XchangeFile> Handle(XchangeFile xchangeFile)
     {
-        Rebex.Licensing.Key = _licenseKey;
+        Rebex.Licensing.Key = licenseKey;
         FtpProtocol.EnsurePasswordProvided(_options.Protocol, _options.Password);
         FtpProtocol.EnsurePrivateKeyProvided(_options.Protocol, _options.PrivateKey);
 

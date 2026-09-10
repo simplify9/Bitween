@@ -29,8 +29,8 @@ namespace SW.Bitween.Model
 
     public class SubscriptionSaveMapper
     {
-        public string MapperId { get; set; }
-        public ICollection<KeyAndValue> MapperProperties { get; set; }
+        public string MapperId { get; set; } = null!;
+        public ICollection<KeyAndValue> MapperProperties { get; set; } = [];
     }
 
     // One execution of a scheduled subscription, out of the scheduler's own history.
@@ -44,8 +44,11 @@ namespace SW.Bitween.Model
 
         /// <summary>Null while the run is still in progress.</summary>
         public bool? Success { get; set; }
-        public string Error { get; set; }
-        public string Node { get; set; }
+        /// <summary>Null when the run succeeded.</summary>
+        public string? Error { get; set; }
+
+        /// <summary>Which node ran it; null for a run recorded before nodes were tracked.</summary>
+        public string? Node { get; set; }
 
         /// <summary>True when someone pressed Receive now / Aggregate now instead of waiting for the cron.</summary>
         public bool Manual { get; set; }
@@ -87,10 +90,11 @@ namespace SW.Bitween.Model
 
     public class ReceiveAttemptExchangeRef
     {
-        public string Id { get; set; }
+        public string Id { get; set; } = null!;
         public bool? Status { get; set; }
         public bool? ResponseBad { get; set; }
-        public IDictionary<string, string> PromotedProperties { get; set; }
+        /// <summary>Null when the document type promotes nothing.</summary>
+        public IDictionary<string, string>? PromotedProperties { get; set; }
     }
 
     public class ReceiveAttemptModel
@@ -99,8 +103,10 @@ namespace SW.Bitween.Model
         public DateTime StartedOn { get; set; }
         public DateTime FinishedOn { get; set; }
         public ReceiveOutcome Outcome { get; set; }
-        public string ErrorMessage { get; set; }
-        public ICollection<ReceiveAttemptExchangeRef> Exchanges { get; set; }
+
+        /// <summary>Null unless the attempt failed.</summary>
+        public string? ErrorMessage { get; set; }
+        public ICollection<ReceiveAttemptExchangeRef> Exchanges { get; set; } = [];
     }
 
     public class SearchReceiveAttemptsModel
@@ -127,7 +133,7 @@ namespace SW.Bitween.Model
         public int TriggerCount { get; set; }
 
         /// <summary>Worst state across the subscription's triggers: Normal, Paused, Blocked, Error, Complete, or Missing.</summary>
-        public string State { get; set; }
+        public string State { get; set; } = null!;
 
         /// <summary>The scheduler's own next fire time — computed from the cron, independently of Subscription.ReceiveOn.</summary>
         public DateTime? NextFireOn { get; set; }
@@ -146,7 +152,8 @@ namespace SW.Bitween.Model
 
     public abstract class SubscriptionCreateUpdateBase : IName
     {
-        public string Name { get; set; }
+        /// <summary>Required; the server rejects a create without it.</summary>
+        public string Name { get; set; } = null!;
         public int DocumentId { get; set; }
         public int? PartnerId { get; set; }
         public int? AggregationForId { get; set; }
@@ -163,26 +170,45 @@ namespace SW.Bitween.Model
     /// </summary>
     public abstract class SubscriptionConfiguration : SubscriptionCreateUpdateBase
     {
-        public string HandlerId { get; set; }
-        public string MapperId { get; set; }
-        public string ReceiverId { get; set; }
-        public string ValidatorId { get; set; }
+        /// <summary>Each adapter slot is optional; null means the stage is skipped.</summary>
+        public string? HandlerId { get; set; }
+
+        public string? MapperId { get; set; }
+
+        public string? ReceiverId { get; set; }
+
+        public string? ValidatorId { get; set; }
+
+        /// <summary>
+        /// Which data source this subscription's adapters connect through — a database connection,
+        /// typically. Null keeps the old behaviour, where an adapter carries its own connection
+        /// settings in its properties.
+        /// </summary>
+        public int? DataSourceId { get; set; }
+
         public int? CategoryId { get; set; }
         public int? WorkGroupId { get; set; }
 
-        public IPropertyMatchSpecification MatchExpression { get; set; }
-        public ICollection<KeyAndValue> HandlerProperties { get; set; }
-        public ICollection<KeyAndValue> ValidatorProperties { get; set; }
-        public ICollection<KeyAndValue> MapperProperties { get; set; }
-        public ICollection<KeyAndValue> ReceiverProperties { get; set; }
-        public ICollection<KeyAndValue> DocumentFilter { get; set; }
+        /// <summary>Null matches every message of the document type.</summary>
+        public IPropertyMatchSpecification? MatchExpression { get; set; }
+        public ICollection<KeyAndValue> HandlerProperties { get; set; } = [];
+        public ICollection<KeyAndValue> ValidatorProperties { get; set; } = [];
+        public ICollection<KeyAndValue> MapperProperties { get; set; } = [];
+        public ICollection<KeyAndValue> ReceiverProperties { get; set; } = [];
+        public ICollection<KeyAndValue> DocumentFilter { get; set; } = [];
 
-        public ICollection<ScheduleView> Schedules { get; set; }
+        /// <summary>
+        /// Null and empty mean different things: null leaves the existing schedules alone —
+        /// a create that mentions no schedule is the "empty subscription" call — while an
+        /// empty collection asks for none, which SetSchedules refuses on a Receiving type.
+        /// </summary>
+        public ICollection<ScheduleView>? Schedules { get; set; }
         public int? ResponseSubscriptionId { get; set; }
-        public string ResponseMessageTypeName { get; set; }
+        /// <summary>Null unless the result is published back onto the bus.</summary>
+        public string? ResponseMessageTypeName { get; set; }
 
         public int? RetryPolicyId { get; set; }
-        public CustomRetryPolicy CustomRetryPolicy { get; set; }
+        public CustomRetryPolicy? CustomRetryPolicy { get; set; }
 
         /// <summary>
         /// Aggregation only: which file of each collected exchange the roll-up links to.
@@ -230,7 +256,7 @@ namespace SW.Bitween.Model
     public class SubscriptionSearch : SubscriptionGet
     {
         public int Id { get; set; }
-        public string DocumentName { get; set; }
+        public string DocumentName { get; set; } = null!;
         public bool? IsRunning { get; set; }
     }
 
@@ -242,10 +268,13 @@ namespace SW.Bitween.Model
         public DateTime? ReceiveOn { get; set; }
         public DateTime? AggregateOn { get; set; }
         public int ConsecutiveFailures { get; set; }
-        public string LastException { get; set; }
+        /// <summary>Null while the subscription is healthy.</summary>
+        public string? LastException { get; set; }
         public DateTime? PausedOn { get; set; }
-        public string CategoryCode { get; set; }
-        public string CategoryDescription { get; set; }
+        /// <summary>Both null when the subscription is in no category.</summary>
+        public string? CategoryCode { get; set; }
+
+        public string? CategoryDescription { get; set; }
     }
 
     public class SubscriptionGet : SubscriptionUpdate

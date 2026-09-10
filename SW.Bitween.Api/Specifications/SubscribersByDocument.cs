@@ -7,13 +7,8 @@ using System.Text;
 
 namespace SW.Bitween
 {
-    class SubscribersByDocument : ISpecification<Subscription>
+    class SubscribersByDocument(int DocumentId, bool Inactive = false) : ISpecification<Subscription>
     {
-        public SubscribersByDocument(int DocumentId, bool Inactive = false)
-        {
-            Criteria = e => e.DocumentId == DocumentId && e.Inactive == Inactive;
-        }
-
-        public Expression<Func<Subscription, bool>> Criteria { get; }
+        public Expression<Func<Subscription, bool>> Criteria { get; } = e => e.DocumentId == DocumentId && e.Inactive == Inactive;
     }
 }

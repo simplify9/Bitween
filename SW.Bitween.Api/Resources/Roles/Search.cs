@@ -8,22 +8,13 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Roles;
 
-public class Search : ISearchyHandler
+public class Search(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Search(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Roles.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Roles.View);
 
-        var query = from role in _dbContext.Set<Role>()
+        var query = from role in dbContext.Set<Role>()
             select new RoleRow
             {
                 Id = role.Id,
@@ -32,7 +23,7 @@ public class Search : ISearchyHandler
                 IsSystem = role.IsSystem,
                 Permissions = role.Permissions,
                 CreatedOn = role.CreatedOn,
-                MemberCount = _dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
+                MemberCount = dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
             };
 
         query = query.AsNoTracking();

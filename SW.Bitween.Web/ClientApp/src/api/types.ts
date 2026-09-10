@@ -483,6 +483,8 @@ export interface InlineSubscriptionDraft {
   mapperProperties: Record<string, string>;
   handlerId: string | null;
   handlerProperties: Record<string, string>;
+  /** Optional here: an inline draft has no connection to bind yet. */
+  dataSourceId?: number | null;
   matchExpression: MatchGroup | null;
   schedules: Schedule[];
   responseSubscriptionId: number | null;
@@ -569,6 +571,8 @@ export interface Subscription {
   mapperProperties: Record<string, string>;
   handlerId: string | null;
   handlerProperties: Record<string, string>;
+  /** Optional here: an inline draft has no connection to bind yet. */
+  dataSourceId: number | null;
   /** Legacy Internal only: which documents this subscription picks up. */
   matchExpression: MatchGroup | null;
   /** Receiving (and Aggregation) only. */
@@ -757,7 +761,178 @@ export interface BusGateway {
   /** Off but kept, with its routes. The message stops being offered to them. */
   inactive: boolean;
   createdOn: string;
+
+  /**
+   * Where the messages come from. Null is Bitween's own internal bus — the only behaviour that
+   * existed before data sources, and still the default, so no gateway changes meaning. Set it and
+   * this gateway is fed by a broker outside Bitween instead.
+   */
+  dataSourceId: number | null;
+  dataSourceName: string | null;
+  /** Health of that connection, so a broker that has gone away shows on the gateway itself. */
+  dataSourceState: string | null;
+  /** Which queue, topic or SQS URL on that data source feeds this gateway. */
+  endpoint: string | null;
 }
+
+// ——— Data sources ———
+
+/**
+ * A connection to something outside Bitween — today a broker.
+ *
+ * It holds the connection and nothing else: what Bitween does with the messages belongs to the bus
+ * gateway pointing at it, which is why one data source can feed many gateways the way one broker
+ * connection serves many queues.
+ */
+export interface DataSource {
+  id: number;
+  name: string;
+  /** The adapter that speaks this protocol, e.g. bitween.bus.rabbitmq. */
+  adapterId: string;
+  kind: string;
+  inactive: boolean;
+  /**
+   * How long a message's deduplication key is remembered. Has to exceed the widest redelivery
+   * window this broker can produce. Zero turns deduplication off.
+   */
+  deduplicationWindowDays: number;
+
+  /** Soft ceiling in MB — crossing it recycles the adapter between messages. 0 = host default. */
+  softMemoryLimitMb: number;
+  /** Hard ceiling in MB — becomes the adapter's GC heap hard limit. 0 = host default. */
+  hardMemoryLimitMb: number;
+
+  /**
+   * Sustained CPU ceiling as a share of the WHOLE node, not of one core. One pegged core on a
+   * sixteen-core node is about 6%. 0 = host default.
+   */
+  cpuPercentLimit: number;
+  /** Consecutive heartbeats above the ceiling before it trips. 0 = host default. */
+  cpuLimitSamples: number;
+
+  // Health, written back by the supervisor from the adapter's heartbeat.
+  lastKnownState: string | null;
+  lastHeartbeatOn: string | null;
+  lastException: string | null;
+  consecutiveFailures: number;
+  /** Which node holds this connection, and at which fencing term. */
+  ownedByNode: string | null;
+}
+
+export interface DataSourceRow extends DataSource {
+  /** How many bus gateways read from it. Deleting is refused while any do. */
+  gatewayCount: number;
+}
+
+export interface DataSourceDetail extends DataSourceRow {
+  /** Connection settings. Secret values arrive as the sentinel, never in clear. */
+  properties: Record<string, string>;
+  /** Which of those names hold credentials. */
+  secretProperties: string[];
+}
+
+/**
+ * What the connection is doing right now, read from the adapter's heartbeat rather than from the
+ * data source row — which only carries what the last reconcile wrote back.
+ */
+/**
+ * One named piece of SQL a data source may run.
+ *
+ * A record rather than a field on the data source, so that writing a query and changing the
+ * database credentials are different permissions — see the backend entity for why SQL cannot live
+ * on the subscription instead.
+ */
+export interface DataSourceStatement {
+  id: number;
+  dataSourceId: number;
+  name: string;
+  sql: string;
+  description: string | null;
+  workGroupId: number | null;
+  workGroupName: string | null;
+  inactive: boolean;
+  /**
+   * Only for a statement a receiver polls with: which column carries the cursor, and which
+   * identifies the row. They describe what this query returns, so they belong to the statement
+   * rather than to each subscription reading it.
+   */
+  cursorColumn: string | null;
+  keyColumn: string | null;
+  /** How many subscriptions name it. Zero is the number that says it is safe to delete. */
+  usageCount: number;
+  createdOn: string;
+  createdBy: string | null;
+  modifiedOn: string | null;
+  modifiedBy: string | null;
+}
+
+export interface DataSourceStatementUsage {
+  statementId: number;
+  name: string;
+  usedBy: DataSourceStatementUsageEntry[];
+}
+
+export interface DataSourceStatementUsageEntry {
+  subscriptionId: number;
+  subscriptionName: string;
+  /** Handler, Mapper or Receiver — which adapter slot names it. */
+  role: string;
+  /** query, execute or call. */
+  operation: string;
+  inactive: boolean;
+}
+
+export interface DataSourceTelemetry {
+  /** False when this node is not the one holding the connection. Not a fault: it is exclusive. */
+  runningHere: boolean;
+  ownedByNode: string | null;
+
+  connected: boolean;
+  state: string | null;
+  lastMessageOn: string | null;
+  inFlight: number;
+  lastError: string | null;
+
+  /** Whatever the adapter reports — per-queue depth, counters, prefetch. Untyped by design. */
+  details: Record<string, string>;
+
+  // Host-observed: these keep working when the adapter is wedged, which is when they matter.
+  processId: number | null;
+  workingSetBytes: number;
+  cpuPercent: number;
+  threadCount: number;
+  uptime: string;
+  restartCount: number;
+  missedHeartbeats: number;
+  quarantined: boolean;
+  lastHeartbeatOn: string | null;
+
+  commands: string[];
+}
+
+/** What a read-only command relayed to the running adapter came back with. */
+export interface DataSourceInspectResult {
+  ran: boolean;
+  command: string | null;
+  /** The adapter's own JSON, as text — Bitween does not model any broker's topology. */
+  result: string | null;
+  error: string | null;
+}
+
+export interface DataSourceTestStage {
+  name: string;
+  succeeded: boolean;
+  detail: string | null;
+}
+
+export interface DataSourceTestResult {
+  succeeded: boolean;
+  error: string | null;
+  stages: DataSourceTestStage[];
+}
+
+/** Secret values come back as this. Saving it again keeps whatever is stored. */
+export const SECRET_SENTINEL = "__private__";
 export interface BusGatewayRow extends BusGateway {
   informationTypeCode: string;
   routeCount: number;
@@ -1151,4 +1326,34 @@ export interface DashboardData {
     failingSubscriptions: { id: number; name: string; consecutiveFailures: number }[];
     pausedSubscriptions: { id: number; name: string }[];
   };
+}
+
+/**
+ * One connection setting, as the adapter itself declares it. The UI keeps no list of its own —
+ * see DataSourceProviderCatalog on the server for why.
+ */
+export interface DataSourceProviderSetting {
+  name: string;
+  /** string, number or boolean — enough to pick an input, nothing more. */
+  type: "string" | "number" | "boolean";
+  hint: string | null;
+  /** What a new data source starts with. Null means start it empty. */
+  default: string | null;
+  /** When present, the only legal values: rendered as a menu instead of a text box. */
+  allowedValues: string[] | null;
+  secret: boolean;
+  required: boolean;
+}
+
+export interface DataSourceProvider {
+  adapterId: string;
+  label: string;
+  /**
+   * What it connects to: Broker, Relational, Document, ObjectStore or Http. A bus gateway can
+   * only read from a Broker — a provider that holds a database session is a data source too, but
+   * it has no queue to consume.
+   */
+  kind: string;
+  description: string | null;
+  settings: DataSourceProviderSetting[];
 }

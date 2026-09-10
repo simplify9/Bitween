@@ -74,6 +74,20 @@ public class Subscription : BaseEntity
     public WorkGroup WorkGroup { get; set; }
     public bool Temporary { get; private set; }
     public DateTime? PausedOn { get; private set; }
+    /// <summary>
+    /// Which external system this subscription's adapters connect through — a database, typically.
+    ///
+    /// Null keeps every existing subscription exactly as it was: an adapter carries its own
+    /// connection settings in its properties. Setting one moves that job to the data source, which
+    /// is what lets several subscriptions share one warm connection pool instead of each opening
+    /// its own, and puts the credentials in one place with a health page in front of them.
+    ///
+    /// One per subscription rather than one per adapter slot. Reading from one database and
+    /// writing to another is a real integration, but it is served by two subscriptions chained
+    /// through a response, and the simpler model is worth more than saving that hop.
+    /// </summary>
+    public int? DataSourceId { get; set; }
+
     public string ValidatorId { get; set; }
     public string HandlerId { get; set; }
     public string ReceiverId { get; set; }

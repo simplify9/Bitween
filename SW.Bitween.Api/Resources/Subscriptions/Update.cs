@@ -12,24 +12,14 @@ using SW.Bitween.Resources.RetryPolicies;
 
 namespace SW.Bitween.Resources.Subscriptions
 {
-    public class Update : ICommandHandler<int, SubscriptionUpdate, object>
+    public class Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache,
+        RequestContext requestContext, SubscriptionSchedulerService subScheduler) : ICommandHandler<int, SubscriptionUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext, SubscriptionSchedulerService subScheduler)
-        {
-            this._dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-            _subScheduler = subScheduler;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
 
         public async Task<object> Handle(int key, SubscriptionUpdate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Edit);
+            await requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Edit);
             var entity = await _dbContext.FindAsync<Subscription>(key);
 
             // Capture before SetSchedules replaces the collection.
@@ -50,10 +40,10 @@ namespace SW.Bitween.Resources.Subscriptions
             await SubscriptionConfigurationApplier.Apply(_dbContext, entity, model);
 
             await _dbContext.SaveChangesAsync();
-            await _BitweenCache.BroadcastRevoke();
+            await BitweenCache.BroadcastRevoke();
 
             // Sync Quartz: unschedule removed entries, schedule new/kept ones.
-            await _subScheduler.Sync(entity, oldSchedules);
+            await subScheduler.Sync(entity, oldSchedules);
 
             return null;
         }
@@ -195,7 +185,6 @@ namespace SW.Bitween.Resources.Subscriptions
 
                 RuleFor(i => i).CustomAsync(async (model, context, ct) =>
                 {
-
                     var subscription = await GetSub(dbContext, httpContextAccessor);
 
                     if (subscription?.Type == SubscriptionType.GatewayApiCall ||

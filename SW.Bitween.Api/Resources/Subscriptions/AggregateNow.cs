@@ -6,28 +6,18 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Subscriptions
 {
     [HandlerName("aggregatenow")]
-    public class AggregateNow : ICommandHandler<int, SubscriptionAggregateNow,object>
+    public class AggregateNow(BitweenDbContext dbContext, RequestContext requestContext,
+        SubscriptionSchedulerService subScheduler) : ICommandHandler<int, SubscriptionAggregateNow,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public AggregateNow(BitweenDbContext dbContext, RequestContext requestContext, SubscriptionSchedulerService subScheduler)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _subScheduler = subScheduler;
-        }
-
         public async Task<object> Handle(int key, SubscriptionAggregateNow request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Operate);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Operate);
 
-            var entity = await _dbContext.FindAsync<Subscription>(key);
+            var entity = await dbContext.FindAsync<Subscription>(key);
             entity.SetAggregateNow();
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
 
-            await _subScheduler.RunNow(entity);
+            await subScheduler.RunNow(entity);
             return null;
         }
     }

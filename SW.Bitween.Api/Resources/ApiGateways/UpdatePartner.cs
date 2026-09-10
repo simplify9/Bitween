@@ -9,22 +9,14 @@ using SW.Bitween.Domain;
 namespace SW.Bitween.Resources.ApiGateways
 {
     [HandlerName(nameof(UpdatePartner))]
-    public class UpdatePartner : ICommandHandler<int, ApiGatewayPartnerCreate, object>
+public class UpdatePartner(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<int, ApiGatewayPartnerCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public UpdatePartner(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(int gatewayId, ApiGatewayPartnerCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.Edit);
 
-            var gateway = await _dbContext.Set<ApiGateway>()
+            var gateway = await dbContext.Set<ApiGateway>()
                 .Include(ag => ag.Partners)
                 .FirstOrDefaultAsync(ag => ag.Id == gatewayId);
 
@@ -38,7 +30,7 @@ namespace SW.Bitween.Resources.ApiGateways
                 throw new SWValidationException(GatewayLinkTarget.NeitherGiven,
                     "Pick the integration this partner runs.");
 
-            var subscription = await _dbContext.Set<Subscription>()
+            var subscription = await dbContext.Set<Subscription>()
                 .FirstOrDefaultAsync(s => s.Id == model.SubscriptionId);
 
             if (subscription == null)
@@ -55,7 +47,7 @@ namespace SW.Bitween.Resources.ApiGateways
 
             partnerLink.SubscriptionId = model.SubscriptionId.Value;
 
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
 
             return null;
         }

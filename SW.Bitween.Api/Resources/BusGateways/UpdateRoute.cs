@@ -7,30 +7,20 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.BusGateways
 {
     [HandlerName(nameof(UpdateRoute))]
-    public class UpdateRoute : ICommandHandler<int, BusGatewayRouteUpdate, object>
+public class UpdateRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, BusGatewayRouteUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public UpdateRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(int gatewayId, BusGatewayRouteUpdate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.Edit);
 
-            var gateway = await _dbContext.Set<BusGateway>()
+            var gateway = await dbContext.Set<BusGateway>()
                 .FirstOrDefaultAsync(bg => bg.Id == gatewayId);
 
             if (gateway == null)
                 throw new SWNotFoundException($"BusGateway with Id {gatewayId} not found");
 
-            var route = await _dbContext.Set<BusGatewayRoute>()
+            var route = await dbContext.Set<BusGatewayRoute>()
                 .FirstOrDefaultAsync(r => r.Id == model.RouteId && r.BusGatewayId == gatewayId);
 
             if (route == null)
@@ -42,15 +32,15 @@ namespace SW.Bitween.Resources.BusGateways
                 throw new SWValidationException(GatewayLinkTarget.NeitherGiven,
                     "Pick the integration this route runs.");
 
-            await AddRoute.ValidateSubscription(_dbContext, model.SubscriptionId.Value, gateway.DocumentId);
-            await AddRoute.ValidatePartner(_dbContext, model.PartnerId);
+            await AddRoute.ValidateSubscription(dbContext, model.SubscriptionId.Value, gateway.DocumentId);
+            await AddRoute.ValidatePartner(dbContext, model.PartnerId);
 
             route.SubscriptionId = model.SubscriptionId.Value;
             route.PartnerId = model.PartnerId;
             route.MatchExpression = model.MatchExpression;
 
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
     }

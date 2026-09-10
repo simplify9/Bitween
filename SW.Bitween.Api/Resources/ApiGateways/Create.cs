@@ -5,20 +5,12 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.ApiGateways
 {
-    public class Create : ICommandHandler<ApiGatewayCreate, object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext)
+        : ICommandHandler<ApiGatewayCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
-
         public async Task<object> Handle(ApiGatewayCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.ApiGateways.Create);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.ApiGateways.Create);
 
             GatewayUrlName.Validate(model.UrlName);
 
@@ -29,8 +21,8 @@ namespace SW.Bitween.Resources.ApiGateways
                 Inactive = model.Inactive
             };
 
-            _dbContext.Add(entity);
-            await _dbContext.SaveChangesAsync();
+            dbContext.Add(entity);
+            await dbContext.SaveChangesAsync();
             return entity.Id;
         }
     }

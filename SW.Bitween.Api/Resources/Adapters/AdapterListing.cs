@@ -28,7 +28,8 @@ public class AdapterListing(
     ServerlessOptions serverlessOptions,
     ICloudFilesService cloudFilesService,
     NativeAdapterDiscoveryService nativeAdapterDiscovery,
-    BitweenDbContext dbContext)
+    BitweenDbContext dbContext,
+    SW.Serverless.AdapterInstaller adapterInstaller)
 {
     /// <param name="prefix">The plural, lowercase kind: <c>receivers</c>, <c>handlers</c>, …</param>
     /// <returns>Native adapters first, then the published ones.</returns>
@@ -40,7 +41,7 @@ public class AdapterListing(
             .Select(key => new AdapterEntry(key, true, []))
             .ToList();
 
-        var files = (await cloudFilesService.ListAsync($"{serverlessOptions.AdapterRemotePath}/infolink6.{prefix}"))
+        var files = (await ListByKindAsync(prefix))
             .Where(item => item.Size > 0)
             .ToList();
 
@@ -59,5 +60,72 @@ public class AdapterListing(
                     .ToList()));
 
         return native.Concat(published).ToList();
+    }
+
+    /// <summary>
+    /// Everything published under the old naming convention for this kind, plus everything that
+    /// DECLARED the kind in its metadata whatever it is called.
+    ///
+    /// Two ways an adapter says what it is for, and both are honoured. The Kind stamped on it at
+    /// publish time is the real answer: it comes from the code rather than from whoever typed the
+    /// id, it is the only way a third party's adapter can be found at all, and it lets an adapter
+    /// be reclassified without being renamed — a rename is not free, because every subscription
+    /// stores the id.
+    ///
+    /// The infolink6.&lt;kind&gt;s. prefix is the old convention, and everything published before the
+    /// stamp existed carries nothing else. Dropping it would empty this list on every deployment
+    /// that has not republished, so it stays as the fallback.
+    /// </summary>
+    private async Task<List<CloudFileInfo>> ListByKindAsync(string prefix)
+    {
+        var root = serverlessOptions.AdapterRemotePath;
+
+        var byConvention = (await cloudFilesService.ListAsync($"{root}/infolink6.{prefix}")).ToList();
+        var named = byConvention.Select(i => i.Key).ToHashSet(System.StringComparer.OrdinalIgnoreCase);
+
+        // The plural the UI asks with — "handlers" — against the singular an adapter declares.
+        var kind = prefix?.TrimEnd('s') ?? "";
+        if (string.IsNullOrWhiteSpace(kind)) return byConvention;
+
+        foreach (var item in await cloudFilesService.ListAsync($"{root}/"))
+        {
+            if (item.Size <= 0 || named.Contains(item.Key)) continue;
+
+            var declared = await DeclaredKindsAsync(item.Key, root);
+            if (declared.Contains(kind, System.StringComparer.OrdinalIgnoreCase))
+                byConvention.Add(item);
+        }
+
+        return byConvention;
+    }
+
+    /// <summary>
+    /// The kinds one adapter declared. Metadata reads are cached by the installer, and an adapter
+    /// whose metadata cannot be read declares nothing rather than taking the whole catalogue down
+    /// with it — the list is what an operator needs to configure anything at all.
+    /// </summary>
+    private async Task<string[]> DeclaredKindsAsync(string key, string root)
+    {
+        try
+        {
+            var adapterId = key.StartsWith($"{root}/", System.StringComparison.OrdinalIgnoreCase)
+                ? key[(root.Length + 1)..]
+                : key;
+
+            // Versioned uploads keep the adapter id one segment up from the version.
+            if (Semver.IsVersionNumber(adapterId.Split('/').Last()))
+                adapterId = string.Join('/', adapterId.Split('/')[..^1]);
+
+            var metadata = await adapterInstaller.GetMetadataAsync(adapterId);
+            if (metadata?.AdapterValues == null) return [];
+
+            return metadata.AdapterValues.TryGetValue("Kind", out var kinds) && !string.IsNullOrWhiteSpace(kinds)
+                ? kinds.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries)
+                : [];
+        }
+        catch
+        {
+            return [];
+        }
     }
 }

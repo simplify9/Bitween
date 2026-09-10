@@ -7,24 +7,14 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.GlobalAdapterValuesSets
 {
-    public class Create : ICommandHandler<GlobalAdapterValuesSetCreate, object>
+public class Create(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<GlobalAdapterValuesSetCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(GlobalAdapterValuesSetCreate request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.GlobalValues.Create);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.GlobalValues.Create);
 
-            var exists = await _dbContext.Set<GlobalAdapterValuesSet>().AnyAsync(x => x.Id == request.Id);
+            var exists = await dbContext.Set<GlobalAdapterValuesSet>().AnyAsync(x => x.Id == request.Id);
             if (exists)
                 throw new SWValidationException("ID_EXISTS", $"GlobalAdapterValuesSet with id '{request.Id}' already exists");
 
@@ -35,9 +25,9 @@ namespace SW.Bitween.Resources.GlobalAdapterValuesSets
                 Values = request.Values
             };
 
-            _dbContext.Add(entity);
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            dbContext.Add(entity);
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return new
             {
                 entity.Id

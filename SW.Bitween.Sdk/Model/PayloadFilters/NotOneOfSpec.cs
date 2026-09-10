@@ -4,18 +4,12 @@ using System.Linq;
 
 namespace SW.Bitween.Model;
 
-public class NotOneOfSpec : IPropertyMatchSpecification
+public class NotOneOfSpec(string path, IEnumerable<string> values) : IPropertyMatchSpecification
 {
-    public NotOneOfSpec(string path, IEnumerable<string> values)
-    {
-        Path = path;
-        Values = values.ToArray();
-    }
-    
-    public string Path { get; private set; }
+    public string Path { get; private set; } = path;
 
-    public string[] Values { get; private set; }
-    
+    public string[] Values { get; private set; } = values.ToArray();
+
     public bool IsMatch(IExchangePayloadReader reader)
     {
         reader.TryGetValue(Path, out var value);

@@ -16,6 +16,7 @@ export type Draft = Pick<
   | "mapperProperties"
   | "handlerId"
   | "handlerProperties"
+  | "dataSourceId"
   | "matchExpression"
   | "schedules"
   | "responseSubscriptionId"
@@ -36,6 +37,7 @@ export const draftOf = (d: SubscriptionDetail): Draft => ({
   mapperProperties: structuredClone(d.mapperProperties),
   handlerId: d.handlerId,
   handlerProperties: structuredClone(d.handlerProperties),
+  dataSourceId: d.dataSourceId,
   matchExpression: structuredClone(d.matchExpression),
   schedules: structuredClone(d.schedules),
   responseSubscriptionId: d.responseSubscriptionId,
@@ -64,6 +66,7 @@ export const EMPTY_SUBSCRIPTION: Draft = {
   mapperProperties: {},
   handlerId: null,
   handlerProperties: {},
+  dataSourceId: null,
   matchExpression: null,
   schedules: [],
   responseSubscriptionId: null,
@@ -85,12 +88,12 @@ export const NEW_SUBSCRIPTION_ID = -1;
  */
 const STAGE_FIELDS: Record<StageId, (keyof Draft)[]> = {
   trigger: ["matchExpression"],
-  source: ["receiverId", "receiverProperties"],
+  source: ["receiverId", "receiverProperties", "dataSourceId"],
   schedule: ["schedules"],
   aggregation: ["aggregationTarget"],
   validation: ["validatorId", "validatorProperties"],
-  transformation: ["mapperId", "mapperProperties"],
-  delivery: ["handlerId", "handlerProperties"],
+  transformation: ["mapperId", "mapperProperties", "dataSourceId"],
+  delivery: ["handlerId", "handlerProperties", "dataSourceId"],
   response: ["responseSubscriptionId", "responseMessageTypeName"],
 };
 

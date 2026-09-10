@@ -6,14 +6,9 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.BitweenDocs;
 
 [Unprotect]
-public class Get : IQueryHandler<GetBitweenDocModel,object>
+public class Get(ICloudFilesService cloudFiles) : IQueryHandler<GetBitweenDocModel,object>
 {
-    private readonly ICloudFilesService cloudFiles;
-
-    public Get(ICloudFilesService cloudFiles)
-    {
-        this.cloudFiles = cloudFiles;
-    }
+    private readonly ICloudFilesService cloudFiles = cloudFiles;
 
     public async Task<object> Handle(GetBitweenDocModel request)
     {

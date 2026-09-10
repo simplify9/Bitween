@@ -5,17 +5,10 @@ using SW.Bitween.Domain;
 
 namespace SW.Bitween
 {
-    public class RunFlagUpdater
+    public class RunFlagUpdater(BitweenDbContext dbContext, BitweenOptions options)
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly string _dbType;
-
-
-        public RunFlagUpdater(BitweenDbContext dbContext, BitweenOptions options)
-        {
-            this.dbContext = dbContext;
-            _dbType = options.DatabaseType;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly string _dbType = options.DatabaseType;
 
         public async Task<bool> MarkAsRunning(int id)
         {

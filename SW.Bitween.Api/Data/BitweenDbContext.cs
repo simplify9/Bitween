@@ -8,15 +8,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using SW.Bitween.Domain.Accounts;
+using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.JsonConverters;
 
 namespace SW.Bitween
 {
-    public class BitweenDbContext : DbContext
+    public class BitweenDbContext(DbContextOptions options, RequestContext requestContext,
+        IPublish publish) : DbContext(options)
     {
-        private readonly RequestContext requestContext;
-        private readonly IPublish publish;
+        private readonly RequestContext requestContext = requestContext;
+        private readonly IPublish publish = publish;
 
         // Parsed as Unspecified kind, so the .ToUniversalTime() calls at every use site below used
         // to convert using whatever timezone the current machine happened to be in — deterministic
@@ -29,14 +31,6 @@ namespace SW.Bitween
             "$SWHASH$V1$10000$VQCi48eitH4Ml5juvBMOFZrMdQwBbhuIQVXe6RR7qJdDF2bJ";
 
         public const string ConnectionString = "BitweenDb";
-
-
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish) :
-            base(options)
-        {
-            this.requestContext = requestContext;
-            this.publish = publish;
-        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -115,6 +109,97 @@ namespace SW.Bitween
                     .OnDelete(DeleteBehavior.Restrict);
                 bg.HasMany(p => p.Routes).WithOne(p => p.BusGateway).HasForeignKey(p => p.BusGatewayId)
                     .OnDelete(DeleteBehavior.Restrict);
+
+                // Nullable on purpose: null keeps meaning "the internal bus", so no existing row
+                // changes behaviour and the migration is additive only.
+                bg.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+                bg.Property(p => p.Endpoint).HasMaxLength(500).IsUnicode(false);
+                bg.Property(p => p.EndpointProperties).StoreAsJson();
+            });
+
+            modelBuilder.Entity<DataSource>(ds =>
+            {
+                ds.ToTable("DataSources");
+                ds.HasKey(i => i.Id);
+                ds.Property(i => i.Id).ValueGeneratedOnAdd();
+                ds.Property(p => p.Name).IsRequired().HasMaxLength(200);
+                ds.Property(p => p.AdapterId).IsRequired().HasMaxLength(200).IsUnicode(false);
+                ds.Property(p => p.Kind).HasConversion<int>();
+                ds.Property(p => p.Properties).StoreAsJson();
+                ds.Property(p => p.SecretProperties).StoreAsJson();
+                ds.Property(p => p.LastKnownState).HasMaxLength(100).IsUnicode(false);
+                ds.Property(p => p.OwnedByNode).HasMaxLength(200).IsUnicode(false);
+                ds.HasIndex(p => p.Name).IsUnique();
+            });
+
+            modelBuilder.Entity<DataSourceStatement>(st =>
+            {
+                st.ToTable("DataSourceStatements");
+                st.HasKey(i => i.Id);
+                st.Property(i => i.Id).ValueGeneratedOnAdd();
+                st.Property(p => p.Name).IsRequired().HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Sql).IsRequired();
+                st.Property(p => p.Description).HasMaxLength(1000);
+
+                // Column names, so the database's own identifier limit is the ceiling — 128 is
+                // above every engine's (Oracle allows 128, PostgreSQL 63).
+                st.Property(p => p.CursorColumn).HasMaxLength(128).IsUnicode(false);
+                st.Property(p => p.KeyColumn).HasMaxLength(128).IsUnicode(false);
+
+                // The namespacing fix, enforced by the database rather than by a check someone can
+                // forget. Case-insensitivity is handled in the handler, because collation differs
+                // per provider and a unique index cannot be relied on to be case-insensitive.
+                st.HasIndex(p => new { p.DataSourceId, p.Name }).IsUnique();
+
+                // Cascade, unlike the subscription FK: a statement has no meaning without its
+                // connection, so deleting the data source takes its statements with it.
+                st.HasOne(p => p.DataSource).WithMany().HasForeignKey(p => p.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                st.HasOne<WorkGroup>().WithMany().HasForeignKey(p => p.WorkGroupId)
+                    .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<AdapterState>(st =>
+            {
+                st.ToTable("AdapterStates");
+
+                // Composite key rather than a surrogate: the adapter addresses state by name
+                // within its instance, and there is exactly one row per address by definition.
+                st.HasKey(p => new { p.AdapterId, p.InstanceKey, p.Name });
+                st.Property(p => p.AdapterId).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.InstanceKey).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Name).HasMaxLength(200).IsUnicode(false);
+                st.Property(p => p.Value).HasMaxLength(AdapterState.MaxValueLength);
+            });
+
+            // Declared here rather than only in the PgSql context: leader election needs this table
+            // on every provider Bitween supports, and a node whose database has no cluster_lease
+            // cannot fence anything — which means two nodes can consume one queue, silently.
+            modelBuilder.Entity<Domain.Cluster.ClusterLease>(cl =>
+            {
+                cl.ToTable("ClusterLeases");
+                cl.HasKey(i => i.Id);
+                cl.Property(i => i.Id).HasMaxLength(200).IsUnicode(false);
+                cl.Property(i => i.OwnerNode).HasMaxLength(200).IsUnicode(false);
+            });
+
+            modelBuilder.Entity<InboundMessage>(im =>
+            {
+                im.ToTable("InboundMessages");
+
+                // The dedupe key IS the key. A unique constraint the database enforces is the
+                // whole mechanism — see the type's remarks.
+                im.HasKey(i => i.Id);
+                im.Property(i => i.Id).HasMaxLength(400).IsUnicode(false);
+                im.Property(i => i.XchangeId).HasMaxLength(50).IsUnicode(false);
+
+                // Pruning scans by age; without this it table-scans a table that only ever grows.
+                im.HasIndex(i => i.SeenOn);
+
+                im.HasOne<DataSource>().WithMany().HasForeignKey(i => i.DataSourceId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<BusGatewayRoute>(bgr =>
@@ -198,6 +283,11 @@ namespace SW.Bitween
 
                 b.Property(p => p.Type).HasConversion<byte>();
                 b.Property(p => p.AggregationTarget).HasConversion<byte>();
+
+                // Restrict, not cascade: deleting a data source that subscriptions still run
+                // through must fail loudly rather than quietly unhooking them.
+                b.HasOne<DataSource>().WithMany().HasForeignKey(p => p.DataSourceId).IsRequired(false)
+                    .OnDelete(DeleteBehavior.Restrict);
 
                 b.HasOne<Subscription>().WithMany().HasForeignKey(p => p.ResponseSubscriptionId).IsRequired(false)
                     .HasConstraintName("FK_Subscriptions_RespSub").OnDelete(DeleteBehavior.Restrict);

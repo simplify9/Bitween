@@ -17,6 +17,7 @@ import {
 } from "../../components/config/shared";
 import { matchSummary } from "../../lib/match";
 import { keys } from "../../api/queryKeys";
+import { ConnectionBadge } from "../data-sources/ConnectionBadge";
 
 /**
  * Bus gateways — messages picked off the bus. A gateway listens for one
@@ -247,6 +248,22 @@ export function BusGatewaysPage() {
               ),
             },
             {
+              // Which bus this gateway actually reads. Worth a column: an operator should be able
+              // to see which of their gateways reach outside Bitween without opening each one.
+              header: "Source",
+              wrap: true,
+              cell: (g) =>
+                g.dataSourceId == null ? (
+                  <span className="text-ink-500">Internal bus</span>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium text-ink-800">{g.dataSourceName}</span>
+                    <code className="font-mono text-[11px] text-ink-500">{g.endpoint}</code>
+                    <ConnectionBadge state={g.dataSourceState} />
+                  </div>
+                ),
+            },
+            {
               // No Partners column here, unlike the API gateway list: a route's
               // partner is optional, so a gateway of unattributed routes would
               // show an empty column and say nothing about what it does. The
@@ -256,8 +273,13 @@ export function BusGatewaysPage() {
                 // Nothing can reach this gateway at all if its type was taken off
                 // the bus — no queue is declared for it. That outranks anything
                 // the routes have to say.
+                //
+                // Only for a gateway on the INTERNAL bus, though: an external one is fed by its
+                // data source's adapter and never touches Bitween's own bus, so the information
+                // type's bus setting says nothing about whether messages arrive.
                 const t = infoTypeById.get(g.informationTypeId);
-                if (t && !t.busEnabled) return <Badge tone="danger">Type not on bus</Badge>;
+                if (g.dataSourceId == null && t && !t.busEnabled)
+                  return <Badge tone="danger">Type not on bus</Badge>;
                 return (
                   <WiredHealthBadge
                     empty="No routes"

@@ -9,28 +9,14 @@ using System.Text.RegularExpressions;
 
 namespace SW.Bitween.Resources.Documents
 {
-    public class Update : ICommandHandler<int, DocumentUpdate, object>
+    public class Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext,
+        IBroadcast broadcast) : ICommandHandler<int, DocumentUpdate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly RequestContext _requestContext;
-        private readonly IBroadcast _broadcast;
-
-
-        public Update(BitweenDbContext dbContext, IInfolinkCache BitweenCache, RequestContext requestContext,
-            IBroadcast broadcast)
-        {
-            this._dbContext = dbContext;
-            _BitweenCache = BitweenCache;
-            _requestContext = requestContext;
-            _broadcast = broadcast;
-        }
-
         public async Task<object> Handle(int key, DocumentUpdate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Documents.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Documents.Edit);
 
-            var entity = await _dbContext.FindAsync<Document>(key);
+            var entity = await dbContext.FindAsync<Document>(key);
 
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new SWValidationException("INVALID_NAME", "Give the information type a name.");
@@ -38,7 +24,7 @@ namespace SW.Bitween.Resources.Documents
             // Ignoring case, as Create does: two types whose names differ only in case
             // are indistinguishable in every list that shows them.
             var wantedName = model.Name.ToLower();
-            var nameDuplicated = await _dbContext.Set<Document>()
+            var nameDuplicated = await dbContext.Set<Document>()
                 .AsNoTracking()
                 .Where(i => i.Id != key)
                 .AnyAsync(i => i.Name.ToLower() == wantedName);
@@ -53,7 +39,7 @@ namespace SW.Bitween.Resources.Documents
 
             if (code != null)
             {
-                var codeDuplicated = await _dbContext.Set<Document>()
+                var codeDuplicated = await dbContext.Set<Document>()
                     .AsNoTracking()
                     .Where(i => i.Id != key)
                     .AnyAsync(i => i.Code == code);
@@ -68,7 +54,7 @@ namespace SW.Bitween.Resources.Documents
             // Ignoring case, for the reason spelled out in Create: the routing key is
             // lower-cased at both ends, so two names differing only in case are one message.
             var wanted = (model.BusMessageTypeName ?? string.Empty).ToLower();
-            var busTypeNameDuplicated = await _dbContext.Set<Document>()
+            var busTypeNameDuplicated = await dbContext.Set<Document>()
                 .AsNoTracking()
                 .Where(i => i.Id != key)
                 .Where(i => !string.IsNullOrEmpty(i.BusMessageTypeName))
@@ -96,11 +82,11 @@ namespace SW.Bitween.Resources.Documents
             // request that was perfectly well formed. Normalising it here makes the copy a no-op
             // whatever the body said.
             model.Id = key;
-            _dbContext.Entry(entity).SetProperties(model);
+            dbContext.Entry(entity).SetProperties(model);
 
-            await _dbContext.SaveChangesAsync();
-            await _BitweenCache.BroadcastRevoke();
-            await _broadcast.RefreshConsumers();
+            await dbContext.SaveChangesAsync();
+            await BitweenCache.BroadcastRevoke();
+            await broadcast.RefreshConsumers();
             return null;
         }
     }

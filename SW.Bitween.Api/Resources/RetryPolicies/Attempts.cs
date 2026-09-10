@@ -25,7 +25,8 @@ namespace SW.Bitween.Resources.RetryPolicies;
 /// </para>
 /// </remarks>
 [HandlerName("attempts")]
-public class Attempts : ICommandHandler<int, RetryGroupAttemptsRequest, object>
+public class Attempts(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, RetryGroupAttemptsRequest, object>
 {
     /// <summary>
     /// Enough to show what keeps failing without turning one table row into a page. The caller is
@@ -33,38 +34,29 @@ public class Attempts : ICommandHandler<int, RetryGroupAttemptsRequest, object>
     /// </summary>
     private const int Limit = 10;
 
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Attempts(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle(int key, RetryGroupAttemptsRequest request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.RetryPolicies.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.RetryPolicies.View);
 
         // Both halves of the pair have to belong to the policy in the route. For the subscription
         // that keeps this from becoming a way to read any subscription's failures through any
         // policy id; for the group it is about the answer being readable — an unknown group would
         // otherwise report zero failures, which is indistinguishable from a group that genuinely
         // has none.
-        var policy = await _dbContext.Set<RetryPolicy>().AsNoTracking()
+        var policy = await dbContext.Set<RetryPolicy>().AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == key);
         if (policy == null) throw new SWNotFoundException(key.ToString());
 
         if (policy.Groups.All(g => g.Id != request.GroupId))
             throw new SWNotFoundException($"{key}/{request.GroupId}");
 
-        var belongs = await _dbContext.Set<Subscription>().AsNoTracking()
+        var belongs = await dbContext.Set<Subscription>().AsNoTracking()
             .AnyAsync(s => s.Id == request.SubscriptionId && s.RetryPolicyId == key);
         if (!belongs) throw new SWNotFoundException($"{key}/{request.SubscriptionId}");
 
-        var query = from result in _dbContext.Set<XchangeResult>()
-            join xchange in _dbContext.Set<Xchange>() on result.Id equals xchange.Id
-            join pending in _dbContext.Set<DelayedRetry>() on result.Id equals pending.Id into scheduled
+        var query = from result in dbContext.Set<XchangeResult>()
+            join xchange in dbContext.Set<Xchange>() on result.Id equals xchange.Id
+            join pending in dbContext.Set<DelayedRetry>() on result.Id equals pending.Id into scheduled
             from pending in scheduled.DefaultIfEmpty()
             where xchange.SubscriptionId == request.SubscriptionId
                   && result.RetryGroupId == request.GroupId

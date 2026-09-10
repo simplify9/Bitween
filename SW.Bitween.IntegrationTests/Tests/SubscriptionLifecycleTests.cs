@@ -25,22 +25,15 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// only asserted "it threw" would still pass if the message went back to being useless.
 /// </remarks>
 [Collection("Bitween")]
-public class SubscriptionLifecycleTests
+public class SubscriptionLifecycleTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public SubscriptionLifecycleTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     /// <summary>An information type and partner to hang integrations off.</summary>
     private async Task<(int documentId, int partnerId)> Groundwork()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("Lifecycle doc"), DocumentFormat.Json);
@@ -55,7 +48,7 @@ public class SubscriptionLifecycleTests
     private async Task<int> CreateSubscription(string name, int documentId, int partnerId,
         SubscriptionType type = SubscriptionType.ApiCall)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Create>(scope.ServiceProvider);
 
@@ -72,7 +65,7 @@ public class SubscriptionLifecycleTests
 
     private async Task Delete(int subscriptionId)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var handler = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Delete>(scope.ServiceProvider);
         await handler.Handle(subscriptionId);
@@ -84,7 +77,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var id = await CreateSubscription(Unique("Round trip"), documentId, partnerId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var stored = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
@@ -96,7 +89,7 @@ public class SubscriptionLifecycleTests
 
         await Delete(id);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             Assert.False(await db.Set<Subscription>().AnyAsync(s => s.Id == id));
@@ -109,7 +102,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var id = await CreateSubscription(Unique("Routed"), documentId, partnerId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var gateway = new BusGateway { Name = "Orders bus", DocumentId = documentId };
@@ -134,7 +127,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var source = await CreateSubscription(Unique("Aggregated source"), documentId, partnerId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.Superuser();
             var handler = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Create>(scope.ServiceProvider);
@@ -160,7 +153,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var id = await CreateSubscription(Unique("Popular"), documentId, partnerId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
@@ -194,7 +187,7 @@ public class SubscriptionLifecycleTests
         // only way out is the database.
         await Delete(id);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await db.Set<Subscription>().AnyAsync(s => s.Id == id));
     }
@@ -205,7 +198,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var id = await CreateSubscription(Unique("Has history"), documentId, partnerId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             var subscription = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
@@ -217,7 +210,7 @@ public class SubscriptionLifecycleTests
         // configuration around forever.
         await Delete(id);
 
-        await using var finalScope = _fixture.CreateScope();
+        await using var finalScope = fixture.CreateScope();
         var finalDb = finalScope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         Assert.False(await finalDb.Set<Subscription>().AnyAsync(s => s.Id == id));
     }
@@ -228,7 +221,7 @@ public class SubscriptionLifecycleTests
         var (documentId, partnerId) = await Groundwork();
         var id = await CreateSubscription(Unique("Guarded"), documentId, partnerId);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         await scope.AsNewViewer(Unique("sub-viewer"));
 
         var create = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Create>(scope.ServiceProvider);

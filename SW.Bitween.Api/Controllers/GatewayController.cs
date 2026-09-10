@@ -20,8 +20,7 @@ public class GatewayController(
     BitweenDbContext dbContext,
     RequestContext requestContext,
     IInfolinkCache cache,
-    XchangeService xchangeService,
-    BitweenOptions bitweenSettings) : ControllerBase
+    XchangeService xchangeService) : ControllerBase
 {
     [HttpPost("{gatewayApiName}/sync")]
     public Task<IActionResult> PostSync([FromRoute] string gatewayApiName)

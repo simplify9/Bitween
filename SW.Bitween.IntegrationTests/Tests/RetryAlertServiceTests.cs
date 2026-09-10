@@ -26,27 +26,20 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// can actually be delivered.
 /// </remarks>
 [Collection("Bitween")]
-public class RetryAlertServiceTests
+public class RetryAlertServiceTests(BitweenFixture fixture)
 {
     // MailHog answers instantly or not at all, so the default 100 seconds only ever means "the run
     // hangs instead of failing".
     private static readonly TimeSpan MailHogTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly BitweenFixture _fixture;
-
-    private string MessagesApi => $"{_fixture.MailHogApi}/api/v2/messages";
-
-    public RetryAlertServiceTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
+    private string MessagesApi => $"{fixture.MailHogApi}/api/v2/messages";
 
     // Deleting is only exposed on MailHog's v1 API — the v2 route 404s and would silently leave
     // messages behind, making the assertions depend on leftovers from the previous run.
     private async Task ClearMailHog()
     {
         using var http = new HttpClient { Timeout = MailHogTimeout };
-        var response = await http.DeleteAsync($"{_fixture.MailHogApi}/api/v1/messages");
+        var response = await http.DeleteAsync($"{fixture.MailHogApi}/api/v1/messages");
         response.EnsureSuccessStatusCode();
     }
 
@@ -72,7 +65,7 @@ public class RetryAlertServiceTests
     {
         await ClearMailHog();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var alertService = scope.ServiceProvider.GetRequiredService<RetryAlertService>();
 
@@ -106,7 +99,7 @@ public class RetryAlertServiceTests
                     AlertHandlerProperties = new Dictionary<string, string>
                     {
                         ["Host"] = "localhost",
-                        ["Port"] = _fixture.MailHogSmtpPort.ToString(),
+                        ["Port"] = fixture.MailHogSmtpPort.ToString(),
                         ["UseTls"] = "false",
                         ["From"] = "bitween-alerts@example.com",
                         ["To"] = "ops@example.com",
@@ -191,7 +184,7 @@ public class RetryAlertServiceTests
     {
         await ClearMailHog();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var alertService = scope.ServiceProvider.GetRequiredService<RetryAlertService>();
 
@@ -223,7 +216,7 @@ public class RetryAlertServiceTests
                     AlertHandlerProperties = new Dictionary<string, string>
                     {
                         ["Host"] = "localhost",
-                        ["Port"] = _fixture.MailHogSmtpPort.ToString(),
+                        ["Port"] = fixture.MailHogSmtpPort.ToString(),
                         ["UseTls"] = "false",
                         ["From"] = "bitween-alerts@example.com",
                         ["To"] = "ops@example.com",
@@ -285,7 +278,7 @@ public class RetryAlertServiceTests
     {
         await ClearMailHog();
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var discovery = scope.ServiceProvider.GetRequiredService<NativeAdapterDiscoveryService>();
 
         // MailHog speaks plain SMTP on 1025, which is exactly the shape of the mistake worth
@@ -293,7 +286,7 @@ public class RetryAlertServiceTests
         var handler = discovery.GetNativeHandler("NativeSmtpHandler", new Dictionary<string, string>
         {
             ["Host"] = "localhost",
-            ["Port"] = _fixture.MailHogSmtpPort.ToString(),
+            ["Port"] = fixture.MailHogSmtpPort.ToString(),
             ["UseTls"] = "false",
             ["Password"] = "hunter2",
             ["From"] = "bitween-alerts@example.com",

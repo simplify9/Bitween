@@ -5,13 +5,11 @@ using SW.Scheduler.SqlServer;
 
 namespace SW.Bitween.MsSql
 {
-    public class BitweenDbContext : Bitween.BitweenDbContext
+    public class BitweenDbContext(DbContextOptions options, RequestContext requestContext,
+        IPublish publish) : Bitween.BitweenDbContext(options, requestContext, publish)
     {
         /// <summary>Backs <see cref="Document"/> ids — see the note in OnModelCreating.</summary>
         public const string DocumentIdSequence = "DocumentIds";
-
-        public BitweenDbContext(DbContextOptions options, RequestContext requestContext, IPublish publish)
-            : base(options, requestContext, publish) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

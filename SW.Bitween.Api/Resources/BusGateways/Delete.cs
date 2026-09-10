@@ -5,24 +5,14 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween.Resources.BusGateways
 {
-    public class Delete : IDeleteHandler<int, object>
+public class Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : IDeleteHandler<int, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Delete(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(int key)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Delete);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.BusGateways.Delete);
 
-            var gateway = await _dbContext.Set<BusGateway>()
+            var gateway = await dbContext.Set<BusGateway>()
                 .Include(bg => bg.Routes)
                 .FirstOrDefaultAsync(bg => bg.Id == key);
 
@@ -31,11 +21,11 @@ namespace SW.Bitween.Resources.BusGateways
 
             // Routes are FK-restricted to the gateway; remove them explicitly before the gateway.
             if (gateway.Routes != null && gateway.Routes.Count > 0)
-                _dbContext.RemoveRange(gateway.Routes);
+                dbContext.RemoveRange(gateway.Routes);
 
-            _dbContext.Remove(gateway);
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            dbContext.Remove(gateway);
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
     }

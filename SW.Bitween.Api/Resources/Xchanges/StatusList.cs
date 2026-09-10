@@ -7,16 +7,10 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Xchanges
 {
     [HandlerName("statuslist")]
-    public class StatusList : ISearchyHandler
+    public class StatusList(BitweenDbContext dbContext, RequestContext requestContext) : ISearchyHandler
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public StatusList(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         public async Task<object> Handle(SearchyRequest searchyRequest, bool lookup = false, string searchPhrase = null)
         {

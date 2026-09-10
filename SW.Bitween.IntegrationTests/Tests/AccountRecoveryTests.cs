@@ -22,21 +22,14 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// resets a locked-out user's password and stops there has not let them back in.
 /// </remarks>
 [Collection("Bitween")]
-public class AccountRecoveryTests
+public class AccountRecoveryTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public AccountRecoveryTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     private const string OldPassword = "Old-Password-1!";
     private const string NewPassword = "Brand-New-Password-2!";
 
     private async Task<Account> CreateAccount(string email, params int[] roleIds)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var account = new Account("Recovery Test", email, SecurePasswordHasher.Hash(OldPassword),
             AccountRole.Member);
@@ -52,7 +45,7 @@ public class AccountRecoveryTests
 
     private async Task<object> Login(string email, string password)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = new DefaultHttpContext();
         var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.Login>(scope.ServiceProvider);
         return await handler.Handle(new UserLogin { Username = email, Password = password });
@@ -64,7 +57,7 @@ public class AccountRecoveryTests
         var target = await CreateAccount("reset-target@test.local");
         var admin = await CreateAccount("reset-admin@test.local", Role.AdministratorId);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.As(admin.Id);
             var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.SetPassword>(scope.ServiceProvider);
@@ -82,7 +75,7 @@ public class AccountRecoveryTests
         var target = await CreateAccount("victim@test.local");
         var member = await CreateAccount("nosy-member@test.local", Role.MemberId);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.As(member.Id);
         var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.SetPassword>(scope.ServiceProvider);
 
@@ -96,7 +89,7 @@ public class AccountRecoveryTests
     {
         var admin = await CreateAccount("self-reset@test.local", Role.AdministratorId);
 
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.As(admin.Id);
         var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.SetPassword>(scope.ServiceProvider);
 
@@ -116,7 +109,7 @@ public class AccountRecoveryTests
         for (var attempt = 0; attempt < 5; attempt++)
             await Assert.ThrowsAsync<SWException>(() => Login("locked-out@test.local", "wrong"));
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.As(admin.Id);
             var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.SetPassword>(scope.ServiceProvider);
@@ -128,7 +121,7 @@ public class AccountRecoveryTests
         var ex = await Assert.ThrowsAsync<SWException>(() => Login("locked-out@test.local", NewPassword));
         Assert.Contains("locked", ex.Message, StringComparison.OrdinalIgnoreCase);
 
-        await using (var scope = _fixture.CreateScope())
+        await using (var scope = fixture.CreateScope())
         {
             scope.As(admin.Id);
             var handler = ActivatorUtilities.CreateInstance<Resources.Accounts.Unlock>(scope.ServiceProvider);

@@ -24,24 +24,17 @@ namespace SW.Bitween.IntegrationTests.Tests;
 /// never lands in storage, and a real new value still does.
 /// </remarks>
 [Collection("Bitween")]
-public class SubscriptionSecretTests
+public class SubscriptionSecretTests(BitweenFixture fixture)
 {
     private const string Sentinel = "__private__";
     private const string RealPassword = "s3cr3t-smtp-password";
-
-    private readonly BitweenFixture _fixture;
-
-    public SubscriptionSecretTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     private static int _seq;
     private static string Unique(string prefix) => $"{prefix}-{Interlocked.Increment(ref _seq)}";
 
     private async Task<(int subscriptionId, int documentId, int partnerId)> AnIntegrationWithASecret()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var document = new Document(null, Unique("Secret doc"), DocumentFormat.Json);
@@ -70,7 +63,7 @@ public class SubscriptionSecretTests
 
     private async Task Update(int id, int documentId, int partnerId, params KeyAndValue[] handlerProperties)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         scope.Superuser();
         var update = ActivatorUtilities.CreateInstance<Resources.Subscriptions.Update>(scope.ServiceProvider);
         await update.Handle(id, new SubscriptionUpdate
@@ -84,7 +77,7 @@ public class SubscriptionSecretTests
 
     private async Task<IReadOnlyDictionary<string, string>> StoredProperties(int id)
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var stored = await db.Set<Subscription>().AsNoTracking().SingleAsync(s => s.Id == id);
         return stored.HandlerProperties;

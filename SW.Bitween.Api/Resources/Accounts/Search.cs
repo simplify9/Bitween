@@ -8,16 +8,11 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Accounts
 {
-    public class Search : IQueryHandler<SearchMembersModel, object>
+public class Search(BitweenDbContext dbContext, RequestContext requestContext)
+        : IQueryHandler<SearchMembersModel, object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext requestContext;
-
-        public Search(BitweenDbContext dbContext, RequestContext requestContext)
-        {
-            this.dbContext = dbContext;
-            this.requestContext = requestContext;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly RequestContext requestContext = requestContext;
 
         public async Task<object> Handle(SearchMembersModel request)
         {

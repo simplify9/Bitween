@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween;
 
@@ -17,8 +18,7 @@ public record ReceivingJobParams(int SubscriptionId, string? CronExpression);
 public class ReceivingJob(
     BitweenDbContext dbContext,
     RunFlagUpdater runFlagUpdater,
-    NativeAdapterDiscoveryService nativeAdapterDiscovery,
-    IServerlessService serverless,
+    IAdapterInvoker adapterInvoker,
     XchangeService xchangeService,
     ILogger<ReceivingJob> logger) : IScheduledJob<ReceivingJobParams>
 {
@@ -56,7 +56,11 @@ public class ReceivingJob(
         try
         {
             var globals = await dbContext.Set<GlobalAdapterValuesSet>().ToArrayAsync();
-            var startupParameters = rec.ReceiverProperties.ToDictionary().Fill(null, globals);
+            var startupParameters = rec.ReceiverProperties.ToDictionary().Fill(null, globals)
+                .WithDataSource(rec.DataSourceId)
+                // The receiver's cursor is namespaced by this. Without it, two subscriptions
+                // polling one data source share a cursor and split the rows between them.
+                .WithSubscription(rec.Id);
             await RunReceiver(rec.ReceiverId, startupParameters, rec.Id, createdExchangeIds);
             rec.SetHealth();
             RecordAttempt(rec.Id, startedOn,
@@ -96,41 +100,26 @@ public class ReceivingJob(
         string serverlessId, IDictionary<string, string> startupParameters, int subId,
         List<string> createdExchangeIds)
     {
-        if (serverlessId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
+        // One session for the whole run: Initialize, the listing, every GetFile and DeleteFile, and
+        // Finalize all have to reach the SAME instance, or Initialize runs somewhere the listing
+        // never sees. A resident receiver is rented from the pool and held for the duration; a
+        // classic one is spawned; a native one is just an object. The pipeline cannot tell.
+        await using var session = await adapterInvoker.BeginAsync(
+            serverlessId, AdapterRole.Receiver, startupParameters);
+
+        await session.InvokeAsync(nameof(IInfolinkReceiver.Initialize));
+        var fileList = (await session.InvokeAsync<IEnumerable<string>>(nameof(IInfolinkReceiver.ListFiles))).ToList();
+
+        logger.LogInformation("Subscription '{SubId}' found {Count} items for retrieval.", subId, fileList.Count);
+
+        foreach (var file in fileList)
         {
-            var receiver = nativeAdapterDiscovery.GetNativeReceiver(serverlessId, startupParameters);
-            await receiver.Initialize();
-            var fileList = (await receiver.ListFiles()).ToList();
-
-            logger.LogInformation("Subscription '{SubId}' found {Count} items for retrieval.", subId, fileList.Count);
-
-            foreach (var file in fileList)
-            {
-                var xchangeFile = await receiver.GetFile(file);
-                logger.LogInformation("Submitting received file for subscriber: '{SubId}'.", subId);
-                createdExchangeIds.Add(await xchangeService.SubmitSubscriptionXchange(subId, xchangeFile));
-                await receiver.DeleteFile(file);
-            }
-
-            await receiver.Finalize();
+            var xchangeFile = await session.InvokeAsync<XchangeFile>(nameof(IInfolinkReceiver.GetFile), file);
+            logger.LogInformation("Submitting received file for subscriber: '{SubId}'.", subId);
+            createdExchangeIds.Add(await xchangeService.SubmitSubscriptionXchange(subId, xchangeFile));
+            await session.InvokeAsync(nameof(IInfolinkReceiver.DeleteFile), file);
         }
-        else
-        {
-            await serverless.StartAsync(serverlessId, null, startupParameters);
-            await serverless.InvokeAsync(nameof(IInfolinkReceiver.Initialize), null);
-            var fileList = (await serverless.InvokeAsync<IEnumerable<string>>(nameof(IInfolinkReceiver.ListFiles), null)).ToList();
 
-            logger.LogInformation("Subscription '{SubId}' found {Count} items for retrieval.", subId, fileList.Count);
-
-            foreach (var file in fileList)
-            {
-                var xchangeFile = await serverless.InvokeAsync<XchangeFile>(nameof(IInfolinkReceiver.GetFile), file);
-                logger.LogInformation("Submitting received file for subscriber: '{SubId}'.", subId);
-                createdExchangeIds.Add(await xchangeService.SubmitSubscriptionXchange(subId, xchangeFile));
-                await serverless.InvokeAsync(nameof(IInfolinkReceiver.DeleteFile), file);
-            }
-
-            await serverless.InvokeAsync(nameof(IInfolinkReceiver.Finalize), null);
-        }
+        await session.InvokeAsync(nameof(IInfolinkReceiver.Finalize));
     }
 }

@@ -6,22 +6,10 @@ using System.Threading.Tasks;
 
 namespace SW.Bitween
 {
-    public class BusService : IConsume
+    public class BusService(XchangeService xchangeService, BitweenDbContext dbContext,
+        RequestContext requestContext) : IConsume
     {
         private const string MessageTypeNameToDocumentId = "MessageTypeNameToDocumentId";
-
-        private readonly XchangeService _xchangeService;
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-
-
-        public BusService(XchangeService xchangeService, BitweenDbContext dbContext,
-            RequestContext requestContext)
-        {
-            _xchangeService = xchangeService;
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-        }
 
         public async Task<IEnumerable<string>> GetMessageTypeNames()
         {
@@ -35,12 +23,12 @@ namespace SW.Bitween
 
             var xf = new XchangeFile(message);
 
-            await _xchangeService.SubmitFilterXchange(map[messageTypeName], xf, null, _requestContext.CorrelationId);
+            await xchangeService.SubmitFilterXchange(map[messageTypeName], xf, null, requestContext.CorrelationId);
         }
 
         private async Task<IReadOnlyDictionary<string, int>> GetMessageTypeNameToDocumentIdMap()
         {
-            return (await _dbContext.ListAsync(new BusEnabledDocuments())).ToDictionary(k => k.BusMessageTypeName,
+            return (await dbContext.ListAsync(new BusEnabledDocuments())).ToDictionary(k => k.BusMessageTypeName,
                 v => v.Id);
         }
     }

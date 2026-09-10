@@ -268,6 +268,236 @@ namespace SW.Bitween.MsSql.Migrations
                     b.ToTable("AuditEntries", (string)null);
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.Cluster.ClusterLease", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("AcquiredOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OwnerNode")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<long>("Term")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ClusterLeases", (string)null);
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.AdapterState", b =>
+                {
+                    b.Property<string>("AdapterId")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("InstanceKey")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("UpdatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("AdapterId", "InstanceKey", "Name");
+
+                    b.ToTable("AdapterStates", (string)null);
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdapterId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CpuLimitSamples")
+                        .HasColumnType("int");
+
+                    b.Property<double>("CpuPercentLimit")
+                        .HasColumnType("float");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DeduplicationWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HardMemoryLimitMb")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Inactive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastException")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastHeartbeatOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastKnownState")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OwnedByNode")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("Placement")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Properties")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SecretProperties")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SoftMemoryLimitMb")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("DataSources", (string)null);
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CursorColumn")
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<int>("DataSourceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("Inactive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KeyColumn")
+                        .HasMaxLength(128)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Sql")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("WorkGroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkGroupId");
+
+                    b.HasIndex("DataSourceId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("DataSourceStatements", (string)null);
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(400)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(400)");
+
+                    b.Property<int>("DataSourceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SeenOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("XchangeId")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DataSourceId");
+
+                    b.HasIndex("SeenOn");
+
+                    b.ToTable("InboundMessages", (string)null);
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.DelayedRetry", b =>
                 {
                     b.Property<string>("Id")
@@ -439,8 +669,19 @@ namespace SW.Bitween.MsSql.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("DataSourceId")
+                        .HasColumnType("int");
+
                     b.Property<int>("DocumentId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Endpoint")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("EndpointProperties")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("Inactive")
                         .HasColumnType("bit");
@@ -457,6 +698,8 @@ namespace SW.Bitween.MsSql.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DataSourceId");
 
                     b.HasIndex("DocumentId");
 
@@ -799,6 +1042,9 @@ namespace SW.Bitween.MsSql.Migrations
                     b.Property<string>("CustomRetryPolicy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("DataSourceId")
+                        .HasColumnType("int");
+
                     b.Property<string>("DocumentFilter")
                         .HasColumnType("nvarchar(max)");
 
@@ -888,6 +1134,8 @@ namespace SW.Bitween.MsSql.Migrations
                     b.HasIndex("AggregationForId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("DataSourceId");
 
                     b.HasIndex("DocumentId");
 
@@ -1780,6 +2028,31 @@ namespace SW.Bitween.MsSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", "DataSource")
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SW.Bitween.Domain.WorkGroup", null)
+                        .WithMany()
+                        .HasForeignKey("WorkGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DataSource");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGatewayPartner", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.Gateway.ApiGateway", "ApiGateway")
@@ -1809,11 +2082,18 @@ namespace SW.Bitween.MsSql.Migrations
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.BusGateway", b =>
                 {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", "DataSource")
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SW.Bitween.Domain.Document", null)
                         .WithMany()
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("DataSource");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.BusGatewayRoute", b =>
@@ -1900,6 +2180,11 @@ namespace SW.Bitween.MsSql.Migrations
                     b.HasOne("SW.Bitween.Domain.SubscriptionCategory", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId");
+
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("SW.Bitween.Domain.Document", null)
                         .WithMany()

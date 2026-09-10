@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   BellRing,
   Cable,
+  Database,
   CalendarClock,
   FileText,
   Handshake,
@@ -78,6 +79,11 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Configuration",
     items: [
+      // First in Configuration, and no longer under bus gateways. It sat there while a data
+      // source could only be a broker feeding one; now it is just as often a database a
+      // subscription runs statements against, which no gateway is involved in at all. What it
+      // describes is a connection to something outside Bitween — configuration, not a pipeline.
+      { label: "Data sources", path: "/data-sources", icon: Database, permissions: ["data-sources.view"] },
       { label: "Information types", path: "/information-types", icon: FileText, permissions: ["documents.view"] },
       { label: "Global values", path: "/global-values", icon: SlidersHorizontal, permissions: ["global-values.view"] },
       { label: "Work groups", path: "/work-groups", icon: Layers, permissions: ["workgroups.view"] },

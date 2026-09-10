@@ -18,27 +18,19 @@ namespace SW.Bitween.Resources.Subscriptions;
 /// subscription instead, which also picks up counters left behind by groups that no longer exist.
 /// </remarks>
 [HandlerName("resetretryusage")]
-public class ResetRetryUsage : ICommandHandler<int, SubscriptionRetryResetUsage, object>
+public class ResetRetryUsage(BitweenDbContext dbContext, RequestContext requestContext)
+    : ICommandHandler<int, SubscriptionRetryResetUsage, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public ResetRetryUsage(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle(int key, SubscriptionRetryResetUsage request)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Operate);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Subscriptions.Operate);
 
-        if (!await _dbContext.Set<Subscription>().AnyAsync(s => s.Id == key))
+        if (!await dbContext.Set<Subscription>().AnyAsync(s => s.Id == key))
             throw new SWNotFoundException(key.ToString());
 
         // Scoped by subscription rather than by policy, so it cannot reach anyone else's counters no
         // matter which kind of policy this subscription uses.
-        var query = _dbContext.Set<RetryGroupUsage>().Where(u => u.SubscriptionId == key);
+        var query = dbContext.Set<RetryGroupUsage>().Where(u => u.SubscriptionId == key);
 
         if (request.GroupId.HasValue)
             query = query.Where(u => u.GroupId == request.GroupId.Value);

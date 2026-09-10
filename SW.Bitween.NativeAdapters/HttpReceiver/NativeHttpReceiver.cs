@@ -12,6 +12,16 @@ public class NativeHttpReceiver(IDynamicHttpProxy httpProxy) : INativeInfolinkRe
   IDictionary<string, string> elementDictionary = new Dictionary<string, string>();
   
     private HttpReceiverInput _options = new();
+    /// <summary>
+    /// A required adapter setting, or a message naming it. These all used to flow into the HTTP
+    /// stack as null and come back as a NullReferenceException that named nothing, so a blank
+    /// field in a subscription's configuration was diagnosed by guesswork.
+    /// </summary>
+    private static string Require(string? value, string setting) =>
+        !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new SWException($"The HTTP receiver needs '{setting}' to be set.");
+
     private HttpMethod HttpMethodFromString(string method)
     {
         switch (method.ToLower())
@@ -56,60 +66,64 @@ public class NativeHttpReceiver(IDynamicHttpProxy httpProxy) : INativeInfolinkRe
           UserName = _options.LoginUsername,
           Password = _options.LoginPassword
         });
-        HttpResponseMessage loginResponse = await client.PostAsync(new Uri(_options.LoginUrl),
+        HttpResponseMessage loginResponse = await client.PostAsync(new Uri(Require(_options.LoginUrl, "LoginUrl")),
           new StringContent(loginJson, Encoding.UTF8, "application/json"));
         loginResponse.EnsureSuccessStatusCode();
         if (loginResponse.StatusCode != HttpStatusCode.OK)
           throw new Exception(loginResponse.StatusCode.ToString());
         string rs = await loginResponse.Content.ReadAsStringAsync();
-        LoginResponse rsDeserialized = JsonConvert.DeserializeObject<LoginResponse>(rs);
-        client.DefaultRequestHeaders.Authorization =
-          new AuthenticationHeaderValue("Bearer", rsDeserialized.Jwt);
+        LoginResponse? rsDeserialized = JsonConvert.DeserializeObject<LoginResponse>(rs);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+          rsDeserialized?.Jwt ?? throw new SWException(
+            "The login endpoint did not return a JSON body carrying a 'jwt'."));
       }
       else if (_options.AuthType == "OAuth2")
       {
         var oathRequest = new HttpRequestMessage(HttpMethod.Post, _options.LoginUrl);
         var oauthContentDictionary = new List<KeyValuePair<string, string>>();
-        oauthContentDictionary.Add(new KeyValuePair<string, string>("client_id", _options.ClientId));
-        oauthContentDictionary.Add(new KeyValuePair<string, string>("client_secret", _options.ClientSecret));
+        oauthContentDictionary.Add(new KeyValuePair<string, string>("client_id", Require(_options.ClientId, "ClientId")));
+        oauthContentDictionary.Add(new KeyValuePair<string, string>("client_secret", Require(_options.ClientSecret, "ClientSecret")));
         oauthContentDictionary.Add(new KeyValuePair<string, string>("grant_type", "client_credentials"));
         var oauthContent = new FormUrlEncodedContent(oauthContentDictionary);
         oathRequest.Content = oauthContent;
         var oauthResponse = await client.SendAsync(oathRequest);
         var res = await oauthResponse.Content.ReadAsStringAsync();
         var resDeserialized = JsonConvert.DeserializeObject<OAuth2Response>(res);
-        client.DefaultRequestHeaders.Authorization =
-          new AuthenticationHeaderValue("Bearer", resDeserialized.access_token);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+          resDeserialized?.access_token ?? throw new SWException(
+            "The OAuth2 token endpoint did not return a JSON body carrying an 'access_token'."));
       }
       
-      HttpContent content = null;
+      HttpContent? content = null;
       if (!string.IsNullOrEmpty(_options.DefaultRequest ?? string.Empty)) 
       {
         string requestBody = _options.DefaultRequest ?? string.Empty;
-        string str = _options.ContentType.ToLower();
+        string str = Require(_options.ContentType, "ContentType").ToLower();
         switch (str)
         {
           case "application/x-www-form-urlencoded":
-            content =  new FormUrlEncodedContent( JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody));
+            content = new FormUrlEncodedContent(
+              JsonConvert.DeserializeObject<Dictionary<string, string>>(requestBody)
+              ?? throw new SWException("DefaultRequest is not a JSON object of form fields."));
             break;
           case "application/json":
             content =  new StringContent(requestBody, Encoding.UTF8, "application/json");
             break;
           default:
-            content =  new StringContent(requestBody, Encoding.UTF8, _options.ContentType);
+            content = new StringContent(requestBody, Encoding.UTF8, Require(_options.ContentType, "ContentType"));
             break;
         }
       }
 
-      Uri uri = new Uri(_options.Url);
+      Uri uri = new Uri(Require(_options.Url, "Url"));
       HttpRequestMessage request = new HttpRequestMessage()
       {
         RequestUri = uri,
-        Method = HttpMethodFromString(_options.Verb),
+        Method = HttpMethodFromString(Require(_options.Verb, "Verb")),
         Content = content
       };
-      string headers1 = _options.Headers;
-      IEnumerable<KeyValuePair<string, string>> headers = headers1?.Split(',').Select((Func<string, KeyValuePair<string, string>>) (h =>
+      string? headers1 = _options.Headers;
+      IEnumerable<KeyValuePair<string, string>>? headers = headers1?.Split(',').Select((Func<string, KeyValuePair<string, string>>) (h =>
       {
         string[] strArray = h.Split(':');
         return new KeyValuePair<string, string>(strArray[0], strArray[1]);

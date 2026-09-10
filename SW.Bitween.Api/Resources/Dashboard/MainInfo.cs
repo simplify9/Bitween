@@ -9,27 +9,17 @@ using SW.PrimitiveTypes;
 namespace SW.Bitween.Resources.Dashboard;
 
 [HandlerName("MainInfo")]
-public class MainInfo : IQueryHandler<object>
+public class MainInfo(BitweenDbContext dbContext, RequestContext requestContext) : IQueryHandler<object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public MainInfo(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle()
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Dashboard.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Dashboard.View);
 
-        var subscriptionsCount = await _dbContext.Set<Subscription>().AsNoTracking().CountAsync();
-        var documentCount = await _dbContext.Set<Document>().AsNoTracking().CountAsync();
-        var notifiersCount = await _dbContext.Set<Notifier>().AsNoTracking().CountAsync();
-        var usersCount = await _dbContext.Set<Account>().AsNoTracking().CountAsync();
-        var partnersCount = await _dbContext.Set<Partner>().AsNoTracking().CountAsync();
-
+        var subscriptionsCount = await dbContext.Set<Subscription>().AsNoTracking().CountAsync();
+        var documentCount = await dbContext.Set<Document>().AsNoTracking().CountAsync();
+        var notifiersCount = await dbContext.Set<Notifier>().AsNoTracking().CountAsync();
+        var usersCount = await dbContext.Set<Account>().AsNoTracking().CountAsync();
+        var partnersCount = await dbContext.Set<Partner>().AsNoTracking().CountAsync();
 
         return new
         {

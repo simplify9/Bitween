@@ -10,11 +10,9 @@ namespace SW.Bitween.Resources.WorkGroups;
 public class Delete(BitweenDbContext dbContext, RequestContext requestContext, IBroadcast _broadcast, IInfolinkCache _infolinkCache)
     : ICommandHandler<int, DeleteWorkGroupModel, object>
 {
-    private readonly RequestContext _requestContext = requestContext;
-
     public async Task<object> Handle(int key, DeleteWorkGroupModel _)
     {
-        await _requestContext.EnsurePermission(dbContext, Model.Permissions.WorkGroups.Delete);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.WorkGroups.Delete);
 
         var category = await dbContext.Set<WorkGroup>().FindAsync(key);
         if (category is null)

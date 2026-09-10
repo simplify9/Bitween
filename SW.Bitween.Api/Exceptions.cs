@@ -13,10 +13,9 @@ namespace SW.Bitween
 
     public class DocumentSizeException : BitweenException {}
 
-    public class AdapterException : BitweenException
+    public class AdapterException(int exitCode, string message) : BitweenException($"{exitCode}:{message}")
     {
-        public int ExitCode { get; }
-        public AdapterException(int exitCode, string message) : base($"{exitCode}:{message}") => ExitCode = exitCode;
+        public int ExitCode { get; } = exitCode;
     }
 
 
@@ -64,17 +63,10 @@ namespace SW.Bitween
     }
 
 
-    public class SubscriberPropertyNotFoundException : BitweenException
+    public class SubscriberPropertyNotFoundException(int SubscriberID, string PropertyName) : BitweenException
     {
-        public int SubscriberID;
-        public string PropertyName;
-
-        public SubscriberPropertyNotFoundException(int SubscriberID, string PropertyName)
-        {
-            this.SubscriberID = SubscriberID;
-            this.PropertyName = PropertyName;
-        }
-
+        public int SubscriberID = SubscriberID;
+        public string PropertyName = PropertyName;
     }
 
 
@@ -95,19 +87,12 @@ namespace SW.Bitween
     //}
 
 
-    public class DuplicateDocumentFoundException : BitweenException
+    public class DuplicateDocumentFoundException(int DuplicateId)
+        : BitweenException("Duplicate document transmission occurred, interchangelog ID:" + DuplicateId)
     {
-        public DuplicateDocumentFoundException(int DuplicateId) : base("Duplicate document transmission occurred, interchangelog ID:" + DuplicateId)
-        {
-        }
-
     }
 
-    public class PromotedPropertyNotPresent : BitweenException
+    public class PromotedPropertyNotPresent(string Message) : BitweenException(Message)
     {
-        public PromotedPropertyNotPresent(string Message) : base(Message)
-        {
-        }
-
     }
 }

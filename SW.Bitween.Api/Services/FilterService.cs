@@ -6,14 +6,9 @@ using SW.Bitween.Model;
 
 namespace SW.Bitween
 {
-    public class FilterService
+    public class FilterService(IInfolinkCache cache)
     {
-        readonly IInfolinkCache _cache;
-
-        public FilterService(IInfolinkCache cache)
-        {
-            _cache = cache;
-        }
+        readonly IInfolinkCache _cache = cache;
 
         public async Task<FilterResult> Filter(int documentId, XchangeFile xchangeFile)
         {

@@ -15,7 +15,7 @@ namespace SW.Bitween.Services;
 /// secret settings stay out of the table entirely.
 /// </para>
 /// </summary>
-public class SettingsProtector
+public class SettingsProtector(BitweenOptions options)
 {
     private const string Prefix = "enc.v1:";
     private const int SaltBytes = 16;
@@ -24,9 +24,7 @@ public class SettingsProtector
     private const int KeyBytes = 32;
     private const int Iterations = 100_000;
 
-    private readonly string _passphrase;
-
-    public SettingsProtector(BitweenOptions options) => _passphrase = options.SettingsEncryptionKey;
+    private readonly string _passphrase = options.SettingsEncryptionKey;
 
     /// <summary>Whether secrets can be stored at all. False = no passphrase configured.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_passphrase);

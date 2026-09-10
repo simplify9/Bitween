@@ -9,26 +9,14 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.BusGateways
 {
     [HandlerName(nameof(AddRoute))]
-    public class AddRoute : ICommandHandler<int, BusGatewayRouteCreate, object>
+    public class AddRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache,
+        AdapterRequirements adapterRequirements) : ICommandHandler<int, BusGatewayRouteCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        private readonly AdapterRequirements _adapterRequirements;
-
-        public AddRoute(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache,
-            AdapterRequirements adapterRequirements)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-            _adapterRequirements = adapterRequirements;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
 
         public async Task<object> Handle(int gatewayId, BusGatewayRouteCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
+            await requestContext.EnsurePermission(_dbContext, Model.Permissions.BusGateways.Edit);
 
             var gateway = await _dbContext.Set<BusGateway>()
                 .FirstOrDefaultAsync(bg => bg.Id == gatewayId);
@@ -52,7 +40,7 @@ namespace SW.Bitween.Resources.BusGateways
                 // tracking, so both rows go in on the one SaveChangesAsync below. A route pointing
                 // at an integration that was never committed is not a state that can happen.
                 var integration = await InlineIntegration.Stage(
-                    _dbContext, _adapterRequirements, model.NewIntegration, gateway.DocumentId,
+                    _dbContext, adapterRequirements, model.NewIntegration, gateway.DocumentId,
                     SubscriptionType.BusGateway);
                 route.Subscription = integration;
             }
@@ -64,7 +52,7 @@ namespace SW.Bitween.Resources.BusGateways
 
             _dbContext.Add(route);
             await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await cache.BroadcastRevoke();
             return route.Id;
         }
 

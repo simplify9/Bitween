@@ -9,22 +9,15 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Accounts
 {
-    public class Create : ICommandHandler<CreateAccountModel,object>
+    public class Create(BitweenDbContext dbContext, RequestContext requestContext,
+        BitweenOptions bitweenOptions) : ICommandHandler<CreateAccountModel,object>
     {
-        private readonly BitweenDbContext dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly BitweenOptions _bitweenOptions;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext, BitweenOptions bitweenOptions)
-        {
-            this.dbContext = dbContext;
-            _requestContext = requestContext;
-            _bitweenOptions = bitweenOptions;
-        }
+        private readonly BitweenDbContext dbContext = dbContext;
+        private readonly BitweenOptions _bitweenOptions = bitweenOptions;
 
         public async Task<object> Handle(CreateAccountModel request)
         {
-            await _requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Create);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Users.Create);
 
             if (string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Email) ||
                 (!_bitweenOptions.DisableEmailPasswordLogin && string.IsNullOrEmpty(request.Password)))

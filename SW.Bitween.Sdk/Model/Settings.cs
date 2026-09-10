@@ -7,19 +7,21 @@ namespace SW.Bitween.Model;
 /// </summary>
 public class SettingRow
 {
-    public string Key { get; set; }
-    public string Section { get; set; }
-    public string Label { get; set; }
-    public string Description { get; set; }
+    public string Key { get; set; } = null!;
+    public string Section { get; set; } = null!;
+    public string Label { get; set; } = null!;
+
+    /// <summary>Optional help text shown beneath the field.</summary>
+    public string? Description { get; set; }
 
     /// <summary>"string", "number", "boolean" or "color".</summary>
-    public string Kind { get; set; }
+    public string Kind { get; set; } = null!;
 
     /// <summary>The product default — what a reset returns this setting to. Empty for secrets.</summary>
-    public string DefaultValue { get; set; }
+    public string DefaultValue { get; set; } = null!;
 
     /// <summary>The stored value. Always null for secrets, whose value never leaves the server.</summary>
-    public string Value { get; set; }
+    public string? Value { get; set; }
 
     public bool Secret { get; set; }
 
@@ -41,11 +43,11 @@ public class SettingRow
     /// environment value, shown but not changeable) or <c>"presence"</c> (an environment value
     /// reported only as set or not set).
     /// </summary>
-    public string Access { get; set; }
+    public string Access { get; set; } = null!;
 }
 
 public class SettingUpdate
 {
     /// <summary>The new value as text; empty clears the setting. Reset-to-default is a DELETE instead.</summary>
-    public string Value { get; set; }
+    public string Value { get; set; } = null!;
 }

@@ -23,7 +23,7 @@ public class RetryPolicyUpdate : RetryPolicyCreate { }
 public class RetryPolicyRow
 {
     public int Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
     public int GroupCount { get; set; }
 
     /// <summary>
@@ -54,9 +54,9 @@ public class RetryPolicyRow
 public class RetryGroupUsageRow
 {
     public int SubscriptionId { get; set; }
-    public string SubscriptionName { get; set; }
+    public string SubscriptionName { get; set; } = null!;
     public Guid GroupId { get; set; }
-    public string GroupName { get; set; }
+    public string GroupName { get; set; } = null!;
 
     public int AttemptsUsed { get; set; }
     public int MaxAttemptsTotal { get; set; }
@@ -152,7 +152,7 @@ public class RetryGroupAttempts
 public class RetryGroupAttemptRow
 {
     /// <summary>The failed exchange, so the full input, output and error can be opened.</summary>
-    public string XchangeId { get; set; }
+    public string XchangeId { get; set; } = null!;
 
     /// <summary>
     /// How deep the retry chain was, 0 being the original delivery. Null for failures recorded
@@ -162,7 +162,8 @@ public class RetryGroupAttemptRow
 
     public DateTime FailedOn { get; set; }
 
-    public string Exception { get; set; }
+    /// <summary>What the attempt failed with.</summary>
+    public string? Exception { get; set; }
 
     /// <summary>
     /// True while another attempt is still scheduled for this failure. The one thing here that is
@@ -171,7 +172,7 @@ public class RetryGroupAttemptRow
     public bool RetryPending { get; set; }
 
     /// <summary>Why no further attempt was scheduled, when the policy refused one.</summary>
-    public string RetryBlockedReason { get; set; }
+    public string? RetryBlockedReason { get; set; }
 }
 
 /// <summary>

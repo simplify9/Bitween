@@ -7,24 +7,14 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Notifiers
 {
-    public class Update : ICommandHandler<int, NotifierUpdate,object>
+public class Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
+        : ICommandHandler<int, NotifierUpdate,object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _cache;
-
-        public Update(BitweenDbContext dbContext, RequestContext requestContext, IInfolinkCache cache)
-        {
-            _dbContext = dbContext;
-            _requestContext = requestContext;
-            _cache = cache;
-        }
-
         public async Task<object> Handle(int key, NotifierUpdate request)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Notifiers.Edit);
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Notifiers.Edit);
 
-            var notifier = await _dbContext.FindAsync<Notifier>(key);
+            var notifier = await dbContext.FindAsync<Notifier>(key);
 
             notifier.Update(request.Name, request.RunOnSuccessfulResult,
                 request.RunOnBadResult,
@@ -37,9 +27,8 @@ namespace SW.Bitween.Resources.Notifiers
             // and a retry policy's groups. Left implicit it threw ArgumentNullException.
             notifier.SetDictionaries((request.HandlerProperties ?? []).ToDictionary());
 
-
-            await _dbContext.SaveChangesAsync();
-            await _cache.BroadcastRevoke();
+            await dbContext.SaveChangesAsync();
+            await cache.BroadcastRevoke();
             return null;
         }
 

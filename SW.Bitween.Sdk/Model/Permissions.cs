@@ -84,6 +84,32 @@ public static class Permissions
         public const string Delete = "bus-gateways.delete";
     }
 
+    public static class DataSources
+    {
+        public const string View = "data-sources.view";
+        public const string Create = "data-sources.create";
+        public const string Edit = "data-sources.edit";
+        public const string Delete = "data-sources.delete";
+
+        /// <summary>Test a connection, which reaches out to the customer's broker.</summary>
+        public const string Operate = "data-sources.operate";
+    }
+
+    /// <summary>
+    /// Separate from <see cref="DataSources"/> on purpose. Statements have to live on the
+    /// connection — SQL in a subscription's adapter properties would have partner values templated
+    /// into it — but that must not mean editing SQL requires the right that also changes the
+    /// credentials. Someone configuring their own integration gets these; only whoever owns the
+    /// connection gets DataSources.Edit.
+    /// </summary>
+    public static class DataSourceStatements
+    {
+        public const string View = "data-source-statements.view";
+        public const string Create = "data-source-statements.create";
+        public const string Edit = "data-source-statements.edit";
+        public const string Delete = "data-source-statements.delete";
+    }
+
     public static class WorkGroups
     {
         public const string View = "workgroups.view";
@@ -138,21 +164,21 @@ public static class Permissions
 
 public class PermissionActionModel
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
 
     /// <summary>What this specific grant allows, in end-user words.</summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 }
 
 public class PermissionAreaModel
 {
-    public string Id { get; set; }
-    public string Label { get; set; }
+    public string Id { get; set; } = null!;
+    public string Label { get; set; } = null!;
 
     /// <summary>Mirrors the app's navigation groups, so a role's grants map onto what its members see.</summary>
-    public string Group { get; set; }
+    public string Group { get; set; } = null!;
 
-    public string Description { get; set; }
+    public string? Description { get; set; }
     public List<PermissionActionModel> Actions { get; set; } = [];
 }
 
@@ -233,6 +259,23 @@ public static class PermissionCatalog
             (Delete, "Delete bus gateways.")),
 
         // ——— Configuration ———
+        Area("data-sources", "Data sources", "Configuration",
+            "Connections to external brokers that bus gateways can read from.",
+            (View, "Browse data sources and their connection health."),
+            (Create, "Create data sources."),
+            (Edit, "Change connection settings and credentials."),
+            (Delete, "Delete data sources."),
+            (Operate, "Test a connection, which reaches out to the broker.")),
+
+        Area("data-source-statements", "SQL statements", "Configuration",
+            "The named SQL a database data source is allowed to run. Held apart from the "
+            + "connection so that writing a query does not require the rights that change "
+            + "credentials.",
+            (View, "Browse statements and see which subscriptions use them."),
+            (Create, "Add a statement to a data source."),
+            (Edit, "Change a statement's SQL."),
+            (Delete, "Delete a statement no subscription uses.")),
+
         Area("workgroups", "Work groups", "Configuration", "Processing lanes that spread load across queues.",
             (View, "See work groups and their throughput."),
             (Create, "Create work groups."),

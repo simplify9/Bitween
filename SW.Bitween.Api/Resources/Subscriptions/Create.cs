@@ -22,25 +22,14 @@ namespace SW.Bitween.Resources.Subscriptions
     /// empty, inactive subscription it always did.
     /// </para>
     /// </summary>
-    public class Create : ICommandHandler<SubscriptionCreate, object>
+    public class Create(BitweenDbContext dbContext, RequestContext requestContext,
+        IInfolinkCache BitweenCache, SubscriptionSchedulerService subScheduler) : ICommandHandler<SubscriptionCreate, object>
     {
-        private readonly BitweenDbContext _dbContext;
-        private readonly RequestContext _requestContext;
-        private readonly IInfolinkCache _BitweenCache;
-        private readonly SubscriptionSchedulerService _subScheduler;
-
-        public Create(BitweenDbContext dbContext, RequestContext requestContext,
-            IInfolinkCache BitweenCache, SubscriptionSchedulerService subScheduler)
-        {
-            this._dbContext = dbContext;
-            _requestContext = requestContext;
-            _BitweenCache = BitweenCache;
-            _subScheduler = subScheduler;
-        }
+        private readonly BitweenDbContext _dbContext = dbContext;
 
         public async Task<object> Handle(SubscriptionCreate model)
         {
-            await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Create);
+            await requestContext.EnsurePermission(_dbContext, Model.Permissions.Subscriptions.Create);
 
             Subscription entity;
 
@@ -80,8 +69,8 @@ namespace SW.Bitween.Resources.Subscriptions
             // Both of these used to be the follow-up update's job. Now that a subscription can be
             // born live and scheduled, skipping them would leave a new integration that looks
             // configured and never runs: stale in the consumers' cache, absent from the scheduler.
-            await _BitweenCache.BroadcastRevoke();
-            await _subScheduler.Sync(entity, Array.Empty<Schedule>());
+            await BitweenCache.BroadcastRevoke();
+            await subScheduler.Sync(entity, Array.Empty<Schedule>());
 
             return entity.Id;
         }

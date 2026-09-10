@@ -23,6 +23,7 @@ namespace SW.Bitween.PgSql.Migrations
                 .HasAnnotation("ProductVersion", "9.0.19")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "hstore");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("SW.Bitween.Domain.Accounts.Account", b =>
@@ -319,6 +320,271 @@ namespace SW.Bitween.PgSql.Migrations
                     b.ToTable("AuditEntries", "infolink");
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.Cluster.ClusterLease", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AcquiredOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("acquired_on");
+
+                    b.Property<string>("OwnerNode")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("owner_node");
+
+                    b.Property<long>("Term")
+                        .HasColumnType("bigint")
+                        .HasColumnName("term");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cluster_lease");
+
+                    b.ToTable("cluster_lease", "infolink");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.AdapterState", b =>
+                {
+                    b.Property<string>("AdapterId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("adapter_id");
+
+                    b.Property<string>("InstanceKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("instance_key");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_on");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("value");
+
+                    b.HasKey("AdapterId", "InstanceKey", "Name")
+                        .HasName("pk_adapter_state");
+
+                    b.ToTable("adapter_state", "infolink");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdapterId")
+                        .HasColumnType("text")
+                        .HasColumnName("adapter_id");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("integer")
+                        .HasColumnName("consecutive_failures");
+
+                    b.Property<int>("CpuLimitSamples")
+                        .HasColumnType("integer")
+                        .HasColumnName("cpu_limit_samples");
+
+                    b.Property<double>("CpuPercentLimit")
+                        .HasColumnType("double precision")
+                        .HasColumnName("cpu_percent_limit");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_on");
+
+                    b.Property<int>("DeduplicationWindowDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("deduplication_window_days");
+
+                    b.Property<int>("HardMemoryLimitMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("hard_memory_limit_mb");
+
+                    b.Property<bool>("Inactive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("inactive");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LastException")
+                        .HasColumnType("text")
+                        .HasColumnName("last_exception");
+
+                    b.Property<DateTime?>("LastHeartbeatOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_heartbeat_on");
+
+                    b.Property<string>("LastKnownState")
+                        .HasColumnType("text")
+                        .HasColumnName("last_known_state");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_on");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OwnedByNode")
+                        .HasColumnType("text")
+                        .HasColumnName("owned_by_node");
+
+                    b.Property<int>("Placement")
+                        .HasColumnType("integer")
+                        .HasColumnName("placement");
+
+                    b.Property<Dictionary<string, string>>("Properties")
+                        .HasColumnType("hstore")
+                        .HasColumnName("properties");
+
+                    b.PrimitiveCollection<List<string>>("SecretProperties")
+                        .HasColumnType("text[]")
+                        .HasColumnName("secret_properties");
+
+                    b.Property<int>("SoftMemoryLimitMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("soft_memory_limit_mb");
+
+                    b.HasKey("Id")
+                        .HasName("pk_data_source");
+
+                    b.ToTable("data_source", "infolink");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_on");
+
+                    b.Property<string>("CursorColumn")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("cursor_column");
+
+                    b.Property<int>("DataSourceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_source_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Inactive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("inactive");
+
+                    b.Property<string>("KeyColumn")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("key_column");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("modified_by");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modified_on");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Sql")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sql");
+
+                    b.Property<int?>("WorkGroupId")
+                        .HasColumnType("integer")
+                        .HasColumnName("work_group_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_data_source_statement");
+
+                    b.HasIndex("WorkGroupId")
+                        .HasDatabaseName("ix_data_source_statement_work_group_id");
+
+                    b.HasIndex("DataSourceId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_data_source_statement_data_source_id_name");
+
+                    b.ToTable("data_source_statement", "infolink");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DataSourceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_source_id");
+
+                    b.Property<DateTime>("SeenOn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("seen_on");
+
+                    b.Property<string>("XchangeId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("xchange_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_inbound_message");
+
+                    b.HasIndex("DataSourceId")
+                        .HasDatabaseName("ix_inbound_message_data_source_id");
+
+                    b.HasIndex("SeenOn")
+                        .HasDatabaseName("ix_inbound_message_seen_on");
+
+                    b.ToTable("inbound_message", "infolink");
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.DelayedRetry", b =>
                 {
                     b.Property<string>("Id")
@@ -523,9 +789,21 @@ namespace SW.Bitween.PgSql.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_on");
 
+                    b.Property<int?>("DataSourceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_source_id");
+
                     b.Property<int>("DocumentId")
                         .HasColumnType("integer")
                         .HasColumnName("document_id");
+
+                    b.Property<string>("Endpoint")
+                        .HasColumnType("text")
+                        .HasColumnName("endpoint");
+
+                    b.Property<Dictionary<string, string>>("EndpointProperties")
+                        .HasColumnType("hstore")
+                        .HasColumnName("endpoint_properties");
 
                     b.Property<bool>("Inactive")
                         .HasColumnType("boolean")
@@ -547,6 +825,9 @@ namespace SW.Bitween.PgSql.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_bus_gateway");
+
+                    b.HasIndex("DataSourceId")
+                        .HasDatabaseName("ix_bus_gateway_data_source_id");
 
                     b.HasIndex("DocumentId")
                         .HasDatabaseName("ix_bus_gateway_document_id");
@@ -967,6 +1248,10 @@ namespace SW.Bitween.PgSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("custom_retry_policy");
 
+                    b.Property<int?>("DataSourceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_source_id");
+
                     b.Property<IReadOnlyDictionary<string, string>>("DocumentFilter")
                         .HasColumnType("jsonb")
                         .HasColumnName("document_filter");
@@ -1078,6 +1363,9 @@ namespace SW.Bitween.PgSql.Migrations
 
                     b.HasIndex("CategoryId")
                         .HasDatabaseName("ix_subscription_category_id");
+
+                    b.HasIndex("DataSourceId")
+                        .HasDatabaseName("ix_subscription_data_source_id");
 
                     b.HasIndex("DocumentId")
                         .HasDatabaseName("ix_subscription_document_id");
@@ -2054,6 +2342,34 @@ namespace SW.Bitween.PgSql.Migrations
                         .HasConstraintName("fk_refresh_tokens_accounts_account_id");
                 });
 
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.DataSourceStatement", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", "DataSource")
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_data_source_statement_data_source_data_source_id");
+
+                    b.HasOne("SW.Bitween.Domain.WorkGroup", null)
+                        .WithMany()
+                        .HasForeignKey("WorkGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_data_source_statement_work_group_work_group_id");
+
+                    b.Navigation("DataSource");
+                });
+
+            modelBuilder.Entity("SW.Bitween.Domain.DataSources.InboundMessage", b =>
+                {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_inbound_message_data_source_data_source_id");
+                });
+
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.ApiGatewayPartner", b =>
                 {
                     b.HasOne("SW.Bitween.Domain.Gateway.ApiGateway", "ApiGateway")
@@ -2086,12 +2402,19 @@ namespace SW.Bitween.PgSql.Migrations
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.BusGateway", b =>
                 {
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", "DataSource")
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .HasConstraintName("fk_bus_gateway_data_source_data_source_id");
+
                     b.HasOne("SW.Bitween.Domain.Document", null)
                         .WithMany()
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_bus_gateway_document_document_id");
+
+                    b.Navigation("DataSource");
                 });
 
             modelBuilder.Entity("SW.Bitween.Domain.Gateway.BusGatewayRoute", b =>
@@ -2188,6 +2511,12 @@ namespace SW.Bitween.PgSql.Migrations
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .HasConstraintName("fk_subscription_subscription_category_category_id");
+
+                    b.HasOne("SW.Bitween.Domain.DataSources.DataSource", null)
+                        .WithMany()
+                        .HasForeignKey("DataSourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_subscription_data_source_data_source_id");
 
                     b.HasOne("SW.Bitween.Domain.Document", null)
                         .WithMany()

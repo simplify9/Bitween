@@ -15,15 +15,8 @@ using Xunit;
 namespace SW.Bitween.IntegrationTests.Tests;
 
 [Collection("Bitween")]
-public class RetryPolicyTests
+public class RetryPolicyTests(BitweenFixture fixture)
 {
-    private readonly BitweenFixture _fixture;
-
-    public RetryPolicyTests(BitweenFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private static AdapterSecretProperties Secrets(AsyncServiceScope scope) =>
@@ -65,7 +58,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Can_create_and_get_retry_policy()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, get, _, _) = Handlers(db, ctx, Secrets(scope));
@@ -83,7 +76,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Create_policy_with_complex_groups_round_trips_json_correctly()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, _, _, _) = Handlers(db, ctx, Secrets(scope));
@@ -135,7 +128,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Can_update_retry_policy_name_and_groups()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, _, update, _) = Handlers(db, ctx, Secrets(scope));
@@ -174,7 +167,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Can_delete_retry_policy_not_assigned_to_any_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, _, _, delete) = Handlers(db, ctx, Secrets(scope));
@@ -192,7 +185,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Cannot_delete_retry_policy_that_is_assigned_to_a_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, _, _, delete) = Handlers(db, ctx, Secrets(scope));
@@ -221,7 +214,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Creating_policy_with_null_name_violates_not_null_db_constraint()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         db.Set<RetryPolicy>().Add(new RetryPolicy { Name = null!, Groups = [] });
@@ -232,7 +225,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Creating_policy_with_name_over_200_chars_violates_db_constraint()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         db.Set<RetryPolicy>().Add(new RetryPolicy { Name = new string('X', 201), Groups = [] });
@@ -245,7 +238,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Subscription_retry_policy_id_is_persisted_and_fk_resolves()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var (create, _, _, _) = Handlers(db, ctx, Secrets(scope));
@@ -276,7 +269,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Subscription_custom_retry_policy_json_is_persisted_and_reloads_with_polymorphic_types()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Sub Custom Policy Doc", DocumentFormat.Json);
@@ -320,7 +313,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Removing_retry_policy_nullifies_subscription_fk_via_set_null_cascade()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Sub SetNull Doc", DocumentFormat.Json);
@@ -350,7 +343,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Group_total_is_shared_across_separate_messages_of_the_same_integration()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Shared Total Doc", DocumentFormat.Json);
@@ -398,7 +391,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Group_total_is_tracked_per_integration_not_per_policy()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Per Integration Doc", DocumentFormat.Json);
@@ -444,7 +437,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Concurrent_claims_never_exceed_the_group_total()
     {
-        await using var setup = _fixture.CreateScope();
+        await using var setup = fixture.CreateScope();
         var setupDb = setup.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Concurrent Budget Doc", DocumentFormat.Json);
@@ -463,7 +456,7 @@ public class RetryPolicyTests
         // instances: a read-then-write would let several observe the same free slot at once.
         var tasks = Enumerable.Range(0, racers).Select(async _ =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             return await new RetryGroupBudget(db, scope.ServiceProvider, sub.Id).TryConsume(groupId, cap);
         });
@@ -483,7 +476,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Usage_reports_spent_budget_and_reset_clears_it()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -535,7 +528,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Usage_lists_never_failed_pairs_and_skips_groups_that_cannot_exhaust()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -585,7 +578,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Reset_does_not_touch_counters_of_another_policy()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -620,7 +613,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Removing_a_group_clears_its_spent_budget()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -658,7 +651,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Attempts_lists_only_this_pairs_stamped_failures_pending_first()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -728,7 +721,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Attempts_rejects_a_subscription_that_does_not_use_the_policy()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -758,7 +751,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Test_simulates_consecutive_attempts_and_stops_once_blocked()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var handler = new Resources.RetryPolicies.Test(db, ctx);
@@ -789,7 +782,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Test_rejects_success_result_type()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var handler = new Resources.RetryPolicies.Test(db, ctx);
@@ -807,7 +800,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Test_reports_no_match_when_no_group_applies()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
         var handler = new Resources.RetryPolicies.Test(db, ctx);
@@ -832,7 +825,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Exhausting_a_budget_claims_the_alert_exactly_once()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Alert Claim Doc", DocumentFormat.Json);
@@ -872,7 +865,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Concurrent_refusals_claim_the_alert_only_once()
     {
-        await using var setupScope = _fixture.CreateScope();
+        await using var setupScope = fixture.CreateScope();
         var setupDb = setupScope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Alert Race Doc", DocumentFormat.Json);
@@ -895,7 +888,7 @@ public class RetryPolicyTests
         // would let each of them decide it was the first and send its own email.
         var tasks = Enumerable.Range(0, 12).Select(async _ =>
         {
-            await using var scope = _fixture.CreateScope();
+            await using var scope = fixture.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
             return await new RetryGroupBudget(db, scope.ServiceProvider, sub.Id).TryConsume(groupId, 1);
         });
@@ -909,7 +902,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Resetting_usage_re_arms_the_exhaustion_alert()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -947,7 +940,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Cannot_save_a_group_that_sends_its_own_alert_without_a_handler()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -973,7 +966,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task An_inline_policy_budget_can_be_reported_and_reset_by_subscription()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1028,7 +1021,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Allow_without_a_budget_is_rejected_on_save()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1078,7 +1071,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task An_alert_password_is_masked_on_read_and_survives_being_saved_back()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1115,7 +1108,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Overriding_an_inherited_alert_keeps_the_password_it_was_only_shown_masked()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1144,7 +1137,7 @@ public class RetryPolicyTests
         // The page offers "start from what this currently sends", so the masked value is what comes
         // back — and there is no override row yet to restore it from. It has to be recovered from the
         // level the caller was shown it at, or the new override would send with no password at all.
-        await new SaveAlertOverride(db, ctx, Secrets(scope)).Handle(policyId, new RetryAlertOverrideSave
+        await new SaveAlertOverride(db, ctx).Handle(policyId, new RetryAlertOverrideSave
         {
             SubscriptionId = sub.Id,
             GroupId = groupId,
@@ -1162,7 +1155,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task A_mail_alert_with_a_password_and_no_encryption_is_rejected_on_save()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1182,7 +1175,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task Policy_alert_handler_round_trips()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var ctx = scope.Superuser();
 
@@ -1210,7 +1203,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task A_retry_started_by_hand_is_left_alone_by_the_policy()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -1256,7 +1249,6 @@ public class RetryPolicyTests
         await db.SaveChangesAsync();
         sub.SetRetryPolicy(policy.Id, null);
         await db.SaveChangesAsync();
-
 
         // The document cache is a warm singleton shared by the whole collection, and production
         // clears it over the bus whenever a document changes. Cleared here for the same reason: a
@@ -1307,7 +1299,7 @@ public class RetryPolicyTests
         // where it actually sits rather than through a seam opened up for the test.
         async Task Run(string xchangeId)
         {
-            await using var runScope = _fixture.CreateScope();
+            await using var runScope = fixture.CreateScope();
             await runScope.ServiceProvider.GetRequiredService<XchangeService>()
                 .Process("XchangeCreated", JsonConvert.SerializeObject(new { Id = xchangeId }));
         }
@@ -1325,7 +1317,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task A_success_gives_the_group_its_spent_budget_back()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -1367,7 +1359,6 @@ public class RetryPolicyTests
         Assert.False(exhausted.ShouldRetry);
         Assert.True(exhausted.BudgetJustExhausted);
 
-
         // The document cache is a warm singleton shared by the whole collection, and production
         // clears it over the bus whenever a document changes. Cleared here for the same reason: a
         // document created after the cache warmed is invisible to the filter step, which then fails
@@ -1379,7 +1370,7 @@ public class RetryPolicyTests
         var recovered = await xs.CreateXchange(sub, new XchangeFile("{}"));
         await db.SaveChangesAsync();
 
-        await using (var runScope = _fixture.CreateScope())
+        await using (var runScope = fixture.CreateScope())
             await runScope.ServiceProvider.GetRequiredService<XchangeService>()
                 .Process("XchangeCreated", JsonConvert.SerializeObject(new { Id = recovered.Id }));
 
@@ -1405,7 +1396,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task A_partly_spent_budget_is_left_alone_by_a_success()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
 
@@ -1443,7 +1434,7 @@ public class RetryPolicyTests
         var succeeded = await xs.CreateXchange(sub, new XchangeFile("{}"));
         await db.SaveChangesAsync();
 
-        await using (var runScope = _fixture.CreateScope())
+        await using (var runScope = fixture.CreateScope())
             await runScope.ServiceProvider.GetRequiredService<XchangeService>()
                 .Process("XchangeCreated", JsonConvert.SerializeObject(new { Id = succeeded.Id }));
 
@@ -1466,7 +1457,7 @@ public class RetryPolicyTests
     [Fact]
     public async Task A_slot_charged_after_the_success_began_is_not_handed_back()
     {
-        await using var scope = _fixture.CreateScope();
+        await using var scope = fixture.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
 
         var doc = new Document(null, "Watermark Doc", DocumentFormat.Json);

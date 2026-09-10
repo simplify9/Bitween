@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using SW.PrimitiveTypes;
+using SW.Bitween.Services.Adapters;
 
 namespace SW.Bitween;
 
@@ -24,7 +25,8 @@ namespace SW.Bitween;
 /// </remarks>
 public class AdapterStartupValues(
     NativeAdapterDiscoveryService nativeAdapterDiscovery,
-    ServerlessAdapterDescriber serverlessDescriber)
+    ServerlessAdapterDescriber serverlessDescriber,
+    IServiceProvider serviceProvider)
 {
     /// <summary>Drops what is remembered about a published adapter.</summary>
     public void Forget(string adapterId) => serverlessDescriber.Forget(adapterId);
@@ -40,6 +42,22 @@ public class AdapterStartupValues(
         // worth queueing behind the published adapters either.
         if (adapterId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
             return nativeAdapterDiscovery.GetStartupValues(adapterId);
+
+        // A RESIDENT adapter cannot answer this, and the attempt is not harmless. Describing a
+        // published adapter means spawning it and asking over stdio; a resident one dials out to
+        // the host instead of speaking stdio, so the ask waits for a reply that never comes and
+        // fails as "Received null data".
+        //
+        // Every caller of this then failed in its own way and none named a cause: saving a
+        // subscription that used one was refused outright, and the two that mask secrets failed
+        // closed and returned every property as "__private__" — so a screen showed a masked value
+        // where the chosen statement should be, and its dropdown could not match it.
+        //
+        // Nothing is the right answer rather than a shrug. A resident adapter's settings live on
+        // its DATA SOURCE, which describes and masks its own; what a subscription holds for one
+        // is which statement to run and what to do with it — routing, not secrets.
+        if (await ResidentAdapters.IsResidentAsync(serviceProvider, adapterId))
+            return new Dictionary<string, StartupValue>();
 
         return await serverlessDescriber.Describe(adapterId);
     }

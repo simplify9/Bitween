@@ -7,22 +7,13 @@ using SW.PrimitiveTypes;
 
 namespace SW.Bitween.Resources.Roles;
 
-public class Get : IGetHandler<int, object>
+public class Get(BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<int, object>
 {
-    private readonly BitweenDbContext _dbContext;
-    private readonly RequestContext _requestContext;
-
-    public Get(BitweenDbContext dbContext, RequestContext requestContext)
-    {
-        _dbContext = dbContext;
-        _requestContext = requestContext;
-    }
-
     public async Task<object> Handle(int key)
     {
-        await _requestContext.EnsurePermission(_dbContext, Model.Permissions.Roles.View);
+        await requestContext.EnsurePermission(dbContext, Model.Permissions.Roles.View);
 
-        var row = await _dbContext.Set<Role>()
+        var row = await dbContext.Set<Role>()
             .AsNoTracking()
             .Where(role => role.Id == key)
             .Select(role => new RoleRow
@@ -33,7 +24,7 @@ public class Get : IGetHandler<int, object>
                 IsSystem = role.IsSystem,
                 Permissions = role.Permissions,
                 CreatedOn = role.CreatedOn,
-                MemberCount = _dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
+                MemberCount = dbContext.Set<AccountRoleLink>().Count(l => l.RoleId == role.Id)
             })
             .SingleOrDefaultAsync();
 
