@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
 
@@ -24,16 +22,10 @@ namespace SW.Bitween;
 /// <c>Subscriptions/Get</c> and <c>Subscriptions/Update</c>; this is the reusable form of it.
 /// </para>
 /// </remarks>
-public class AdapterSecretProperties(
-    NativeAdapterDiscoveryService nativeAdapterDiscovery,
-    IServiceProvider serviceProvider)
+public class AdapterSecretProperties(AdapterStartupValues startupValues)
 {
     /// <summary>Stands in for a secret value in any response that carries adapter properties.</summary>
     public const string Sentinel = "__private__";
-
-    // Describing a serverless adapter means starting it and asking, which is far too expensive to
-    // repeat per row of a report. Scoped service, so the memo lives exactly as long as one request.
-    private readonly Dictionary<string, IDictionary<string, StartupValue>> _described = new();
 
     /// <summary>
     /// Returns a copy with every secret value replaced. Values that are already empty are left
@@ -50,10 +42,10 @@ public class AdapterSecretProperties(
         if (string.IsNullOrEmpty(adapterId))
             return properties.ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        IDictionary<string, StartupValue> startupValues;
+        IDictionary<string, StartupValue> described;
         try
         {
-            startupValues = await Describe(adapterId);
+            described = await startupValues.Describe(adapterId);
         }
         catch
         {
@@ -63,7 +55,7 @@ public class AdapterSecretProperties(
         }
 
         return properties.ToDictionary(kv => kv.Key, kv =>
-            startupValues.TryGetValue(kv.Key, out var startupValue)
+            described.TryGetValue(kv.Key, out var startupValue)
             && startupValue.Private
             && !string.IsNullOrEmpty(kv.Value)
                 ? Sentinel
@@ -123,23 +115,4 @@ public class AdapterSecretProperties(
         foreach (var kv in merged) incoming[kv.Key] = kv.Value;
     }
 
-    private async Task<IDictionary<string, StartupValue>> Describe(string adapterId)
-    {
-        if (_described.TryGetValue(adapterId, out var cached)) return cached;
-
-        IDictionary<string, StartupValue> startupValues;
-        if (adapterId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            startupValues = nativeAdapterDiscovery.GetStartupValues(adapterId);
-        }
-        else
-        {
-            var serverless = serviceProvider.GetRequiredService<IServerlessService>();
-            await serverless.StartAsync(adapterId, null);
-            startupValues = await serverless.GetExpectedStartupValues();
-        }
-
-        _described[adapterId] = startupValues;
-        return startupValues;
-    }
 }

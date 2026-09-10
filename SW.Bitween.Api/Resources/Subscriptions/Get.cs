@@ -5,9 +5,7 @@ using SW.EfCoreExtensions;
 using System.Linq;
 using System.Threading.Tasks;
 using SW.Bitween.Model;
-using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace SW.Bitween.Resources.Subscriptions
 {
@@ -15,17 +13,15 @@ namespace SW.Bitween.Resources.Subscriptions
     {
         private readonly BitweenDbContext dbContext;
         private readonly RequestContext requestContext;
-        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
-        private readonly IServiceProvider _serviceProvider;
+        private readonly AdapterStartupValues _startupValues;
 
         private const string PrivateSentinel = "__private__";
 
-        public Get(BitweenDbContext dbContext, NativeAdapterDiscoveryService nativeAdapterDiscovery, IServiceProvider serviceProvider, RequestContext requestContext)
+        public Get(BitweenDbContext dbContext, AdapterStartupValues startupValues, RequestContext requestContext)
         {
             this.dbContext = dbContext;
             this.requestContext = requestContext;
-            _nativeAdapterDiscovery = nativeAdapterDiscovery;
-            _serviceProvider = serviceProvider;
+            _startupValues = startupValues;
         }
 
         public async Task<object> Handle(int key)
@@ -96,16 +92,7 @@ namespace SW.Bitween.Resources.Subscriptions
 
             try
             {
-                if (adapterId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    startupValues = _nativeAdapterDiscovery.GetStartupValues(adapterId);
-                }
-                else
-                {
-                    var serverless = _serviceProvider.GetRequiredService<IServerlessService>();
-                    await serverless.StartAsync(adapterId, null);
-                    startupValues = await serverless.GetExpectedStartupValues();
-                }
+                startupValues = await _startupValues.Describe(adapterId);
             }
             catch
             {
