@@ -34,12 +34,21 @@ export function ValueCell({
   source,
   paths,
   valueType,
+  emptyPathLabel,
   onChange,
 }: {
   source: ValueSource;
   paths: SourcePaths;
   /** The type the field is written as, which decides how a fixed value is typed in. */
   valueType?: ValueTypeName;
+  /**
+   * What an empty path means, where it means something rather than nothing.
+   *
+   * On a list of plain values it is "the entry itself" — the ordinary case, and what
+   * the scaffolder writes. Given a label, the empty box reads as that answer instead
+   * of as a box nobody has filled in yet.
+   */
+  emptyPathLabel?: string;
   onChange: (source: ValueSource) => void;
 }) {
   const { testPartnerId } = useRules();
@@ -69,6 +78,15 @@ export function ValueCell({
       // happen to contain — a field absent from this one document, or any field at
       // all when the sample's list is empty — may still be the right mapping.
       const orphan = path !== "" && !known.includes(path);
+      // Not a hint about what to type but the answer itself, so it is set in the
+      // colour of a value rather than the grey of a placeholder.
+      //
+      // Only ever true of a path read from the entry. Switch the box to "document"
+      // and an empty path is the whole incoming document, not the entry — a mapping
+      // that writes the same document into every slot of the list, and the last
+      // thing to label as the ordinary answer.
+      const meansWholeEntry =
+        emptyPathLabel !== undefined && path === "" && source.kind === "path";
 
       return (
         <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -95,13 +113,17 @@ export function ValueCell({
           )}
 
           <RowSuggestInput
-            className="min-w-0 flex-1 font-mono"
+            className={`min-w-0 flex-1 font-mono ${
+              meansWholeEntry ? "placeholder:text-ink-700" : ""
+            }`}
             aria-label="Source field"
-            placeholder="order.customer"
+            placeholder={meansWholeEntry ? emptyPathLabel : "order.customer"}
             title={
-              paths.document
-                ? "A path on this entry, or on the whole document — type it, or pick from the sample"
-                : "A path into the incoming document — type it, or pick one from the sample"
+              meansWholeEntry
+                ? `Empty means ${emptyPathLabel}. Type a path to read a field of it instead.`
+                : paths.document
+                  ? "A path on this entry, or on the whole document — type it, or pick from the sample"
+                  : "A path into the incoming document — type it, or pick one from the sample"
             }
             suggestions={known}
             value={path}

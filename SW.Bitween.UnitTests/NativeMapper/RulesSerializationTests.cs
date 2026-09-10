@@ -59,6 +59,25 @@ public class RulesSerializationTests
     /// <summary>
     /// Multi-word kinds arrive camelCased, the same shape as <c>greaterThan</c> on a filter.
     /// </summary>
+    /// <summary>
+    /// The date order rides on the mapping, not on the rule, so it has to survive the wire
+    /// like any other part of the document's shape.
+    /// </summary>
+    [TestMethod]
+    public void SourceDateOrder_AsCamelCase()
+    {
+        Assert.AreEqual(DateOrder.DayFirst, Read("""{ "sourceDateOrder": "dayFirst" }""").SourceDateOrder);
+        Assert.AreEqual(DateOrder.MonthFirst, Read("""{ "sourceDateOrder": "monthFirst" }""").SourceDateOrder);
+    }
+
+    /// <summary>
+    /// Absent means year-first, so every mapping written before this existed keeps reading the
+    /// only dates it could ever have read correctly.
+    /// </summary>
+    [TestMethod]
+    public void SourceDateOrder_DefaultsToYearFirst() =>
+        Assert.AreEqual(DateOrder.YearFirst, Read("""{ "fields": [] }""").SourceDateOrder);
+
     [TestMethod]
     public void RootPathKind_AsCamelCase()
     {

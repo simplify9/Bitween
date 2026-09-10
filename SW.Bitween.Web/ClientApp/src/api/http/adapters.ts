@@ -2,15 +2,17 @@ import type { ApiClient } from "../client";
 import type { AdapterInfo, AdapterKind, AdapterProp } from "../types";
 import { get } from "./request";
 
-interface RawVersionedAdapter {
-  key: string;
-  versions: string[] | null;
-}
 interface RawStartupValue {
   optional: boolean;
   default: string | null;
   private: boolean;
   description: string | null;
+}
+interface RawCatalogAdapter {
+  key: string;
+  native: boolean;
+  versions: string[] | null;
+  startupValues: Record<string, RawStartupValue> | null;
 }
 
 // The backend's Prefix param takes the plural, lowercase form.
@@ -21,8 +23,7 @@ const KIND_PREFIX: Record<AdapterKind, string> = {
   validator: "validators",
 };
 
-async function fetchProps(id: string): Promise<AdapterProp[]> {
-  const values = await get<Record<string, RawStartupValue>>(`/adapters/${encodeURIComponent(id)}/GetStartupValues`);
+function toProps(values: Record<string, RawStartupValue> | null): AdapterProp[] {
   return Object.entries(values ?? {}).map(([key, v]) => ({
     key,
     optional: v.optional,
@@ -34,20 +35,19 @@ async function fetchProps(id: string): Promise<AdapterProp[]> {
 
 export const adapterMethods = {
   async listAdapters(kind: AdapterKind): Promise<AdapterInfo[]> {
-    const rows = await get<RawVersionedAdapter[]>(`/adapters/Versioned?prefix=${KIND_PREFIX[kind]}`);
-    return Promise.all(
-      (rows ?? []).map(async (r) => ({
-        id: r.key,
-        kind,
-        // No backend source for a friendly display name — fall back to the raw id.
-        label: r.key,
-        native: r.key.toLowerCase().startsWith("native"),
-        versions: r.versions ?? [],
-        // Legacy (non-native) adapters can fail to report startup values (e.g. their
-        // serverless runtime isn't available locally) — don't let that blank out the
-        // whole catalog, including the native adapters that did resolve fine.
-        props: await fetchProps(r.key).catch(() => []),
-      })),
-    );
+    // One request for the whole kind, properties included. Asking `Versioned` for the adapters and
+    // then `GetStartupValues` per adapter was around ninety requests for the four kinds a
+    // subscription screen loads, and each of those booted the adapter in a child process to be
+    // told its property names.
+    const rows = await get<RawCatalogAdapter[]>(`/adapters/Catalog?prefix=${KIND_PREFIX[kind]}`);
+    return (rows ?? []).map((r) => ({
+      id: r.key,
+      kind,
+      // No backend source for a friendly display name — fall back to the raw id.
+      label: r.key,
+      native: r.native,
+      versions: r.versions ?? [],
+      props: toProps(r.startupValues),
+    }));
   },
 } satisfies Partial<ApiClient>;

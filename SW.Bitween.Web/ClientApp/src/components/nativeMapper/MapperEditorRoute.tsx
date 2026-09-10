@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { api } from "../../api";
 import { keys } from "../../api/queryKeys";
 import { NATIVE_MAPPER_ID } from "../../lib/nativeMapper/types";
 import { Button, FormError, LoadingBlock } from "../ui/basics";
 import MappingEditor from "../mapper/MappingEditor";
 import NativeMapperEditor from "./NativeMapperEditor";
+
+/** The two mappers with a visual editor, so `?mapper=` cannot name anything else. */
+const MAPPERS_WITH_AN_EDITOR: readonly string[] = [NATIVE_MAPPER_ID, "NativeJSONMapper"];
 
 /**
  * Sends a subscription to the editor that matches its mapper.
@@ -18,7 +21,14 @@ import NativeMapperEditor from "./NativeMapperEditor";
  */
 export default function MapperEditorRoute() {
   const { id } = useParams<{ id: string }>();
+  const [search] = useSearchParams();
   const subscriptionId = Number(id);
+
+  // The mapper the config page had selected when it sent us here, which is not
+  // necessarily the one the subscription is saved with — picking a mapper and opening
+  // its editor should not need a save in between. Both editors write `mapperId` when
+  // they save, so arriving this way and saving completes the switch that was started.
+  const picked = search.get("mapper");
 
   const valid = Number.isInteger(subscriptionId) && subscriptionId > 0;
 
@@ -54,7 +64,15 @@ export default function MapperEditorRoute() {
 
   // A subscription with no mapper yet gets the new editor — that is what new
   // mappings should be built with. Existing ones keep whichever they were made in.
-  const useNew = !data?.mapperId || data.mapperId === NATIVE_MAPPER_ID;
+  //
+  // Only a mapper that has an editor is honoured from the URL: anything else is a
+  // hand-edited address, and opening an editor on it would show an empty mapping that
+  // saving would then make real.
+  const intended = picked !== null && MAPPERS_WITH_AN_EDITOR.includes(picked)
+    ? picked
+    : data?.mapperId;
+
+  const useNew = !intended || intended === NATIVE_MAPPER_ID;
 
   return useNew ? <NativeMapperEditor /> : <MappingEditor />;
 }

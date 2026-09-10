@@ -21,6 +21,16 @@ public interface IDocumentFormat
     /// </remarks>
     string ContentType { get; }
 
+    /// <summary>
+    /// Whether a single value has to be walked as a list of one.
+    /// </summary>
+    /// <remarks>
+    /// A format that makes a list by repeating a name — XML — cannot tell a list of one from a
+    /// value that was never a list, so a list rule over such a path must walk what it found rather
+    /// than treat it as no entries at all. JSON says which, so it says no.
+    /// </remarks>
+    bool SingleValueIsAList { get; }
+
     /// <summary>Reads a document into a tree.</summary>
     /// <exception cref="DocumentFormatException">When the text is not a valid document of this format.</exception>
     ValueNode Read(string text);

@@ -327,3 +327,29 @@ describe("a transform argument that is only punctuation and spaces", () => {
     expect(next.rules.fields[0].transform?.with).toBe(" (EDI)");
   });
 });
+
+describe("how the incoming document writes its dates", () => {
+  it("is part of the mapping, and survives the wire", () => {
+    const state = run([{ type: "SET_DATE_ORDER", order: "dayFirst" }]);
+
+    expect(state.rules.sourceDateOrder).toBe("dayFirst");
+    // A fact about the document, so it changes the mapping and can be undone.
+    expect(state.dirty).toBe(true);
+
+    const wire = JSON.parse(JSON.stringify(toWire(state.rules)));
+    expect(wire.sourceDateOrder).toBe("dayFirst");
+    expect(fromWire(wire).sourceDateOrder).toBe("dayFirst");
+  });
+
+  it("reads back as year-first when a stored mapping never said", () => {
+    // Every mapping saved before this existed could only have read year-first dates
+    // correctly anyway, so that is what absent has to mean.
+    expect(fromWire({ version: 1, sourceFormat: "json", targetFormat: "json", fields: [], lists: [] })
+      .sourceDateOrder).toBe("yearFirst");
+  });
+
+  it("undoes in one step", () => {
+    const set = run([{ type: "SET_DATE_ORDER", order: "monthFirst" }]);
+    expect(rulesEditorReducer(set, { type: "UNDO" }).rules.sourceDateOrder).toBe("yearFirst");
+  });
+});

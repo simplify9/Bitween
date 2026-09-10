@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
-import type { ExchangeRow, ExchangeStatus } from "../../api";
+import { ArrowRight, Check, Copy } from "lucide-react";
+import type { BulkRetryPlan, ExchangeRow, ExchangeStatus } from "../../api";
 import { Badge, Button } from "../../components/ui/basics";
+import { PromotedProps, namesSomething } from "../../components/config/shared";
 import { Checkbox } from "../../components/ui/forms";
 import { Dialog } from "../../components/ui/overlays";
 
@@ -112,45 +113,171 @@ export function XchangeId({ id, className = "" }: { id: string; className?: stri
 }
 
 /**
- * Shared confirm for single and bulk retries — carries the "reset adapter
- * properties" choice that decides whether the retry re-resolves config.
+ * How the plan lists name an exchange: the promoted properties the exchange list names it by,
+ * and enough of the id to tell two of them apart.
+ *
+ * The id stays because a substitution puts two exchanges side by side, and an information type
+ * whose promoted paths resolved to nothing gives both of them the same chips — "trackingNo= →
+ * trackingNo=" says which fields exist and nothing about which exchanges these are.
+ */
+function ExchangeIdentity({
+  id,
+  properties,
+}: {
+  id: string;
+  properties: Record<string, string | null> | null;
+}) {
+  // Properties that carry no values name nothing, so they are left out entirely rather than
+  // shown as a row of empty chips next to an identical row of empty chips.
+  if (!namesSomething(properties))
+    return (
+      <span className="min-w-0 truncate font-mono text-[11px] text-ink-500" title={id}>
+        {id}
+      </span>
+    );
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <PromotedProps properties={properties} max={2} />
+      <span className="shrink-0 font-mono text-[11px] text-ink-400" title={id}>
+        {id.slice(0, 8)}…
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Shared confirm for single and bulk retries — carries the "reset adapter properties" choice
+ * that decides whether the retry re-resolves config.
+ *
+ * A bulk retry also passes the `plan` the server worked out for the same selection, because a
+ * selection is rarely just itself: exchanges already retried hand over to their newest attempt,
+ * ones that have since succeeded drop out, and two selections in one chain come to the same
+ * attempt. All of that is shown before anyone commits, since a retry cannot be taken back.
  */
 export function RetryDialog({
   count,
+  plan,
+  planLoading = false,
   busy,
   onConfirm,
+  onResetChange,
   onClose,
 }: {
   count: number;
+  /** Bulk retries only — a single retry has nothing to resolve. */
+  plan?: BulkRetryPlan | null;
+  planLoading?: boolean;
   busy: boolean;
   onConfirm: (reset: boolean) => void;
+  /**
+   * Bulk retries only: the plan depends on this choice — re-resolving properties is impossible
+   * for an exchange whose subscription is gone — so the caller has to be able to ask again.
+   */
+  onResetChange?: (reset: boolean) => void;
   onClose: () => void;
 }) {
   const [reset, setReset] = useState(false);
+  const bulk = count !== 1;
+  const nothingToDo = plan != null && !plan.overLimit && plan.willRetry === 0;
+
   return (
     <Dialog
-      title={count === 1 ? "Retry this exchange?" : `Retry ${count} exchanges?`}
+      title={count === 1 ? "Retry this exchange?" : `Retry ${count.toLocaleString()} exchanges?`}
       onClose={onClose}
     >
       <div className="space-y-4">
-        <p className="text-sm text-ink-600">
-          The original input document{count === 1 ? "" : "s"} will run through the pipeline again as{" "}
-          {count === 1 ? "a new exchange" : "new exchanges"}.
-          {count > 1 && " Exchanges that already have a pending auto-retry are skipped."}
-        </p>
-        <Checkbox
-          label="Re-resolve adapter properties"
-          description="Use the subscription's current configuration instead of the values captured when the exchange first ran."
-          checked={reset}
-          onChange={(e) => setReset(e.target.checked)}
-        />
+        {plan?.overLimit ? (
+          <p className="text-sm text-ink-600">
+            {plan.selected.toLocaleString()} exchanges match this filter, which is more than the{" "}
+            {plan.limit.toLocaleString()} a single retry will carry out. Narrow the filter — by
+            status, partner or date — and retry the rest after.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-ink-600">
+              {bulk && planLoading
+                ? "Working out what will run…"
+                : plan
+                  ? plan.willRetry === 0
+                    ? "Nothing here can be retried."
+                    : `${plan.willRetry.toLocaleString()} ${
+                        plan.willRetry === 1 ? "exchange" : "exchanges"
+                      } will run again — the original input document goes back through the pipeline as a new exchange.`
+                  : `The original input document${count === 1 ? "" : "s"} will run through the pipeline again as ${
+                      count === 1 ? "a new exchange" : "new exchanges"
+                    }.`}
+            </p>
+
+            {plan != null && plan.substituted.length > 0 && (
+              <div className="rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
+                <p className="text-[13px] text-ink-700">
+                  <strong className="font-semibold">{plan.substituted.length.toLocaleString()}</strong> of
+                  these {plan.substituted.length === 1 ? "has" : "have"} already been retried. An
+                  exchange is only retried once, so{" "}
+                  {plan.substituted.length === 1 ? "its newest attempt runs" : "their newest attempts run"}{" "}
+                  instead.
+                </p>
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-xs font-medium text-ink-500 hover:text-ink-700">
+                    Show which
+                  </summary>
+                  <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto">
+                    {plan.substituted.map((s) => (
+                      <li key={s.selectedId} className="flex items-center gap-1.5">
+                        <ExchangeIdentity id={s.selectedId} properties={plan.properties[s.selectedId] ?? null} />
+                        <ArrowRight className="size-3 shrink-0 text-ink-400" aria-hidden />
+                        <ExchangeIdentity id={s.retryId} properties={plan.properties[s.retryId] ?? null} />
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+
+            {plan != null && plan.skipped.length > 0 && (
+              <div className="rounded-lg border border-ink-200 bg-ink-50/60 px-3 py-2">
+                <p className="text-[13px] text-ink-700">
+                  <strong className="font-semibold">{plan.skipped.length.toLocaleString()}</strong>{" "}
+                  will be skipped.
+                </p>
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-xs font-medium text-ink-500 hover:text-ink-700">
+                    Show why
+                  </summary>
+                  <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto">
+                    {plan.skipped.map((s) => (
+                      <li key={s.id} className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-600">
+                        <ExchangeIdentity id={s.id} properties={plan.properties[s.id] ?? null} />
+                        <span>— {s.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+
+            <Checkbox
+              label="Re-resolve adapter properties"
+              description="Use the subscription's current configuration instead of the values captured when the exchange first ran."
+              checked={reset}
+              onChange={(e) => {
+                setReset(e.target.checked);
+                onResetChange?.(e.target.checked);
+              }}
+            />
+          </>
+        )}
+
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {plan?.overLimit || nothingToDo ? "Close" : "Cancel"}
           </Button>
-          <Button variant="primary" busy={busy} onClick={() => onConfirm(reset)}>
-            Retry
-          </Button>
+          {!plan?.overLimit && !nothingToDo && (
+            <Button variant="primary" busy={busy} disabled={planLoading} onClick={() => onConfirm(reset)}>
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     </Dialog>

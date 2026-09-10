@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
 /** Checkbox labels carry their description in the accessible name, so anchor at the start. */
 export const startsWith = (text: string) =>

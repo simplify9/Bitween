@@ -14,6 +14,7 @@ import type {
   EditorListEntry,
   EditorListRule,
   EditorRules,
+  RuleId,
 } from "./types";
 
 export interface OutputFieldNode {
@@ -62,6 +63,23 @@ export interface OutputEntryNode {
   children: OutputNode[];
 }
 
+/**
+ * The single value each walked entry of a list of plain values produces.
+ *
+ * A node rather than a setting on the list, because that is what it is: one rule,
+ * with a source, a transform and a type, exactly like a field. The only thing it
+ * lacks is a name — the entries of `["A1","B7"]` have nowhere to be named — so it
+ * is the one row whose name is fixed text rather than a box.
+ */
+export interface OutputItemNode {
+  kind: "item";
+  key: string;
+  /** The list whose walked entries this produces. */
+  listId: RuleId;
+  rule: EditorFieldRule;
+  errorKey: string;
+}
+
 export interface OutputBranchNode {
   kind: "branch";
   key: string;
@@ -74,7 +92,11 @@ export type OutputNode =
   | OutputFieldNode
   | OutputListNode
   | OutputBranchNode
-  | OutputEntryNode;
+  | OutputEntryNode
+  | OutputItemNode;
+
+/** The two nodes drawn as an ordinary rule row: a named field, and a list's value. */
+export type OutputRowNode = OutputFieldNode | OutputItemNode;
 
 /**
  * How a rule's errors are named, mirroring DocumentMapper.Describe.
@@ -110,7 +132,17 @@ function listNode(list: EditorListRule, prefix: string, isRoot = false): OutputL
     isRoot,
     list,
     errorKey,
-    children: list.item ? [] : grouped(entriesOf(list.fields, list.lists, errorKey)),
+    children: list.item
+      ? [
+          {
+            kind: "item" as const,
+            key: list.item.id,
+            listId: list.id,
+            rule: list.item,
+            errorKey,
+          },
+        ]
+      : grouped(entriesOf(list.fields, list.lists, errorKey)),
     // A fixed entry's rules are reported under the list, exactly as a walked
     // entry's are — the mapper hands both the same target.
     fixed: list.fixed.map((entry, at) => ({
@@ -231,7 +263,12 @@ export function filterTree(nodes: OutputNode[], search: string): OutputNode[] {
           break;
         }
 
-        // An entry has no name of its own, so it survives only for what is in it.
+        // Neither an item nor an entry has a name to match on. An item is only ever
+        // reached by its list matching, which keeps its children whole; an entry can
+        // still hold named rules, so it survives for those.
+        case "item":
+          break;
+
         case "entry": {
           const children = keep(node.children);
           if (children.length > 0) out.push({ ...node, children });

@@ -1,10 +1,8 @@
 using FluentValidation;
-using Microsoft.Extensions.DependencyInjection;
 using SW.EfCoreExtensions;
 using SW.Bitween.Domain;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
-using System;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -35,7 +33,7 @@ namespace SW.Bitween.Resources.Subscriptions
 
         private class Validate : AbstractValidator<SubscriptionSaveMapper>
         {
-            public Validate(NativeAdapterDiscoveryService nativeAdapterDiscovery, IServiceProvider serviceProvider)
+            public Validate(AdapterRequirements adapterRequirements)
             {
                 RuleFor(i => i.MapperId).NotEmpty();
 
@@ -44,23 +42,8 @@ namespace SW.Bitween.Resources.Subscriptions
                     RuleFor(i => i.MapperProperties).CustomAsync(async (i, context, _) =>
                     {
                         var mapperId = ((SubscriptionSaveMapper)context.InstanceToValidate).MapperId;
-                        var mustProps = Enumerable.Empty<string>();
 
-                        if (mapperId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var properties = nativeAdapterDiscovery.GetStartupValues(mapperId);
-                            mustProps = properties.Where(p => !p.Value.Optional).Select(p => p.Key);
-                        }
-                        else
-                        {
-                            var serverless = serviceProvider.GetRequiredService<IServerlessService>();
-                            await serverless.StartAsync(mapperId, null);
-                            mustProps = (await serverless.GetExpectedStartupValues())
-                                .Where(p => p.Value.Optional == false).Select(p => p.Key);
-                        }
-
-                        var missing = mustProps.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                            .Except(i.Where(p => !string.IsNullOrEmpty(p.Value)).Select(p => p.Key));
+                        var missing = await adapterRequirements.MissingFor(mapperId, i);
                         if (missing.Any())
                             context.AddFailure($"Missing: {string.Join(",", missing)}");
                     });

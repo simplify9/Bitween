@@ -30,6 +30,23 @@ public class MappingRules
     /// <summary>Format id of the document to produce.</summary>
     public string TargetFormat { get; set; } = "json";
 
+    /// <summary>
+    /// Which of the day and the month comes first in the incoming document's dates.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On the mapping rather than on each rule, because a partner writes dates one way
+    /// throughout a document — asking per field would be the same answer typed many times,
+    /// and one row set wrongly would be invisible.
+    /// </para>
+    /// <para>
+    /// It has to be asked at all because <c>04.09.2026</c> is the 4th of September to a French
+    /// partner and the 9th of April to the invariant parser, which reads it that way without
+    /// complaining. Year-first values are unambiguous and need no setting.
+    /// </para>
+    /// </remarks>
+    public DateOrder SourceDateOrder { get; set; } = DateOrder.YearFirst;
+
     public List<FieldRule> Fields { get; set; } = new();
 
     public List<ListRule> Lists { get; set; } = new();
@@ -126,6 +143,19 @@ public enum ValueSourceKind
 
     /// <summary>A key in one of the global values sets.</summary>
     Global,
+}
+
+/// <summary>How a document writes dates that are not year-first.</summary>
+public enum DateOrder
+{
+    /// <summary>Only year-first values are accepted; anything else is refused rather than guessed.</summary>
+    YearFirst,
+
+    /// <summary><c>04.09.2026</c> is the 4th of September.</summary>
+    DayFirst,
+
+    /// <summary><c>04.09.2026</c> is the 9th of April.</summary>
+    MonthFirst,
 }
 
 public enum ValueType

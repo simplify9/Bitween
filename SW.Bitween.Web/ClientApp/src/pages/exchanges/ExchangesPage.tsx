@@ -1,8 +1,8 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, RotateCcw, X } from "lucide-react";
-import { api, type ExchangeQuery, type ExchangeStatus } from "../../api";
+import { api, type BulkRetrySelection, type ExchangeQuery, type ExchangeStatus } from "../../api";
 import { Can } from "../../auth/guards";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
@@ -11,6 +11,7 @@ import { SearchSelect } from "../../components/ui/SearchSelect";
 import { useSubscriptionsCache } from "../../components/config/shared";
 import { timeAgo, timeUntil, duration } from "../../lib/dates";
 import { ExchangeDrawer } from "./ExchangeDrawer";
+import { hasRetryChain, retryTreeQuery } from "./RetryChain";
 import { JourneyStrip, RetryDialog, STATUS_LABELS, StatusBadge } from "./shared";
 import { PromotedProps } from "../../components/config/shared";
 import { keys } from "../../api/queryKeys";
@@ -57,7 +58,16 @@ export function ExchangesPage() {
   const [refreshMs, setRefreshMs] = useState(15_000);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /**
+   * "Select all matching" holds the filter rather than a list of ids, so a selection is not
+   * limited to the 25 rows one page happened to load. Unticking a row in this mode records an
+   * exclusion instead of removing an id.
+   */
+  const [allMatching, setAllMatching] = useState(false);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState(false);
+  /** Mirrors the confirm dialog's own choice, because the plan depends on it. */
+  const [bulkReset, setBulkReset] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -127,26 +137,70 @@ export function ExchangesPage() {
       return next;
     });
 
+  const toggle = (set: Set<string>, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  };
+
   const toggleSelected = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    allMatching
+      ? setExcluded((prev) => toggle(prev, id))
+      : setSelected((prev) => toggle(prev, id));
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    setExcluded(new Set());
+    setAllMatching(false);
+  };
 
   const rows = data?.result ?? [];
   const total = data?.total ?? 0;
   const totalIsCapped = total > COUNT_CAP;
-  const allOnPageSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+
+  const isSelected = (id: string) => (allMatching ? !excluded.has(id) : selected.has(id));
+  const allOnPageSelected = rows.length > 0 && rows.every((r) => isSelected(r.id));
+  const selectedCount = allMatching ? Math.max(0, total - excluded.size) : selected.size;
+
+  /** What the retry acts on: the ticked rows, or the filter itself minus the unticked ones. */
+  const selection: BulkRetrySelection = allMatching
+    ? { matching: query, excludeIds: [...excluded] }
+    : { ids: [...selected] };
+
+  /**
+   * A selection means a set of exchanges, and changing the filters changes which set that is —
+   * for "all matching" it would silently come to mean something else entirely. Paging is not a
+   * filter, so ticking rows across pages still accumulates.
+   */
+  const filterKey = FILTER_KEYS.map((k) => searchParams.get(k) ?? "").join("\u0000");
+  useEffect(clearSelection, [filterKey]);
+
+  /**
+   * What the retry would do, asked for while the confirm is open. A selection is rarely just
+   * itself — anything already retried hands over to its newest attempt — so this is shown
+   * before anyone commits rather than reported afterwards.
+   */
+  const { data: plan, isFetching: planLoading } = useQuery({
+    queryKey: keys.exchanges.bulkRetryPreview(JSON.stringify({ selection, reset: bulkReset })),
+    queryFn: () => api.previewBulkRetry(selection, { reset: bulkReset }),
+    enabled: bulkConfirm && selectedCount > 0,
+    staleTime: 30_000,
+  });
 
   const bulkRetry = useMutation({
-    mutationFn: (reset: boolean) => api.bulkRetryExchanges([...selected], { reset }),
-    onSuccess: ({ retried, skipped }) => {
+    mutationFn: (reset: boolean) => api.bulkRetryExchanges(selection, { reset }),
+    onSuccess: (done) => {
       setBulkConfirm(false);
-      setSelected(new Set());
+      setBulkReset(false);
+      clearSelection();
       setBulkResult(
-        `${retried} retr${retried === 1 ? "y" : "ies"} started${skipped > 0 ? `, ${skipped} skipped (auto-retry already scheduled)` : ""}.`,
+        `${done.willRetry.toLocaleString()} retr${done.willRetry === 1 ? "y" : "ies"} started` +
+          (done.substituted.length > 0
+            ? `, ${done.substituted.length} continuing an existing chain`
+            : "") +
+          (done.skipped.length > 0 ? `, ${done.skipped.length} skipped` : "") +
+          ".",
       );
       void queryClient.invalidateQueries({ queryKey: keys.exchanges.all });
     },
@@ -357,14 +411,17 @@ export function ExchangesPage() {
                       aria-label="Select all on this page"
                       className="size-3.5 cursor-pointer accent-crimson-600"
                       checked={allOnPageSelected}
-                      onChange={() =>
+                      onChange={() => {
+                        // In "all matching" mode the box stands for the whole filter, so
+                        // clearing it drops the whole selection rather than excluding 25 rows.
+                        if (allMatching) return clearSelection();
                         setSelected((prev) => {
                           const next = new Set(prev);
                           if (allOnPageSelected) rows.forEach((r) => next.delete(r.id));
                           else rows.forEach((r) => next.add(r.id));
                           return next;
-                        })
-                      }
+                        });
+                      }}
                     />
                   </Can>
                 </th>
@@ -383,6 +440,12 @@ export function ExchangesPage() {
                 <Fragment key={x.id}>
                   <tr
                     onClick={() => toggleOpen(x.id)}
+                    /* Hovering a row is most of a second's head start on opening it, which is
+                       enough that its retry chain is already there when the drawer renders.
+                       Only for rows that have one — most exchanges do not. */
+                    onMouseEnter={() => {
+                      if (hasRetryChain(x)) void queryClient.prefetchQuery(retryTreeQuery(x.id));
+                    }}
                     className="cursor-pointer border-b border-ink-50 transition-colors last:border-0 hover:bg-ink-50/60"
                   >
                     <td className="py-1.5 pl-4" onClick={(e) => e.stopPropagation()}>
@@ -391,7 +454,7 @@ export function ExchangesPage() {
                           type="checkbox"
                           aria-label={`Select ${x.id}`}
                           className="size-3.5 cursor-pointer accent-crimson-600"
-                          checked={selected.has(x.id)}
+                          checked={isSelected(x.id)}
                           onChange={() => toggleSelected(x.id)}
                         />
                       </Can>
@@ -514,29 +577,65 @@ export function ExchangesPage() {
       )}
 
       {/* — bulk action bar — */}
-      {selected.size > 0 && (
-        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-xl border border-ink-200 bg-white px-4 py-2.5 shadow-lg">
-          <span className="text-sm text-ink-700">
-            <strong className="font-semibold">{selected.size}</strong> selected
-          </span>
-          <span className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <Button size="sm" variant="primary" onClick={() => setBulkConfirm(true)}>
-              <RotateCcw className="size-3.5" aria-hidden />
-              Retry selected…
-            </Button>
-          </span>
+      {selectedCount > 0 && (
+        <div className="sticky bottom-4 mt-4 space-y-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-ink-700">
+              <strong className="font-semibold">
+                {totalIsCapped && allMatching ? `${COUNT_CAP.toLocaleString()}+` : selectedCount.toLocaleString()}
+              </strong>{" "}
+              selected
+              {allMatching && <span className="text-ink-500"> — everything this filter matches</span>}
+              {allMatching && excluded.size > 0 && (
+                <span className="text-ink-500">, {excluded.size} unticked</span>
+              )}
+            </span>
+            <span className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={clearSelection}>
+                Clear
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => setBulkConfirm(true)}>
+                <RotateCcw className="size-3.5" aria-hidden />
+                Retry selected…
+              </Button>
+            </span>
+          </div>
+
+          {/* The whole page is ticked but there is more behind it — the one moment where
+              "select all matching" is what someone actually wants, so it is offered there
+              rather than living permanently in the toolbar. */}
+          {!allMatching && allOnPageSelected && total > rows.length && (
+            <p className="text-[13px] text-ink-500">
+              Only the {rows.length} rows on this page.{" "}
+              <button
+                onClick={() => {
+                  setAllMatching(true);
+                  setSelected(new Set());
+                  setExcluded(new Set());
+                }}
+                className="font-medium text-crimson-700 hover:underline"
+              >
+                Select all {totalIsCapped ? `${COUNT_CAP.toLocaleString()}+` : total.toLocaleString()} matching
+                this filter
+              </button>
+            </p>
+          )}
         </div>
       )}
 
       {bulkConfirm && (
         <RetryDialog
-          count={selected.size}
+          count={selectedCount}
+          plan={plan ?? null}
+          planLoading={planLoading}
           busy={bulkRetry.isPending}
           onConfirm={(reset) => bulkRetry.mutate(reset)}
-          onClose={() => setBulkConfirm(false)}
+          onResetChange={setBulkReset}
+          onClose={() => {
+            setBulkConfirm(false);
+            // The dialog starts unticked each time it opens, so the mirrored copy has to as well.
+            setBulkReset(false);
+          }}
         />
       )}
     </div>

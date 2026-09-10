@@ -53,6 +53,20 @@ describe("formatDocument", () => {
     expect(formatDocument("<a><![CDATA[keep > <this]]></a>")).toBeNull();
   });
 
+  it("declines markup that says its own whitespace is content", () => {
+    // `xml:space="preserve"` is the document stating the one thing that makes laying
+    // it out unsafe. This payload is sent as-is from the new-exchange page, so a
+    // newline added here is a newline the partner receives.
+    expect(formatDocument('<r xml:space="preserve"><a/><b/></r>')).toBeNull();
+    expect(formatDocument("<r xml:space='preserve'><a/><b/></r>")).toBeNull();
+  });
+
+  it("still lays out markup that only mentions xml:space elsewhere", () => {
+    // `default` is the other legal value and means the opposite, so the bail-out has
+    // to read the value rather than the attribute name.
+    expect(formatDocument('<r xml:space="default"><a/><b/></r>')).not.toBeNull();
+  });
+
   it("declines markup carrying a comment", () => {
     expect(formatDocument("<a><!-- note --><b/></a>")).toBeNull();
   });

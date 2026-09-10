@@ -7,7 +7,7 @@ import {
 } from "../../lib/nativeMapper/documentTree";
 import type { OutputNode } from "../../lib/nativeMapper/outputTree";
 import { useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
-import type { RuleId } from "../../lib/nativeMapper/types";
+import type { EditorListRule, RuleId } from "../../lib/nativeMapper/types";
 import { EntryRow } from "./EntryRow";
 import { ListRow } from "./ListRow";
 import { OutputRow } from "./OutputRow";
@@ -91,7 +91,7 @@ function TreeNode({
     document: scope === root ? null : readablePaths(root),
   };
 
-  if (node.kind === "field") {
+  if (node.kind === "field" || node.kind === "item") {
     return (
       <div style={pad}>
         <OutputRow node={node} prefix={prefix} paths={paths} />
@@ -171,10 +171,6 @@ function TreeNode({
         <ListRow
           node={node}
           scope={scope}
-          itemPaths={{
-            entry: readablePaths(itemScopeOf(scope, node.list.over ?? "")),
-            document: readablePaths(root),
-          }}
           prefix={prefix}
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((c) => !c)}
@@ -197,7 +193,10 @@ function TreeNode({
             indent={indent + 1}
           />
 
-          {node.list.over !== undefined && node.list.item === undefined && (
+          {/* Whatever a walked entry produces: the field rows of a record, or the one
+              row of a plain value. A list that walks nothing has no walked entry, so
+              it shows neither and is exactly the entries written into it. */}
+          {node.list.over !== undefined && (
             <OutputTreeView
               nodes={node.children}
               scope={itemScopeOf(scope, node.list.over ?? "")}
@@ -217,11 +216,33 @@ function TreeNode({
                 dispatch({ type: "ADD_FIXED_ENTRY", listId: node.list.id })
               }
               showPerEntryRules={node.list.over !== undefined && node.list.item === undefined}
+              onAddValue={
+                stillUndecided(node.list)
+                  ? () => dispatch({ type: "MAKE_LIST_OF_VALUES", listId: node.list.id })
+                  : undefined
+              }
             />
           </div>
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Whether a list is still open to being made a list of plain values.
+ *
+ * Only while it holds nothing at all. A list's shape follows what is put in it, so
+ * one that already has fields, nested lists or written entries has answered the
+ * question — and offering to change it then would mean deciding what happens to
+ * everything already there.
+ */
+function stillUndecided(list: EditorListRule): boolean {
+  return (
+    list.item === undefined &&
+    list.fields.length === 0 &&
+    list.lists.length === 0 &&
+    list.fixed.length === 0
   );
 }
 
@@ -276,6 +297,7 @@ export function AddRuleButtons({
   canAddList,
   inside,
   onAddFixedEntry,
+  onAddValue,
   showPerEntryRules = true,
 }: {
   listId: RuleId | null;
@@ -284,6 +306,14 @@ export function AddRuleButtons({
   inside?: string;
   /** Offered on a list, where an entry can be written into it. */
   onAddFixedEntry?: () => void;
+  /**
+   * Offered on a list that has not yet been made of anything.
+   *
+   * What a list holds is decided by what is put in it, so this sits beside Field and
+   * List rather than being a setting behind a chevron — and once one of the three has
+   * been used the other kind is no longer offered.
+   */
+  onAddValue?: () => void;
   /** False for a list that walks nothing: there are no per-entry rules to add. */
   showPerEntryRules?: boolean;
 }) {
@@ -292,6 +322,17 @@ export function AddRuleButtons({
 
   return (
     <div className="flex flex-wrap gap-1.5 py-1">
+      {onAddValue && (
+        <button
+          type="button"
+          onClick={onAddValue}
+          aria-label={`Add a value${where}`}
+          title={'Every entry is one value rather than a record, e.g. ["A1", "B7"]'}
+          className="flex items-center gap-1 rounded border border-ink-200 bg-white px-1.5 py-0.5 text-[11px] text-ink-600 hover:border-ink-300 hover:bg-ink-50"
+        >
+          <Plus size={11} /> Value
+        </button>
+      )}
       {onAddFixedEntry && (
         <button
           type="button"

@@ -79,3 +79,94 @@ test("queue health page loads with live consumer data", async ({ page }) => {
   await expect(page.getByText("v3.local.bitween").first()).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("undefined")).toHaveCount(0);
 });
+
+/**
+ * An exchange is retried at most once, so a retried one stops offering Retry and hands over to
+ * the attempt that can be retried. Built through the UI rather than pinned to particular ids,
+ * since the retry has to exist for the state to be real.
+ */
+test("a retried exchange shows its chain and sends you to the newest attempt", async ({ page }) => {
+  test.setTimeout(60000);
+  await page.goto("exchanges?status=failed");
+  await expect(page.getByRole("row").nth(1)).toBeVisible({ timeout: 15000 });
+  await page.getByLabel("Refresh interval").selectOption("0");
+
+  // Whichever failed exchange has not been retried yet. Most have not, but this database
+  // accumulates chains as the suite runs, and an already-retried one has no Retry button to
+  // press — which is the very thing under test further down.
+  let retried: string | null = null;
+  const failedRows = page.getByRole("row").filter({ hasText: "Failed" });
+  // The whole page, not the first few rows: this database accumulates chains as the suite runs,
+  // and a run that happened to leave several retried exchanges at the top would otherwise fail
+  // here before reaching what the test is about. Newest first, and every retry lands at the top
+  // as a fresh un-retried leaf, so a page is far more than enough.
+  const candidates = await failedRows.count();
+  for (let i = 0; i < candidates && retried === null; i++) {
+    const row = failedRows.nth(i);
+    const label = await row.locator("input[type=checkbox]").getAttribute("aria-label");
+    await row.locator("td").last().click();
+    if (await page.getByRole("button", { name: "Retry…" }).isVisible()) {
+      retried = label!.replace("Select ", "");
+      break;
+    }
+    await row.locator("td").last().click(); // collapse and try the next one
+  }
+  expect(
+    retried,
+    `no un-retried failed exchange among the ${candidates} on this page`,
+  ).not.toBeNull();
+
+  await page.getByRole("button", { name: "Retry…" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText(/Retry started/)).toBeVisible({ timeout: 15000 });
+
+  // Open that same exchange again: it is spent now.
+  await page.goto(`exchanges?ids=${retried}`);
+  const row = page.locator(`tr:has(input[aria-label="Select ${retried}"])`);
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.locator("td").last().click();
+
+  await expect(page.getByText("Already retried")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("button", { name: "Retry…" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Open the newest attempt/ })).toBeVisible();
+
+  // And the chain itself, with this exchange marked in it.
+  await expect(page.getByText(/Retry chain · \d+ attempts/)).toBeVisible();
+  await expect(page.getByText("You are here")).toBeVisible();
+});
+
+/**
+ * A selection has to be able to mean "everything this filter matches", or a 200-exchange
+ * recovery is 8 pages of ticking boxes. Stops at the confirm — what it says is the point, and
+ * running it would retry the whole filter.
+ */
+test("select all matching covers the whole filter, and the confirm says what will run", async ({ page }) => {
+  await page.goto("exchanges?status=failed");
+  await expect(page.getByRole("row").nth(1)).toBeVisible({ timeout: 15000 });
+  await page.getByLabel("Refresh interval").selectOption("0");
+
+  await page.getByRole("checkbox", { name: "Select all on this page" }).check();
+  const offer = page.getByRole("button", { name: /Select all [\d,]+\+? matching this filter/ });
+  await expect(offer).toBeVisible();
+  await offer.click();
+
+  await expect(page.getByText(/everything this filter matches/)).toBeVisible();
+
+  // Unticking a row in this mode records an exclusion rather than dropping out of it.
+  const before = await page.locator("text=/^[\\d,]+\\+? selected/").first().innerText();
+  await page.getByRole("checkbox", { name: /^Select (?!all\b)/ }).first().uncheck();
+  await expect(page.getByText(/1 unticked/)).toBeVisible();
+  expect(await page.locator("text=/^[\\d,]+\\+? selected/").first().innerText()).not.toBe(before);
+
+  // The confirm describes the selection the server resolved, not the rows on screen.
+  await page.getByRole("button", { name: "Retry selected…" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(/Retry [\d,]+ exchanges\?/)).toBeVisible({ timeout: 15000 });
+  // Either it is within the cap and says how many will run, or it is past it and refuses.
+  await expect(dialog.getByText(/will run again|more than the [\d,]+ a single retry|Nothing here can be retried/)).toBeVisible({ timeout: 15000 });
+
+  // By text, not accessible name: the dialog's own × is also called "Close".
+  await dialog.locator("button", { hasText: /^(Cancel|Close)$/ }).click();
+  await expect(dialog).toHaveCount(0);
+});

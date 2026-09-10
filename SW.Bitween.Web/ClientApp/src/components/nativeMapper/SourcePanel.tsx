@@ -6,7 +6,10 @@ import {
   type DocumentNode,
 } from "../../lib/nativeMapper/documentTree";
 import { useRules, useRulesDispatch } from "../../lib/nativeMapper/RulesEditorContext";
+import { FormatButton } from "../ui/FormatButton";
 import { TextInput } from "../ui/forms";
+import { RowSelect } from "./rowControls";
+import { DATE_ORDERS, type DateOrderName } from "../../lib/nativeMapper/types";
 
 /**
  * The shape of the source document, as a tree of paths a rule can read.
@@ -66,9 +69,35 @@ export function SourcePanel({
           onChange={(e) => dispatch({ type: "SET_SOURCE_SAMPLE", text: e.target.value })}
           aria-label="Sample source document"
         />
-        {parseError && <p className="mt-1 text-[11px] text-danger-700">{parseError}</p>}
+        <div className="flex items-center gap-2">
+          {parseError && <p className="mt-1 text-[11px] text-danger-700">{parseError}</p>}
+          <FormatButton
+            className="mt-1 ml-auto"
+            value={sourceSample}
+            onChange={(text) => dispatch({ type: "SET_SOURCE_SAMPLE", text })}
+          />
+        </div>
+
+        {/* Part of the mapping, unlike the sample above it: how this partner writes
+            dates is a fact about their documents, and it is the same for every field —
+            so it is asked once here rather than on each rule that formats a date. */}
+        <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-500">
+          Dates
+          <RowSelect
+            className="min-w-0 flex-1"
+            aria-label="Dates in the incoming document"
+            title="Which of the day and the month comes first. Year-first needs no setting."
+            value={rules.sourceDateOrder ?? "yearFirst"}
+            onChange={(e) =>
+              dispatch({ type: "SET_DATE_ORDER", order: e.target.value as DateOrderName })
+            }
+            options={DATE_ORDERS}
+          />
+        </label>
+
         <p className="mt-1 text-[11px] text-ink-500">
-          Used only here, to show the fields and the preview. The mapping never reads it.
+          The sample is used only here, to show the fields and the preview. The mapping never
+          reads it.
         </p>
       </div>
 

@@ -549,7 +549,11 @@ export function AdapterConfig({
       {adapter && usesVisualMappingEditor(adapter.id) && (
         mapperEditorHref ? (
           <Link
-            to={mapperEditorHref}
+            // Which mapper is *picked*, which is not yet which mapper is saved. Without
+            // it the editor asks the server and gets the one being replaced, so choosing
+            // a mapper and opening its editor gave you the other one until you saved
+            // first — in both directions, and with nothing on screen to explain it.
+            to={`${mapperEditorHref}?mapper=${encodeURIComponent(adapter.id)}`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-[13px] font-medium text-crimson-700 hover:border-ink-300 hover:bg-ink-50"
           >
             Open the visual mapping editor

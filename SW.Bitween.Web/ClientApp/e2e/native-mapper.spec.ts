@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { pickOption, signInAsAdmin } from "./helpers";
 import {
   SAMPLE,
+  addList,
+  addListValue,
   addPathRule,
   buildFromSample,
   createSubscription,
@@ -9,6 +11,7 @@ import {
   openMapper,
   setSourcePath,
   suggestionsFor,
+  writeMapperProperties,
 } from "./mapperHelpers";
 
 /**
@@ -163,6 +166,14 @@ test("stored rules survive a switch to a list-shaped output and back", async ({ 
 test("choosing the new mapper offers its editor, and the old mapper keeps its own", async ({
   page,
 }) => {
+  // The old mapper is listed only while a subscription somewhere still uses it, so this
+  // test has to put one on it before it can pick it. A separate subscription rather than
+  // the one under test: pinning that one would give it a mapper already, and the first
+  // thing asserted below is that it has none.
+  await writeMapperProperties(await createSubscription(page), "NativeJSONMapper", {
+    ScribanTemplate: "{}",
+  });
+
   const subscriptionId = await createSubscription(page);
 
   await page.goto(`subscriptions/${subscriptionId}`);
@@ -177,7 +188,7 @@ test("choosing the new mapper offers its editor, and the old mapper keeps its ow
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute(
     "href",
-    new RegExp(`/subscriptions/${subscriptionId}/mapper$`),
+    new RegExp(`/subscriptions/${subscriptionId}/mapper\\?mapper=NativeMapper$`),
   );
 
   // Both mappers are named by the same check, so adding the new one cannot quietly
@@ -190,6 +201,63 @@ test("choosing the new mapper offers its editor, and the old mapper keeps its ow
   await page.getByRole("combobox", { name: "mapper adapter" }).blur();
   await pickOption(page, "mapper adapter", "NativeJSONMapper");
   await expect(link).toBeVisible();
+});
+
+
+test("the editor opens for the mapper you picked, not the one that is saved", async ({ page }) => {
+  // The link used to carry only the subscription, so the editor asked the server which
+  // mapper it used and got the one being replaced. Choosing a mapper and opening its
+  // editor gave you the other one — in both directions — until you saved first, with
+  // nothing on screen to say why.
+  const subscriptionId = await createSubscription(page);
+  await writeMapperProperties(subscriptionId, "NativeJSONMapper", { ScribanTemplate: "{}" });
+
+  await page.goto(`subscriptions/${subscriptionId}`);
+  await page.getByRole("button", { name: /^Transformation/ }).click();
+
+  const link = page.getByRole("link", { name: /Open the visual mapping editor/ });
+
+  // Saved as the old mapper, picking the new one: the new editor, no save in between.
+  await pickOption(page, "mapper adapter", "NativeMapper");
+  await link.click();
+  await expect(page.getByLabel("From format")).toBeVisible({ timeout: 15000 });
+
+  // And back the other way, which is the same bug reversed.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeJSONMapper`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+
+  // A mapper nobody has an editor for is ignored rather than opening one on a guess.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=SomethingElse`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+});
+
+test("saving over the mapping the other mapper already has asks first", async ({ page }) => {
+  const subscriptionId = await createSubscription(page);
+  await writeMapperProperties(subscriptionId, "NativeJSONMapper", {
+    ScribanTemplate: '{ "ref": "{{ order.ref }}" }',
+  });
+
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeMapper`);
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SAMPLE);
+  await addPathRule(page, "customer", "order.customer");
+
+  // Saving here switches the mapper as well as storing the rules, so the template
+  // someone wrote in the other editor goes — and nothing else holds a copy of it.
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(/Replace the mapping this subscription already has/)).toBeVisible();
+
+  // Cancelling leaves the stored mapping exactly where it was.
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeJSONMapper`);
+  await expect(page.getByRole("button", { name: "Visual" })).toBeVisible({ timeout: 15000 });
+
+  // Going through with it does switch, and there is no second question next time.
+  await page.goto(`subscriptions/${subscriptionId}/mapper?mapper=NativeMapper`);
+  await page.getByRole("textbox", { name: "Sample source document" }).fill(SAMPLE);
+  await addPathRule(page, "customer", "order.customer");
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Replace the mapping" }).click();
+  await expect(page.getByText("Saved")).toBeVisible({ timeout: 15000 });
 });
 
 test("builds the whole output from a sample of it, and matches the source fields", async ({
@@ -230,6 +298,63 @@ test("builds the whole output from a sample of it, and matches the source fields
   await expect(preview).toContainText('"net": 100');
   await expect(preview).toContainText('"sku": "A1"');
   await expect(preview).toContainText('"sku": "B7"');
+});
+
+test("a list of plain values built from a sample is wired up and says so", async ({
+  page,
+}) => {
+  // The shape that sent this round: both sides hold `[1,2,3]`, and the scaffolder
+  // wires each entry to the entry itself — the right answer, which used to be shown
+  // as an empty box behind a checkbox and read as nothing configured at all.
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+
+  await page
+    .getByRole("textbox", { name: "Sample source document" })
+    .fill(JSON.stringify({ city: "errr", test: [1, 2, 3] }));
+  await buildFromSample(page, { city: "", test: [1, 2, 3] });
+  await page.getByRole("button", { name: "Build from a sample of the output" }).click();
+  await page.keyboard.press("Escape");
+
+  const list = page.getByRole("group", { name: "Rules for the list test" });
+
+  // A row in the tree, not a setting behind a chevron — and it reads as an answer
+  // rather than as a box waiting to be filled in.
+  const value = list.getByRole("combobox", { name: "Source field" });
+  await expect(value).toHaveAttribute("placeholder", "the entry itself");
+  await expect(value).toHaveValue("");
+  await expect(list.getByText("each entry")).toBeVisible();
+
+  // Nothing is left unassigned, which is what the count above the tree has to agree
+  // with: an empty path here is the answer, not a blank.
+  await expect(page.getByText("2 rules · 2 assigned")).toBeVisible();
+
+  // And it runs: the source values come straight through.
+  await expect(page.locator("pre").first()).toHaveText(/"test":\s*\[\s*1,\s*2,\s*3\s*\]/, {
+    timeout: 15000,
+  });
+});
+
+test("a list's value takes a type and a transform like any other rule", async ({ page }) => {
+  const subscriptionId = await createSubscription(page);
+  await openMapper(page, subscriptionId);
+  await page
+    .getByRole("textbox", { name: "Sample source document" })
+    .fill(JSON.stringify({ price: [10, 20] }));
+
+  const list = await addList(page, "totals", "price");
+  await addListValue(list, "totals", "");
+
+  // The row carries the whole rule, which is the point of it being a row: the value
+  // each entry produces can be multiplied and typed exactly like a named field.
+  await list.getByRole("button", { name: "Details for each entry" }).click();
+  await list.getByRole("combobox", { name: "Transform" }).selectOption("multiply");
+  await list.getByRole("textbox", { name: /Multiply.*By/ }).fill("2");
+  await list.getByRole("combobox", { name: "Value type" }).selectOption("number");
+
+  await expect(page.locator("pre").first()).toHaveText(/"totals":\s*\[\s*20,\s*40\s*\]/, {
+    timeout: 15000,
+  });
 });
 
 test("a list inside a list offers the entry's own lists, not the document's", async ({ page }) => {
@@ -433,11 +558,10 @@ test("a list of values with a slot per rule, walking nothing", async ({ page }) 
   // Nothing to walk, so the list is exactly what is written into it. This is what
   // the old mapper called a primitive array.
   await page.getByRole("combobox", { name: "Source list" }).selectOption("none");
-  await page.getByRole("button", { name: "Settings for the list codes" }).click();
-  await page.getByRole("checkbox", { name: /A list of plain values/ }).check();
 
-  // Each entry mirrors the list, so each is one value rather than a record.
-  await page.getByRole("button", { name: "Add an entry to codes" }).click();
+  // What the list holds is decided by what is put in it, not by a setting: the first
+  // slot says these are plain values, and every entry after it follows.
+  await page.getByRole("button", { name: "Add a value to codes" }).click();
   await page.getByRole("button", { name: "Add an entry to codes" }).click();
 
   const first = page.getByRole("group", { name: "Entry 1" });

@@ -7,14 +7,24 @@ using SW.Bitween.Domain;
 namespace SW.Bitween.Resources.Xchanges
 {
     [HandlerName("retry")]
-public class Retry(BitweenDbContext dbContext, XchangeService xchangeService)
-        : ICommandHandler<string, XchangeRetry,object>
+    public class Retry : ICommandHandler<string, XchangeRetry,object>
     {
-        private readonly BitweenDbContext dbContext = dbContext;
-        private readonly XchangeService xchangeService = xchangeService;
+        private readonly BitweenDbContext dbContext;
+        private readonly RequestContext requestContext;
+        private readonly XchangeService xchangeService;
+
+        public Retry(BitweenDbContext dbContext, RequestContext requestContext,
+            XchangeService xchangeService)
+        {
+            this.dbContext = dbContext;
+            this.requestContext = requestContext;
+            this.xchangeService = xchangeService;
+        }
 
         public async Task<object> Handle(string key, XchangeRetry xchangeRetry)
         {
+            await requestContext.EnsurePermission(dbContext, Model.Permissions.Exchanges.Operate);
+
             if (await dbContext.Set<DelayedRetry>().AnyAsync(d => d.Id == key))
                 throw new SWValidationException("AUTO_RETRY_SCHEDULED",
                     "An auto-retry is already scheduled for this exchange. Use \"Run Now\" to execute it immediately instead of retrying manually.");

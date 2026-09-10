@@ -9,12 +9,21 @@ using System.Threading.Tasks;
 namespace SW.Bitween.Resources.Adapters
 {
     [HandlerName("properties")]
-    public class GetProperties(IServerlessService serverless, NativeAdapterDiscoveryService nativeAdapterDiscovery,
-        BitweenDbContext dbContext, RequestContext requestContext) : IGetHandler<string,object>
+    public class GetProperties : IGetHandler<string,object>
     {
-        private readonly IServerlessService serverless = serverless;
-        private readonly BitweenDbContext dbContext = dbContext;
-        private readonly RequestContext requestContext = requestContext;
+        private readonly AdapterStartupValues startupValues;
+        private readonly NativeAdapterDiscoveryService _nativeAdapterDiscovery;
+        private readonly BitweenDbContext dbContext;
+        private readonly RequestContext requestContext;
+
+        public GetProperties(AdapterStartupValues startupValues, NativeAdapterDiscoveryService nativeAdapterDiscovery,
+            BitweenDbContext dbContext, RequestContext requestContext)
+        {
+            this.startupValues = startupValues;
+            _nativeAdapterDiscovery = nativeAdapterDiscovery;
+            this.dbContext = dbContext;
+            this.requestContext = requestContext;
+        }
 
         async public Task<object> Handle(string key)
         {
@@ -25,24 +34,12 @@ namespace SW.Bitween.Resources.Adapters
             // Check if it's a native adapter
             if (decodedKey.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                return nativeAdapterDiscovery.GetExpectedStartupValues(decodedKey);
+                return _nativeAdapterDiscovery.GetExpectedStartupValues(decodedKey);
             }
             
-            // Handle serverless adapters
-            try
-            {
-                await serverless.StartAsync(decodedKey, null);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                throw new BitweenException(
-                    $"Adapter '{decodedKey}' metadata is incomplete or the adapter package is not installed. " +
-                    $"Missing metadata key: {ex.Message}", ex);
-            }
-
-            var expected = await serverless.GetExpectedStartupValues();
-            if (expected == null)
-                return new Dictionary<string, string>();
+            // Handle serverless adapters. The native branch above returns a different shape —
+            // each key's default rather than a "key (default)" label — so it is left as it was.
+            var expected = await startupValues.Describe(decodedKey);
 
             return expected
                 .ToList()

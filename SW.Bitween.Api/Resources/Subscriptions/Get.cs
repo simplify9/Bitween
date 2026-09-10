@@ -1,24 +1,28 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SW.Bitween.Domain;
-using SW.Bitween.Services.Adapters;
 using SW.PrimitiveTypes;
 using SW.EfCoreExtensions;
 using System.Linq;
 using System.Threading.Tasks;
 using SW.Bitween.Model;
-using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace SW.Bitween.Resources.Subscriptions
 {
-    public class Get(BitweenDbContext dbContext, NativeAdapterDiscoveryService nativeAdapterDiscovery,
-        IServiceProvider serviceProvider, RequestContext requestContext) : IGetHandler<int, object>
+    public class Get : IGetHandler<int, object>
     {
-        private readonly BitweenDbContext dbContext = dbContext;
-        private readonly RequestContext requestContext = requestContext;
+        private readonly BitweenDbContext dbContext;
+        private readonly RequestContext requestContext;
+        private readonly AdapterStartupValues _startupValues;
 
         private const string PrivateSentinel = "__private__";
+
+        public Get(BitweenDbContext dbContext, AdapterStartupValues startupValues, RequestContext requestContext)
+        {
+            this.dbContext = dbContext;
+            this.requestContext = requestContext;
+            _startupValues = startupValues;
+        }
 
         public async Task<object> Handle(int key)
         {
@@ -34,7 +38,6 @@ namespace SW.Bitween.Resources.Subscriptions
                     DocumentFilter = subscriber.DocumentFilter.ToKeyAndValueCollection(),
                     DocumentId = subscriber.DocumentId,
                     HandlerId = subscriber.HandlerId,
-                    DataSourceId = subscriber.DataSourceId,
                     Inactive = subscriber.Inactive,
                     MapperId = subscriber.MapperId,
                     ReceiverId = subscriber.ReceiverId,
@@ -85,30 +88,11 @@ namespace SW.Bitween.Resources.Subscriptions
             if (string.IsNullOrEmpty(adapterId) || properties == null || !properties.Any())
                 return properties;
 
-            // A RESIDENT adapter cannot be described below: that path spawns it expecting stdio and
-            // a resident one dials out, so the attempt throws and the fail-closed branch masks
-            // EVERY property. On a database subscription that hid which statement it runs behind
-            // "__private__", so the screen could not show it and its dropdown could not match it.
-            //
-            // Nothing here is a secret: a resident adapter's credentials live on its data source,
-            // which masks its own. What a subscription holds is which statement to run.
-            if (await ResidentAdapters.IsResidentAsync(serviceProvider, adapterId))
-                return properties;
-
             IDictionary<string, StartupValue> startupValues;
 
             try
             {
-                if (adapterId.StartsWith(NativeAdapterDiscoveryService.NativePrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    startupValues = nativeAdapterDiscovery.GetStartupValues(adapterId);
-                }
-                else
-                {
-                    var serverless = serviceProvider.GetRequiredService<IServerlessService>();
-                    await serverless.StartAsync(adapterId, null);
-                    startupValues = await serverless.GetExpectedStartupValues();
-                }
+                startupValues = await _startupValues.Describe(adapterId);
             }
             catch
             {

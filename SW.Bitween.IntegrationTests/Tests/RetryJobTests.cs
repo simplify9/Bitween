@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -199,7 +199,7 @@ public class RetryJobTests(BitweenFixture fixture)
 
         // One selection containing both. This threw before, so the whole bulk retry failed — including
         // for the exchanges that were perfectly retryable.
-        await new Resources.Xchanges.BulkRetry(db, xs).Handle(new XchangeBulkRetry
+        await new Resources.Xchanges.BulkRetry(db, scope.Superuser(), xs).Handle(new XchangeBulkRetry
         {
             Ids = [orphan.Id, healthy.Id],
             Reset = false

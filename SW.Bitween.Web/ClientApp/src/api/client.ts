@@ -22,6 +22,9 @@ import type {
   DashboardData,
   ExchangeQuery,
   ExchangeRow,
+  BulkRetryPlan,
+  BulkRetrySelection,
+  RetryTree,
   GlobalValuesSetDetail,
   GlobalValuesSetRow,
   InformationType,
@@ -476,7 +479,9 @@ export interface ApiClient {
    */
   retryExchange(id: string, opts: { reset: boolean }): Promise<{ id: string }>;
   /** Retries many; exchanges with a pending auto-retry are skipped, not failed. */
-  bulkRetryExchanges(ids: string[], opts: { reset: boolean }): Promise<{ retried: number; skipped: number }>;
+  bulkRetryExchanges(selection: BulkRetrySelection, opts: { reset: boolean }): Promise<BulkRetryPlan>;
+  previewBulkRetry(selection: BulkRetrySelection, opts: { reset: boolean }): Promise<BulkRetryPlan>;
+  getRetryTree(id: string): Promise<RetryTree>;
   /** Manually injects a payload, addressed at a subscription or an information type. */
   createExchange(input: {
     target: "subscription" | "informationType";

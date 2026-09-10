@@ -9,7 +9,23 @@
 // nothing is recovered out of anything, so the editor reads back exactly what it
 // wrote.
 
-export type DocumentFormatId = "json";
+export type DocumentFormatId = "json" | "xml";
+
+/**
+ * Which of the day and the month comes first in the incoming document's dates.
+ *
+ * Asked once for the mapping rather than on every rule: a partner writes dates one
+ * way throughout a document, so per-rule would be the same answer many times over,
+ * and one row set wrongly would be invisible.
+ */
+export type DateOrderName = "yearFirst" | "dayFirst" | "monthFirst";
+
+/** Each option is the same day — 4 September 2026 — written the three ways a partner might. */
+export const DATE_ORDERS: { value: DateOrderName; label: string }[] = [
+  { value: "yearFirst", label: "Year first — 2026-09-04" },
+  { value: "dayFirst", label: "Day first — 04.09.2026" },
+  { value: "monthFirst", label: "Month first — 09.04.2026" },
+];
 
 export type ValueSourceKind = "path" | "rootPath" | "fixed" | "partner" | "global";
 
@@ -114,6 +130,8 @@ export interface MappingRules {
   version: number;
   sourceFormat: DocumentFormatId;
   targetFormat: DocumentFormatId;
+  /** Absent means year-first, which is the only unambiguous shape. */
+  sourceDateOrder?: DateOrderName;
   fields: FieldRule[];
   lists: ListRule[];
   /** When set, the whole output is this list rather than an object. */
@@ -193,6 +211,7 @@ export const emptyRules = (): EditorRules => ({
   version: RULES_VERSION,
   sourceFormat: "json",
   targetFormat: "json",
+  sourceDateOrder: "yearFirst",
   fields: [],
   lists: [],
 });
@@ -200,6 +219,7 @@ export const emptyRules = (): EditorRules => ({
 /** The formats the mapper can read and write, for the dropdowns. */
 export const DOCUMENT_FORMATS: { id: DocumentFormatId; label: string }[] = [
   { id: "json", label: "JSON" },
+  { id: "xml", label: "XML" },
 ];
 
 /**
@@ -217,6 +237,18 @@ export const SOURCE_KINDS: { value: ValueSourceKind; label: string; title: strin
   { value: "partner", label: "Partner", title: "A property of the exchange's partner" },
   { value: "global", label: "Global", title: "A key from one of the global values sets" },
 ];
+
+/**
+ * Short enough for a row; "boo" is not a word anyone wants to read.
+ *
+ * Keyed by the type union rather than by `string`, so adding a value type is a
+ * compile error here instead of a badge that silently renders as nothing.
+ */
+export const TYPE_BADGES: Record<ValueTypeName, string> = {
+  string: "txt",
+  number: "num",
+  boolean: "y/n",
+};
 
 /** What a value can be written as. Blank leaves it as the source produced it. */
 export const VALUE_TYPES: { value: string; label: string }[] = [
@@ -259,10 +291,21 @@ export const FILTER_OPERATORS: { value: FilterOperatorName; label: string }[] = 
  * implemented. A name here that C# does not know would be a dropdown entry that
  * fails at runtime.
  */
+export interface TransformArg {
+  name: string;
+  label: string;
+  /**
+   * `choice` is a closed list; `suggest` is a box that offers `options` and still
+   * takes anything typed, for an argument with common answers but no fixed set.
+   */
+  kind: "text" | "number" | "choice" | "suggest";
+  options?: { value: string; label: string }[];
+}
+
 export const TRANSFORMS: {
   fn: string;
   label: string;
-  args: { name: string; label: string; kind: "text" | "number" }[];
+  args: TransformArg[];
 }[] = [
   { fn: "upper", label: "Uppercase", args: [] },
   { fn: "lower", label: "Lowercase", args: [] },
@@ -290,7 +333,33 @@ export const TRANSFORMS: {
   {
     fn: "formatDate",
     label: "Format a date",
-    args: [{ name: "format", label: "Format", kind: "text" }],
+    args: [
+      {
+        name: "format",
+        label: "Format",
+        kind: "choice",
+        // A closed list on purpose. There was a second box here for which way round the
+        // incoming date is written, and two dropdowns on one row asking different
+        // questions read as one question asked twice — so that moved to the source
+        // document, where it is answered once for the whole mapping.
+        options: [
+          { value: "", label: "Format…" },
+          { value: "yyyy-MM-dd", label: "2026-09-04" },
+          { value: "dd/MM/yyyy", label: "04/09/2026" },
+          { value: "MM/dd/yyyy", label: "09/04/2026" },
+          { value: "dd.MM.yyyy", label: "04.09.2026" },
+          { value: "dd-MM-yyyy", label: "04-09-2026" },
+          { value: "yyyyMMdd", label: "20260904" },
+          { value: "dd MMM yyyy", label: "04 Sep 2026" },
+          { value: "d MMMM yyyy", label: "4 September 2026" },
+          { value: "yyyy-MM-ddTHH:mm:ss", label: "2026-09-04T13:45:00" },
+          { value: "yyyy-MM-dd HH:mm", label: "2026-09-04 13:45" },
+          { value: "yyyyMMddHHmmss", label: "20260904134500" },
+          { value: "HH:mm", label: "13:45" },
+          { value: "HH:mm:ss", label: "13:45:00" },
+        ],
+      },
+    ],
   },
   {
     fn: "defaultIfEmpty",

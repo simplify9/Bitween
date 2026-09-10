@@ -74,6 +74,9 @@ namespace SW.Bitween.Web
             services.AddSingleton<IInfolinkCache, InMemoryBitweenCache>();
             services.AddSingleton<FilterService>();
             services.AddScoped<NativeAdapterDiscoveryService>();
+            services.AddSingleton<ServerlessAdapterDescriber>();
+            services.AddScoped<AdapterStartupValues>();
+            services.AddScoped<Resources.Adapters.AdapterListing>();
             services.AddScoped<AdapterSecretProperties>();
             services.AddScoped<RetryUsageReport>();
             // Registration ORDER is the routing order: each runtime is asked whether an

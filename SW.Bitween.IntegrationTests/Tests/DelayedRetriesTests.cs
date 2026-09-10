@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -52,7 +52,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
         db.Set<DelayedRetry>().Add(new DelayedRetry { Id = xchange.Id, On = DateTime.UtcNow.AddMinutes(5) });
         await db.SaveChangesAsync();
 
-        var retry = new SW.Bitween.Resources.Xchanges.Retry(db, xs);
+        var retry = new SW.Bitween.Resources.Xchanges.Retry(db, scope.Superuser(), xs);
 
         await Assert.ThrowsAsync<SWValidationException>(() =>
             retry.Handle(xchange.Id, new XchangeRetry { Reset = false }));
@@ -66,7 +66,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
         var xs = scope.ServiceProvider.GetRequiredService<XchangeService>();
         var (_, _, xchange) = await CreateSubscriptionWithXchange(db, xs, "Retry OK Doc");
 
-        var retry = new SW.Bitween.Resources.Xchanges.Retry(db, xs);
+        var retry = new SW.Bitween.Resources.Xchanges.Retry(db, scope.Superuser(), xs);
         await retry.Handle(xchange.Id, new XchangeRetry { Reset = false });
 
         var retryXchange = await db.Set<Xchange>().FirstOrDefaultAsync(x => x.RetryFor == xchange.Id);
@@ -86,7 +86,7 @@ public class DelayedRetriesTests(BitweenFixture fixture)
         db.Set<DelayedRetry>().Add(new DelayedRetry { Id = xchangeScheduled.Id, On = DateTime.UtcNow.AddMinutes(5) });
         await db.SaveChangesAsync();
 
-        var bulkRetry = new SW.Bitween.Resources.Xchanges.BulkRetry(db, xs);
+        var bulkRetry = new SW.Bitween.Resources.Xchanges.BulkRetry(db, scope.Superuser(), xs);
         await bulkRetry.Handle(new XchangeBulkRetry
         {
             Reset = false,

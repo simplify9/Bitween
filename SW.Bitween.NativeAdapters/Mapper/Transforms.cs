@@ -34,7 +34,8 @@ public static class Transforms
     /// leave it absent, not turn it into <c>""</c> or <c>0</c>. The exception is
     /// <c>defaultIfEmpty</c>, whose entire job is to replace one.
     /// </remarks>
-    public static bool TryApply(TransformRule rule, object? value, out object? result, out string? error)
+    public static bool TryApply(TransformRule rule, object? value, DateOrder dateOrder,
+        out object? result, out string? error)
     {
         // Every failure this class knows about is reported through `error`, and DocumentMapper
         // collects those so one mapping run names every rule that is wrong. An exception escapes
@@ -46,7 +47,7 @@ public static class Transforms
         // ordinary failures here.
         try
         {
-            return Apply(rule, value, out result, out error);
+            return Apply(rule, value, dateOrder, out result, out error);
         }
         catch (Exception ex) when (ex is OverflowException or FormatException or ArgumentException
                                        or InvalidCastException or Newtonsoft.Json.JsonException)
@@ -57,7 +58,8 @@ public static class Transforms
         }
     }
 
-    private static bool Apply(TransformRule rule, object? value, out object? result, out string? error)
+    private static bool Apply(TransformRule rule, object? value, DateOrder dateOrder,
+        out object? result, out string? error)
     {
         result = value;
         error = null;
@@ -176,10 +178,9 @@ public static class Transforms
                     error = "formatDate needs 'format'";
                     return false;
                 }
-                if (!DateTimeOffset.TryParse(AsString(value), CultureInfo.InvariantCulture,
-                        DateTimeStyles.RoundtripKind, out var date))
+                if (!TryReadDate(AsString(value), dateOrder, out var date, out var readError))
                 {
-                    error = $"formatDate could not read '{value}' as a date";
+                    error = readError;
                     return false;
                 }
                 result = date.ToString(format, CultureInfo.InvariantCulture);
@@ -190,6 +191,77 @@ public static class Transforms
                 error = $"unknown transform '{rule.Fn}'";
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Date shapes that mean only one thing, whoever is reading them.
+    /// </summary>
+    /// <remarks>
+    /// Year first, so there is no day-or-month question to get wrong. These are the only
+    /// shapes accepted without being told the order.
+    /// </remarks>
+    private static readonly string[] UnambiguousFormats =
+    [
+        "o", "s", "u", "r",
+        "yyyy-MM-ddTHH:mm:sszzz", "yyyy-MM-ddTHH:mm:ss.FFFFFFFzzz", "yyyy-MM-ddTHH:mm:ssZ",
+        "yyyy-MM-ddTHH:mm:ss.FFFFFFF", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm",
+        "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd", "yyyy/MM/dd", "yyyyMMdd",
+    ];
+
+    private static readonly string[] DayFirstFormats =
+    [
+        "dd.MM.yyyy HH:mm:ss", "dd.MM.yyyy HH:mm", "dd.MM.yyyy",
+        "dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy HH:mm", "dd/MM/yyyy",
+        "dd-MM-yyyy HH:mm:ss", "dd-MM-yyyy HH:mm", "dd-MM-yyyy",
+        "d.M.yyyy", "d/M/yyyy", "d-M-yyyy", "ddMMyyyy",
+    ];
+
+    private static readonly string[] MonthFirstFormats =
+    [
+        "MM/dd/yyyy HH:mm:ss", "MM/dd/yyyy HH:mm", "MM/dd/yyyy",
+        "MM.dd.yyyy HH:mm:ss", "MM.dd.yyyy HH:mm", "MM.dd.yyyy",
+        "MM-dd-yyyy HH:mm:ss", "MM-dd-yyyy HH:mm", "MM-dd-yyyy",
+        "M/d/yyyy", "M.d.yyyy", "M-d-yyyy", "MMddyyyy",
+    ];
+
+    /// <summary>
+    /// Reads a date, refusing to guess which of the day and the month comes first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The reason this exists rather than a single <c>DateTimeOffset.Parse</c>: a French
+    /// partner's <c>04.09.2026</c> is the 4th of September, and the invariant parser reads
+    /// it happily as the 9th of April. It <em>succeeds</em>, so nothing is reported and a
+    /// shipment is dated five months wrong. Failing to parse is recoverable; parsing to the
+    /// wrong day is not.
+    /// </para>
+    /// <para>
+    /// So a date that is not year-first has to say which order it is in. Each order still
+    /// accepts the unambiguous shapes too, because a partner sending mostly
+    /// <c>dd/MM/yyyy</c> may well send an ISO timestamp in one field.
+    /// </para>
+    /// </remarks>
+    private static bool TryReadDate(string text, DateOrder order, out DateTimeOffset date, out string? error)
+    {
+        error = null;
+        string[] formats = order switch
+        {
+            DateOrder.DayFirst => [.. DayFirstFormats, .. UnambiguousFormats],
+            DateOrder.MonthFirst => [.. MonthFirstFormats, .. UnambiguousFormats],
+            _ => UnambiguousFormats,
+        };
+
+        const DateTimeStyles styles = DateTimeStyles.RoundtripKind | DateTimeStyles.AllowWhiteSpaces;
+        if (DateTimeOffset.TryParseExact(text.Trim(), formats, CultureInfo.InvariantCulture, styles, out date))
+            return true;
+
+        // Naming the way out matters more than naming the failure: whoever sees this is
+        // looking at a real partner document and needs to know what to change.
+        error = order == DateOrder.YearFirst
+            ? $"formatDate could not read '{text}' as a date. If the day or the month comes " +
+              "first, say so under the source document."
+            : $"formatDate could not read '{text}' as a date with the {order} order set";
+        return false;
     }
 
     private static JToken? Arg(TransformRule rule, string name) =>

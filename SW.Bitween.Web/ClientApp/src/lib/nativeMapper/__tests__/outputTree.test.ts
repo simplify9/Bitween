@@ -131,15 +131,34 @@ describe("lists", () => {
     expect(drawn(rules)).toEqual(["lines []", "  tags []", "    code"]);
   });
 
-  /** A list of plain values carries one item rule, so it has no children to show. */
-  it("gives a list of plain values no children", () => {
+  it("shows a list of plain values as its one value row, not its fields", () => {
     const rules = emptyRules();
     const list = emptyListRule(["codes"]);
     list.item = emptyFieldRule();
+    // Fields left over from before it became a list of values. The mapper ignores
+    // them, so drawing them would offer rules that do nothing.
     list.fields.push(emptyFieldRule(["ignored"]));
     rules.lists.push(list);
 
+    const [node] = outputTreeOf(rules);
+    expect(node.kind).toBe("list");
+    const children = node.kind === "list" ? node.children : [];
+    expect(children.map((c) => c.kind)).toEqual(["item"]);
     expect(drawn(rules)).toEqual(["codes []"]);
+  });
+
+  it("keeps a list of plain values whole when its name is searched for", () => {
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+
+    // The value row has no name of its own, so it can only be reached through its
+    // list — and a search that finds the list has to keep what is in it.
+    const [found] = filterTree(outputTreeOf(rules), "codes");
+    expect(found.kind === "list" && found.children).toHaveLength(1);
+
+    expect(filterTree(outputTreeOf(rules), "nothing")).toHaveLength(0);
   });
 
   it("puts the whole output under one root list", () => {
@@ -158,7 +177,9 @@ describe("the keys rule errors arrive under", () => {
     const out: string[] = [];
     const walk = (nodes: OutputNode[]) => {
       for (const n of nodes) {
-        if (n.kind === "field") out.push(n.errorKey);
+        // A field and a list's value are both leaves; only the value shares its key
+        // with something else, because the mapper reports it under the list.
+        if (n.kind === "field" || n.kind === "item") out.push(n.errorKey);
         else if (n.kind === "list") {
           out.push(n.errorKey);
           walk(n.children);
@@ -168,6 +189,18 @@ describe("the keys rule errors arrive under", () => {
     walk(outputTreeOf(rules));
     return out;
   };
+
+  it("names a list of plain values twice, because both report under the list", () => {
+    // The list's own troubles — no target, a filter that will not read — and the
+    // value's arrive under one key, so the editor lights up both rows. Worth pinning:
+    // it is why a failing value shows a reason at all, having no key of its own.
+    const rules = emptyRules();
+    const list = emptyListRule(["codes"]);
+    list.item = emptyFieldRule();
+    rules.lists.push(list);
+
+    expect(keysOf(rules)).toEqual(["codes", "codes"]);
+  });
 
   it("names a top-level rule by its dotted target", () => {
     expect(keysOf(withFields(["ref"], ["billing", "city"]))).toEqual(["ref", "billing.city"]);
@@ -221,7 +254,21 @@ describe("filtering", () => {
     const out: string[] = [];
     const walk = (nodes: OutputNode[], depth: number) => {
       for (const node of nodes) {
-        out.push("  ".repeat(depth) + (node.name || "(root)"));
+        const pad = "  ".repeat(depth);
+
+        // Two of the five kinds have no name to print. A list's value has nothing
+        // under it either; an entry is numbered and holds rules of its own.
+        if (node.kind === "item") {
+          out.push(`${pad}(value)`);
+          continue;
+        }
+        if (node.kind === "entry") {
+          out.push(`${pad}(entry ${node.position})`);
+          walk(node.children, depth + 1);
+          continue;
+        }
+
+        out.push(pad + (node.name || "(root)"));
         if (node.kind !== "field") walk(node.children, depth + 1);
       }
     };

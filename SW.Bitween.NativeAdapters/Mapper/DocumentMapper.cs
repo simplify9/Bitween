@@ -34,15 +34,32 @@ public static class DocumentMapper
     }
 
     /// <summary>
+    /// What the mapper needs to know about the source document beyond the document itself.
+    /// </summary>
+    /// <remarks>
+    /// Both are facts about the whole source rather than about any one rule — how the partner
+    /// writes dates, and whether their format can tell a list of one from a single value — so they
+    /// travel together instead of widening four signatures again for the next one.
+    /// </remarks>
+    private readonly record struct SourceTraits(DateOrder DateOrder, bool SingleValueIsAList);
+
+    /// <summary>
     /// Maps <paramref name="source"/> according to <paramref name="rules"/>.
     /// </summary>
     /// <exception cref="MappingFailedException">
     /// When any rule could not be applied. Every rule is attempted first, so the exception names
     /// all of them rather than stopping at the first.
     /// </exception>
-    public static ValueNode Map(MappingRules rules, ValueNode? source, MappingContext context)
+    /// <param name="singleValueIsAList">
+    /// Whether the source format makes a list by repeating a name, so that a single occurrence
+    /// and a value that is not a list at all are the same document. True for XML. Defaulted
+    /// because JSON says which, and every mapping was JSON until XML arrived.
+    /// </param>
+    public static ValueNode Map(MappingRules rules, ValueNode? source, MappingContext context,
+        bool singleValueIsAList = false)
     {
         var errors = new List<MappingError>();
+        var traits = new SourceTraits(rules.SourceDateOrder, singleValueIsAList);
 
         var scope = new Scope(source, source);
 
@@ -57,12 +74,12 @@ public static class DocumentMapper
                 errors.Add(new MappingError("(root)",
                     "the whole output is a list, so the top-level fields and lists cannot be written"));
 
-            output = BuildList(rules.Root, scope, context, errors, path: "");
+            output = BuildList(rules.Root, scope, context, traits, errors, path: "");
         }
         else
         {
             var obj = ValueNode.Object();
-            MapInto(obj, rules.Fields, rules.Lists, scope, context, errors, path: "");
+            MapInto(obj, rules.Fields, rules.Lists, scope, context, traits, errors, path: "");
             output = obj;
         }
 
@@ -79,6 +96,7 @@ public static class DocumentMapper
         List<ListRule> lists,
         Scope scope,
         MappingContext context,
+        SourceTraits traits,
         List<MappingError> errors,
         string path)
     {
@@ -92,7 +110,7 @@ public static class DocumentMapper
                 continue;
             }
 
-            if (!TryResolveField(field, scope, context, out var value, out var reason))
+            if (!TryResolveField(field, scope, context, traits, out var value, out var reason))
             {
                 errors.Add(new MappingError(target, reason!));
                 continue;
@@ -111,7 +129,7 @@ public static class DocumentMapper
                 continue;
             }
 
-            Values.PlaceAt(output, rule.Target, BuildList(rule, scope, context, errors, path));
+            Values.PlaceAt(output, rule.Target, BuildList(rule, scope, context, traits, errors, path));
         }
     }
 
@@ -127,6 +145,7 @@ public static class DocumentMapper
         ListRule rule,
         Scope scope,
         MappingContext context,
+        SourceTraits traits,
         List<MappingError> errors,
         string path)
     {
@@ -135,16 +154,32 @@ public static class DocumentMapper
 
         // Read against the scope the list sits in, since a fixed entry has no entry of its own.
         foreach (var entry in rule.Fixed)
-            AddEntry(list, entry.Item, entry.Fields, entry.Lists, scope, context, errors, target);
+            AddEntry(list, entry.Item, entry.Fields, entry.Lists, scope, context, traits, errors, target);
 
         // No source list to walk: the list is whatever its fixed entries produced.
         if (rule.Over is null) return list;
 
-        // A path that is absent, or holds something that is not a list, adds nothing rather than
-        // failing. An order with no lines is ordinary; so is an optional section.
-        if (Values.Resolve(scope.Current, rule.Over) is not ListNode items) return list;
+        // A path that is absent adds nothing rather than failing. An order with no lines is
+        // ordinary; so is an optional section.
+        var over = Values.Resolve(scope.Current, rule.Over);
+        if (over is null) return list;
 
-        foreach (var item in items.Items)
+        // XML makes a list by repeating a name, so an order with one <line> is the same document as
+        // one whose `line` was never a list. Reading that as no lines would drop the only line
+        // without a word, so where the format cannot say, a single value walks as a list of one.
+        //
+        // Only for a *named* path, though. A document has exactly one root and it is never a
+        // repeated element, so there is no ambiguity to forgive at `over: ""` — that is a
+        // deliberate claim that the whole document is a list, and a document that is not one has
+        // no entries rather than one entry that is the whole document.
+        IReadOnlyList<ValueNode> items = over switch
+        {
+            ListNode found => found.Items,
+            _ when traits.SingleValueIsAList && rule.Over.Length > 0 => [over],
+            _ => [],
+        };
+
+        foreach (var item in items)
         {
             if (rule.Where is not null && !Matches(rule.Where, item, out var whereError))
             {
@@ -156,7 +191,7 @@ public static class DocumentMapper
                 break;
             }
 
-            AddEntry(list, rule.Item, rule.Fields, rule.Lists, scope.Enter(item), context, errors, target);
+            AddEntry(list, rule.Item, rule.Fields, rule.Lists, scope.Enter(item), context, traits, errors, target);
         }
 
         return list;
@@ -177,12 +212,13 @@ public static class DocumentMapper
         List<ListRule> lists,
         Scope scope,
         MappingContext context,
+        SourceTraits traits,
         List<MappingError> errors,
         string target)
     {
         if (item is not null)
         {
-            if (TryResolveField(item, scope, context, out var value, out var reason))
+            if (TryResolveField(item, scope, context, traits, out var value, out var reason))
                 list.Add(ValueNode.Value(value));
             else
                 errors.Add(new MappingError(target, reason!));
@@ -190,7 +226,7 @@ public static class DocumentMapper
         }
 
         var row = ValueNode.Object();
-        MapInto(row, fields, lists, scope, context, errors, target);
+        MapInto(row, fields, lists, scope, context, traits, errors, target);
         list.Add(row);
     }
 
@@ -198,6 +234,7 @@ public static class DocumentMapper
         FieldRule field,
         Scope scope,
         MappingContext context,
+        SourceTraits traits,
         out object? value,
         out string? reason)
     {
@@ -214,7 +251,7 @@ public static class DocumentMapper
         };
 
         if (field.Transform is not null &&
-            !Transforms.TryApply(field.Transform, value, out value, out reason))
+            !Transforms.TryApply(field.Transform, value, traits.DateOrder, out value, out reason))
             return false;
 
         if (field.Lookup is not null)

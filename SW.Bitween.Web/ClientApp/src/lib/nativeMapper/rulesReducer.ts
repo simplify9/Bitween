@@ -6,6 +6,7 @@ import {
   emptyListEntry,
   emptyListRule,
   emptyRules,
+  type DateOrderName,
   type DocumentFormatId,
   type EditorFieldRule,
   type EditorListEntry,
@@ -73,6 +74,7 @@ export type RulesEditorAction =
   | { type: "LOAD"; rules: EditorRules; sourceSample: string; targetSample: string; error?: string }
   | { type: "SET_SOURCE_FORMAT"; format: DocumentFormatId }
   | { type: "SET_TARGET_FORMAT"; format: DocumentFormatId }
+  | { type: "SET_DATE_ORDER"; order: DateOrderName }
   | { type: "SET_SOURCE_SAMPLE"; text: string }
   | { type: "SET_TARGET_SAMPLE"; text: string }
   | { type: "SCAFFOLD_FROM_TARGET" }
@@ -85,6 +87,7 @@ export type RulesEditorAction =
   | { type: "ADD_LIST"; parentListId: RuleId | null; target?: string[] }
   | { type: "UPDATE_LIST"; id: RuleId; changes: Partial<Omit<EditorListRule, "id" | "fields" | "lists">> }
   | { type: "REMOVE_LIST"; id: RuleId }
+  | { type: "MAKE_LIST_OF_VALUES"; listId: RuleId }
   | { type: "ADD_FIXED_ENTRY"; listId: RuleId }
   | { type: "REMOVE_FIXED_ENTRY"; id: RuleId }
   | {
@@ -212,12 +215,14 @@ function changesTheMapping(action: RulesEditorAction): boolean {
   switch (action.type) {
     case "SET_SOURCE_FORMAT":
     case "SET_TARGET_FORMAT":
+    case "SET_DATE_ORDER":
     case "ADD_FIELD":
     case "UPDATE_FIELD":
     case "REMOVE_FIELD":
     case "ADD_LIST":
     case "UPDATE_LIST":
     case "REMOVE_LIST":
+    case "MAKE_LIST_OF_VALUES":
     case "ADD_FIXED_ENTRY":
     case "REMOVE_FIXED_ENTRY":
     case "UPDATE_FIXED_ENTRY":
@@ -270,6 +275,10 @@ export function rulesEditorReducer(
         draft.rules.targetFormat = action.format;
         break;
 
+      case "SET_DATE_ORDER":
+        draft.rules.sourceDateOrder = action.order;
+        break;
+
       // Samples are an editor convenience — runtime never reads them — so changing
       // one is not a change to the mapping and does not go on the undo stack.
       case "SET_SOURCE_SAMPLE":
@@ -287,7 +296,7 @@ export function rulesEditorReducer(
       // Both samples are parsed here rather than passed in, so the action carries
       // nothing and the button cannot hand the reducer a tree from a stale render.
       case "SCAFFOLD_FROM_TARGET": {
-        const target = parseSample(draft.targetSample, draft.rules.targetFormat);
+        const target = parseSample(draft.targetSample, draft.rules.targetFormat, "target");
         const source = parseSample(draft.sourceSample, draft.rules.sourceFormat);
         draft.scaffold = target.error
           ? { created: 0, matched: 0, problem: target.error }
@@ -345,6 +354,21 @@ export function rulesEditorReducer(
         break;
       }
 
+      case "MAKE_LIST_OF_VALUES": {
+        const list = findList(draft.rules, action.listId);
+        if (!list) break;
+        list.item = emptyFieldRule();
+        // A list that walks nothing has no walked entry for that rule to describe, so
+        // what it needs is the first slot written into it. Without this the click
+        // would set a mark nobody can see and add nothing anyone can fill in.
+        if (list.over === undefined) {
+          const entry = emptyListEntry();
+          entry.item = emptyFieldRule();
+          list.fixed.push(entry);
+        }
+        break;
+      }
+
       case "ADD_FIXED_ENTRY": {
         const list = findList(draft.rules, action.listId);
         if (!list) break;
@@ -359,7 +383,12 @@ export function rulesEditorReducer(
 
       case "REMOVE_FIXED_ENTRY": {
         const owner = allEntries(draft.rules).find((e) => e.entry.id === action.id)?.list;
-        if (owner) owner.fixed = owner.fixed.filter((e) => e.id !== action.id);
+        if (!owner) break;
+        owner.fixed = owner.fixed.filter((e) => e.id !== action.id);
+        // A list that walks nothing is exactly the entries written into it, so with the
+        // last one gone there is nothing left to say it holds values — and leaving the
+        // mark on would mean the list could never be built out of records instead.
+        if (owner.over === undefined && owner.fixed.length === 0) owner.item = undefined;
         break;
       }
 
@@ -454,21 +483,50 @@ export function targetPathOf(target: string[]): string {
 /** Every field rule in the mapping, with the list it belongs to. */
 export function everyFieldRule(
   rules: EditorRules,
-): { rule: EditorFieldRule; list: EditorListRule | null }[] {
-  const out: { rule: EditorFieldRule; list: EditorListRule | null }[] = [];
-  for (const rule of rules.fields) out.push({ rule, list: null });
+): { rule: EditorFieldRule; list: EditorListRule | null; isItem: boolean }[] {
+  const out: { rule: EditorFieldRule; list: EditorListRule | null; isItem: boolean }[] = [];
+  const add = (rule: EditorFieldRule, list: EditorListRule | null, isItem = false) =>
+    out.push({ rule, list, isItem });
+
+  for (const rule of rules.fields) add(rule, null);
   for (const list of allLists(rules)) {
-    if (list.item) out.push({ rule: list.item, list });
-    for (const rule of list.fields) out.push({ rule, list });
+    // Only a list that walks something has an entry for an empty path to mean, and
+    // only then does the rule run at all: for a list that walks nothing this is the
+    // mark saying it holds values, and the mapper never reads it.
+    if (list.item) add(list.item, list, list.over !== undefined);
+    for (const rule of list.fields) add(rule, list);
   }
   for (const { entry, list } of allEntries(rules)) {
-    if (entry.item) out.push({ rule: entry.item, list });
-    for (const rule of entry.fields) out.push({ rule, list });
+    // Not marked: an entry written into a list by hand has no entry of its own, so
+    // the mapper runs its rules against whatever the list reads. An empty path there
+    // is the enclosing scope, not one item of the list, and nothing anyone means.
+    if (entry.item) add(entry.item, list);
+    for (const rule of entry.fields) add(rule, list);
   }
   return out;
 }
 
-/** Whether a rule has a value assigned, for the "n of m assigned" count. */
+/**
+ * Whether a rule producing a whole entry of a list of plain values has a value.
+ *
+ * Separate from `isAssigned` because an empty path means something here:
+ * the entry itself, which is what a list of plain values almost always wants and what
+ * the scaffolder writes. Counted as blank, a correctly built list of values would sit
+ * in the "not assigned yet" tally for ever with nothing for anyone to fill in.
+ */
+export function isItemAssigned(rule: EditorFieldRule): boolean {
+  // `rootPath` deliberately not included: an empty path read from the document is
+  // the whole document, which would write the same thing into every slot of the
+  // list. That is a blank someone still has to fill in, not an answer.
+  return rule.from.kind === "path" ? true : isAssigned(rule);
+}
+
+/**
+ * Whether a rule has a value assigned, for the "n of m assigned" count.
+ *
+ * Takes only the rule on purpose: it is passed straight to `Array.map` in places, so
+ * a second parameter would quietly receive the index.
+ */
 export function isAssigned(rule: EditorFieldRule): boolean {
   switch (rule.from.kind) {
     case "path":

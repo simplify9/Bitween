@@ -6,10 +6,12 @@ import { api, ApiRequestError, type ExchangeDocStage, type ExchangeRow } from ".
 import { useSessionCan } from "../../auth/guards";
 import { Badge, Button } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
+import { HighlightedDocument } from "../../components/ui/HighlightedDocument";
 import { formatDateTime, duration, timeUntil } from "../../lib/dates";
 import { formatDocument } from "../../lib/documentPreview";
 import { useSubscriptionsCache } from "../../components/config/shared";
 import { RetryDialog, journeyStages, type JourneyStage } from "./shared";
+import { RetryChain, hasRetryChain, newestAttempt, retryTreeQuery } from "./RetryChain";
 import { keys } from "../../api/queryKeys";
 
 const STAGE_TONES: Record<JourneyStage["state"], { ring: string; badge: ReactNode }> = {
@@ -151,9 +153,17 @@ function DocumentPreview({
           </div>
         )}
       </div>
-      <pre className="max-h-96 overflow-y-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed wrap-anywhere whitespace-pre-wrap text-ink-100">
-        {body}
-      </pre>
+      {/* Coloured only where the document is known to be the format it looks like —
+          `formatted` exists because it parsed. Raw is the bytes as they arrived and
+          gets no colour, which is the point of asking for it; so does a payload that
+          would not parse, where colouring the parts a grammar still recognises would
+          dress up the very document someone opened this drawer to find fault with. */}
+      <HighlightedDocument
+        text={body}
+        format={!raw && formatted !== null ? undefined : null}
+        onInk
+        className="max-h-96 overflow-y-auto px-3 py-2.5 text-[11px] leading-relaxed wrap-anywhere text-ink-100"
+      />
       {clipped && (
         <p className="border-t border-white/10 px-3 py-1.5 text-[11px] text-ink-400">
           Showing the first 256 KB — download the document to read the rest.
@@ -198,6 +208,11 @@ export function ExchangeDrawer({ x }: { x: ExchangeRow }) {
     queryFn: () => api.getExchangeDocument(activeKey!),
     enabled: activeKey !== null,
   });
+
+  // The same query the chain below reads, so asking here costs nothing extra — and only asked
+  // for at all when the row says there is a chain to read.
+  const { data: chain } = useQuery({ ...retryTreeQuery(x.id), enabled: hasRetryChain(x) });
+  const newest = chain ? newestAttempt(chain, x.id) : null;
 
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -292,6 +307,9 @@ export function ExchangeDrawer({ x }: { x: ExchangeRow }) {
         </div>
       )}
 
+      {/* — the attempts this exchange belongs to, when it belongs to any — */}
+      {hasRetryChain(x) && <RetryChain id={x.id} />}
+
       {/* — metadata — */}
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
         {/* The id lives here rather than in the row: it identifies a record you
@@ -338,16 +356,6 @@ export function ExchangeDrawer({ x }: { x: ExchangeRow }) {
             Retries &amp; aggregation family
           </Link>
         </MetaItem>
-        {x.retryFor && (
-          <MetaItem label="Retry of">
-            <Link
-              to={`/exchanges?ids=${encodeURIComponent(x.retryFor)}`}
-              className="font-mono text-xs text-ink-700 hover:text-crimson-700 hover:underline"
-            >
-              {x.retryFor}
-            </Link>
-          </MetaItem>
-        )}
         {isRollUp && (
           <MetaItem label="Rolled up">
             {/* The Id filter matches AggregationXchangeId as well as Id, so this one
@@ -404,12 +412,29 @@ export function ExchangeDrawer({ x }: { x: ExchangeRow }) {
               </Button>
             </>
           ) : (
-            (x.status === "failed" || x.status === "badResponse") && (
+            (x.status === "failed" || x.status === "badResponse") &&
+            /* An exchange is retried at most once, so a spent one offers the way on to the
+               attempt that can be retried instead of a button that would be refused. */
+            (x.hasRetry ? (
+              <>
+                <Badge tone="neutral" title="An exchange is only retried once, so that its attempts stay a single chain">
+                  Already retried
+                </Badge>
+                {newest && newest.id !== x.id && (
+                  <Link
+                    to={`/exchanges?ids=${encodeURIComponent(newest.id)}`}
+                    className="text-[13px] font-medium text-ink-700 hover:text-crimson-700 hover:underline"
+                  >
+                    Open the newest attempt to retry from there
+                  </Link>
+                )}
+              </>
+            ) : (
               <Button size="sm" onClick={() => setConfirming(true)}>
                 <RotateCcw className="size-3.5" aria-hidden />
                 Retry…
               </Button>
-            )
+            ))
           )}
           {actionError && <p className="text-[13px] text-danger-700">{actionError}</p>}
         </div>

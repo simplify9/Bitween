@@ -133,10 +133,11 @@ public class MappingPreviewTests
     [Fact]
     public async Task An_unsupported_format_names_what_is_supported()
     {
-        var response = await PreviewAsync(new { version = 1, sourceFormat = "xml" }, "{}");
+        var response = await PreviewAsync(new { version = 1, sourceFormat = "csv" }, "{}");
 
         Assert.Contains("not a source format", response.Error);
         Assert.Contains("json", response.Error);
+        Assert.Contains("xml", response.Error);
     }
 
     [Fact]
