@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SW.Bitween.Domain.DataSources;
 using SW.PrimitiveTypes;
 using SW.Serverless;
 using SW.Serverless.Resident;
@@ -75,25 +77,96 @@ public class ResidentAdapterRuntime(
         if (dataSourceId != null)
         {
             var running = adapters.Get(adapterId, dataSourceId);
-            if (running == null)
-                throw new BitweenException(
-                    $"Data source {dataSourceId} is not running on this node, so adapter "
-                    + $"'{adapterId}' has no connection to work through. If the data source is "
-                    + "exclusive, another node holds it; if it is per-node, look at its health — "
-                    + "the supervisor could not start it here.");
 
-            // The subscription's own adapter properties travel with each CALL, not with the
-            // process: this instance is shared by every subscription bound to the data source, and
-            // its startup values are the data source's. Without this a subscription could not say
-            // which statement to run — it would be reading whatever the data source was started
-            // with, which is the same answer for all of them.
-            return new RunningInstanceSession(running, spec.StartupValues);
+            if (running != null)
+                // The subscription's own adapter properties travel with each CALL, not with the
+                // process: this instance is shared by every subscription bound to the data source,
+                // and its startup values are the data source's. Without this a subscription could
+                // not say which statement to run — it would be reading whatever the data source
+                // was started with, which is the same answer for all of them.
+                return new RunningInstanceSession(running, spec.StartupValues);
+
+            // Not here. For an EXCLUSIVE data source that is the normal case on every node but
+            // one — a broker connection is held by a single node so that a queue is drained once.
+            //
+            // Exclusivity is about CONSUMING, though, not about connecting. A subscription's
+            // handler runs on whichever node picked up the message, so a delivery that publishes
+            // to the customer's broker would fail on every node but the owner — which is to say,
+            // almost always. A publish-only connection of our own is the answer: it sends and
+            // never subscribes, so nothing is consumed twice.
+            if (role is AdapterRole.Handler or AdapterRole.Mapper)
+            {
+                var publishing = await PublishOnlySpecAsync(adapterId, dataSourceId);
+                if (publishing != null)
+                    // The same split as the exclusive path: the rented instance's startup values
+                    // are the CONNECTION's, and the slot's own properties — where to publish above
+                    // all — travel with the call. Passing only the spec would send the message to
+                    // an endpoint the connection never knew about, which is to say nowhere.
+                    return new ResidentAdapterSession(
+                        await adapters.RentAsync(publishing), spec.StartupValues);
+            }
+
+            throw new BitweenException(
+                $"Data source {dataSourceId} is not running on this node, so adapter "
+                + $"'{adapterId}' has no connection to work through. If the data source is "
+                + "exclusive, another node holds it; if it is per-node, look at its health — "
+                + "the supervisor could not start it here.");
         }
 
         // Rented, not started: the process is already up, so the call costs a round trip rather
         // than a launch. Returning the lease is what releases it to the next message — and what
         // triggers the reset that clears per-message state between borrowers.
         return new ResidentAdapterSession(await adapters.RentAsync(spec));
+    }
+
+    /// <summary>
+    /// A spec for a connection that can SEND but will never consume, built from the data source's
+    /// own settings.
+    ///
+    /// <c>Consume=false</c> is the whole point, and it is the same switch the connection test uses
+    /// for the same reason: a second instance that subscribed would drain the customer's queue
+    /// alongside the node that owns it, and the lease exists precisely to stop that.
+    ///
+    /// Pooled rather than exclusive, so several nodes may hold one at once — which is correct for
+    /// publishing and wrong for consuming. The pool key includes a hash of these values, so the
+    /// publish-only instance is a different renter from anything else and cannot be handed the
+    /// consuming one by mistake.
+    ///
+    /// Null when there is no such data source, or it is not a broker: a relational source is
+    /// per-node and is expected to be here, so "not running" is a fault to report rather than
+    /// something to work around.
+    /// </summary>
+    private async Task<AdapterSpec> PublishOnlySpecAsync(string adapterId, string dataSourceId)
+    {
+        if (!int.TryParse(dataSourceId, out var id)) return null;
+
+        var dbContext = serviceProvider.GetService<BitweenDbContext>();
+        if (dbContext == null) return null;
+
+        var dataSource = await dbContext.Set<DataSource>().AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id);
+
+        if (dataSource == null || dataSource.Kind != DataSourceKind.Broker) return null;
+
+        var spec = new AdapterSpec { AdapterId = adapterId };
+
+        foreach (var kv in dataSource.Properties ?? new Dictionary<string, string>())
+            spec.StartupValues[kv.Key] = kv.Value;
+
+        // Never subscribe, and carry no endpoints to subscribe to even if something ignored the
+        // flag. Where to PUBLISH travels with the call, not with the process.
+        spec.StartupValues["Consume"] = "false";
+        spec.StartupValues.Remove("Endpoints");
+
+        // Distinct from any other renter of this adapter, so a publish-only instance is never
+        // confused with one somebody else configured.
+        spec.PoolKey = $"{adapterId}:publish:{id}";
+
+        logger.LogDebug(
+            "Data source {DataSourceId} is owned elsewhere; publishing through a send-only "
+            + "connection on this node.", id);
+
+        return spec;
     }
 
     /// <summary>
@@ -114,13 +187,14 @@ public class ResidentAdapterRuntime(
         public ValueTask DisposeAsync() => default;
     }
 
-    private sealed class ResidentAdapterSession(IAdapterLease lease) : IAdapterSession
+    private sealed class ResidentAdapterSession(
+        IAdapterLease lease, IDictionary<string, string> properties = null) : IAdapterSession
     {
         public Task<TResult> InvokeAsync<TResult>(string method, object argument = null) =>
-            lease.InvokeAsync<TResult>(method, argument);
+            lease.InvokeAsync<TResult>(method, argument, properties: properties);
 
         public Task InvokeAsync(string method, object argument = null) =>
-            lease.InvokeAsync<object>(method, argument);
+            lease.InvokeAsync<object>(method, argument, properties: properties);
 
         public ValueTask DisposeAsync() => lease.DisposeAsync();
     }

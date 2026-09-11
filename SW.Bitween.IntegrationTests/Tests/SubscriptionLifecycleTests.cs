@@ -96,6 +96,48 @@ public class SubscriptionLifecycleTests(BitweenFixture fixture)
         }
     }
 
+    /// <summary>
+    /// Reading a subscription reports which data source it is bound to.
+    ///
+    /// Sounds too small to test, and it is exactly the field a merge dropped from the projection
+    /// once. Nothing failed: the API answered with dataSourceId null while the row held an id, so
+    /// the UI read every bound subscription as unbound — and saving one from that screen wrote the
+    /// null back and quietly unbound it. A projection is only as good as the thing that notices a
+    /// field missing from it.
+    /// </summary>
+    [Fact]
+    public async Task Reading_an_integration_reports_the_data_source_it_is_bound_to()
+    {
+        var (documentId, partnerId) = await Groundwork();
+        var id = await CreateSubscription(Unique("Bound"), documentId, partnerId);
+
+        await using var scope = fixture.CreateScope();
+        scope.Superuser();
+        var db = scope.ServiceProvider.GetRequiredService<BitweenDbContext>();
+
+        var dataSource = new SW.Bitween.Domain.DataSources.DataSource
+        {
+            Name = Unique("bound-source"),
+            AdapterId = "bitween.db.postgresql",
+            Kind = SW.Bitween.Domain.DataSources.DataSourceKind.Relational,
+            Properties = new Dictionary<string, string> { ["Host"] = "localhost" }
+        };
+        db.Add(dataSource);
+        await db.SaveChangesAsync();
+
+        // Set on the row rather than through the update handler, so this tests the READ and
+        // nothing else.
+        var stored = await db.Set<Subscription>().SingleAsync(s => s.Id == id);
+        stored.DataSourceId = dataSource.Id;
+        await db.SaveChangesAsync();
+
+        var read = await ActivatorUtilities
+            .CreateInstance<Resources.Subscriptions.Get>(scope.ServiceProvider)
+            .Handle(id);
+
+        Assert.Equal(dataSource.Id, ((SubscriptionGet)read).DataSourceId);
+    }
+
     [Fact]
     public async Task Deleting_names_the_bus_gateway_route_still_pointing_at_it()
     {

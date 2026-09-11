@@ -80,7 +80,42 @@ Three details that are load-bearing:
 `ILeaderElection` exists so the mechanism can be replaced when the internal bus is no longer
 RabbitMQ — not so two implementations can be maintained at once.
 
-## Not done yet
+## Egress: a delivery publishes
+
+A bus adapter is declared `[AdapterKind("bus")]` **and** `[AdapterKind("handler")]`, so it appears
+in a subscription's delivery picker. The delivery's own properties say where to send:
+
+| Property | Applies to | Meaning |
+|---|---|---|
+| `Endpoint` | both | RabbitMQ: the queue name. SQS: the full queue URL. |
+| `Exchange`, `RoutingKey` | RabbitMQ | Publish through an exchange instead of straight to a queue. |
+| `GroupId`, `DeduplicationId` | SQS | FIFO queues only; a FIFO queue rejects a send with no group. |
+
+Not restricted to the endpoints the data source consumes — the usual case for egress is a queue
+Bitween does not drain.
+
+### Why this needed more than a method
+
+`Publish` existed from the start and nothing could reach it: Bitween's pipeline calls `Handle` on a
+handler, and neither adapter had one. So an integration could drain a customer's queue and had no
+way to answer on it.
+
+Adding `Handle` is half of it. The other half is that **a broker data source is exclusive** — one
+node holds the connection so the queue is drained once — while **a delivery runs on whichever node
+picked the message up.** Publishing would therefore fail on every node but the owner.
+
+Exclusivity is about *consuming*, not about connecting. When the owned instance is not on this
+node, `ResidentAdapterRuntime` opens a **send-only** connection instead: built from the data
+source's own settings, with `Consume=false`, no `Endpoints`, and its own pool key so it can never
+be confused with the consuming instance. It sends and never subscribes, so nothing is processed
+twice, and a delivery works wherever it lands. This is the same `Consume=false` the connection
+test uses, for the same reason.
+
+### The one thing it cannot do
+
+A subscription has **one** `dataSourceId`, applied to every slot. So a single subscription cannot
+read from a database and publish to a broker — both slots would resolve to the same connection.
+Chain two subscriptions with `ResponseSubscriptionId` for that shape.
 
 ## The two providers
 
@@ -94,8 +129,8 @@ creating queues on a customer's broker is not our call.
 Dedupe key is the broker's message id, or a content hash — **not** the delivery tag, which is per
 channel and restarts at 1 on every reconnect.
 
-Also supports `Publish`, so egress works on external gateways even though the internal one does
-not have it yet.
+Also supports `Publish` — and is a **handler**, so a subscription's delivery can publish through
+it. See *Egress* below.
 
 ### `SW.Bitween.Adapters.Bus.Sqs`
 
@@ -167,7 +202,8 @@ Anything added to the model needs configuring in the provider contexts, not just
 
 ## Not done yet
 
-- **CRUD API and UI** for `DataSource`. Rows must be inserted directly for now.
+- ~~**CRUD API and UI** for `DataSource`.~~ Done — data sources are under Configuration, and the
+  form is generated from the adapter's own `[AdapterSetting]` attributes.
 - **Secret protection at rest.** `SecretProperties` names the fields; wiring it to
   `SettingsProtector` is outstanding, so treat credentials in `DataSource.Properties` as
   plaintext until that lands.

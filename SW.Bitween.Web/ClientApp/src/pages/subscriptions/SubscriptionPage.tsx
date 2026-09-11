@@ -176,9 +176,14 @@ export function SubscriptionPage() {
   const entryPoints = entryPointsOf(s);
 
   const stages = stagesFor(s.type);
-  const isRelational = (adapterId: string | null) =>
-    adapterId != null &&
-    providerOf(dataSourceProviders.data, adapterId)?.kind === "Relational";
+  // Which adapters bind to a data source at all. A relational one always does; a BROKER one does
+  // in a delivery, because that is how a subscription answers on the customer's own queue —
+  // ingress from a broker comes through a bus gateway rather than through a subscription slot.
+  const bindsToDataSource = (adapterId: string | null, slot: "receiver" | "mapper" | "handler") => {
+    const kind = adapterId == null ? null : providerOf(dataSourceProviders.data, adapterId)?.kind;
+    if (kind === "Relational") return true;
+    return kind === "Broker" && slot !== "receiver";
+  };
 
   const stageParam = params.get("stage") as StageId | null;
   const stage = stageParam && stages.includes(stageParam) ? stageParam : null;
@@ -255,10 +260,11 @@ export function SubscriptionPage() {
               disabled={!canEdit}
               required
             />
-            {isRelational(draft.receiverId) && (
+            {bindsToDataSource(draft.receiverId, "receiver") && (
               <div className="mt-3">
                 <DataSourceBinding
                   slot="receiver"
+                  siblings={[{ slot: "transformation", adapterId: draft.mapperId }, { slot: "delivery", adapterId: draft.handlerId }]}
                   dataSourceId={draft.dataSourceId}
                   properties={draft.receiverProperties}
                   onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}
@@ -326,10 +332,11 @@ export function SubscriptionPage() {
               noneLabel="None — the document passes through unchanged"
               mapperEditorHref={`/subscriptions/${s.id}/mapper`}
             />
-            {isRelational(draft.mapperId) && (
+            {bindsToDataSource(draft.mapperId, "mapper") && (
               <div className="mt-3">
                 <DataSourceBinding
                   slot="mapper"
+                  siblings={[{ slot: "source", adapterId: draft.receiverId }, { slot: "delivery", adapterId: draft.handlerId }]}
                   dataSourceId={draft.dataSourceId}
                   properties={draft.mapperProperties}
                   onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}
@@ -355,10 +362,11 @@ export function SubscriptionPage() {
               disabled={!canEdit}
               noneLabel="None — the document stops here"
             />
-            {isRelational(draft.handlerId) && (
+            {bindsToDataSource(draft.handlerId, "handler") && (
               <div className="mt-3">
                 <DataSourceBinding
                   slot="handler"
+                  siblings={[{ slot: "source", adapterId: draft.receiverId }, { slot: "transformation", adapterId: draft.mapperId }]}
                   dataSourceId={draft.dataSourceId}
                   properties={draft.handlerProperties}
                   onDataSourceChange={(dataSourceId) => set("dataSourceId", dataSourceId)}

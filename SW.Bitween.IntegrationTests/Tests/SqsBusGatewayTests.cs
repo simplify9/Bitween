@@ -13,6 +13,7 @@ using SW.Bitween.Domain.DataSources;
 using SW.Bitween.Domain.Gateway;
 using SW.Bitween.IntegrationTests.Fixtures;
 using SW.Bitween.Model;
+using SW.Bitween.Services.Adapters;
 using SW.PrimitiveTypes;
 using SW.Serverless.Resident;
 using Xunit;
@@ -237,6 +238,78 @@ public class SqsBusGatewayTests(BitweenFixture fixture)
 
         await WaitAsync(async () => await DepthAsync(target) >= 1, TimeSpan.FromSeconds(20),
             "the message never arrived on the target queue");
+    }
+
+    /// <summary>
+    /// A DELIVERY sends, which is the half that was missing. Publish had existed since this
+    /// adapter did and nothing in the pipeline ever called it.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_sends_the_message_it_was_given()
+    {
+        var consumed = await fixture.CreateSqsQueueAsync(Unique("handler-in"));
+        var target = await fixture.CreateSqsQueueAsync(Unique("handler-out"));
+
+        var dataSourceId = await CreateDataSourceAsync(consumed);
+        await using var adapter = await StartAsync(dataSourceId);
+
+        await adapter.Instance.InvokeAsync<XchangeFile>("Handle",
+            new XchangeFile("{\"delivered\":true}", "out.json"),
+            properties: new Dictionary<string, string> { ["Endpoint"] = target });
+
+        await WaitAsync(async () => await DepthAsync(target) >= 1, TimeSpan.FromSeconds(20),
+            "the delivered message never arrived on the target queue");
+    }
+
+    [Fact]
+    public async Task A_delivery_with_no_endpoint_says_so()
+    {
+        var dataSourceId = await CreateDataSourceAsync(
+            await fixture.CreateSqsQueueAsync(Unique("handler-none")));
+
+        await using var adapter = await StartAsync(dataSourceId);
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() =>
+            adapter.Instance.InvokeAsync<XchangeFile>("Handle",
+                new XchangeFile("{}", "out.json"),
+                properties: new Dictionary<string, string>()));
+
+        Assert.Contains("no Endpoint", error.Message);
+    }
+
+    /// <summary>
+    /// The multi-node case. A broker data source is exclusive, but a delivery runs on whichever
+    /// node picked the message up — so when the owned instance is not here the runtime opens a
+    /// send-only connection of its own rather than failing. See the RabbitMQ twin of this test
+    /// for the reasoning in full.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_sends_from_a_node_that_does_not_own_the_connection()
+    {
+        var target = await fixture.CreateSqsQueueAsync(Unique("elsewhere-out"));
+        var dataSourceId = await CreateDataSourceAsync(
+            await fixture.CreateSqsQueueAsync(Unique("elsewhere-in")));
+
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        Assert.Null(host.Get(BusAdapters.Sqs, dataSourceId.ToString()));
+
+        await using var scope = fixture.App.Services.CreateAsyncScope();
+        var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
+
+        await invoker.InvokeAsync<XchangeFile>(BusAdapters.Sqs, AdapterRole.Handler,
+            "Handle", new XchangeFile("{\"fromElsewhere\":true}", "out.json"),
+            new Dictionary<string, string>
+            {
+                [StartupValuesFiller.DataSourceIdKey] = dataSourceId.ToString(),
+                ["Endpoint"] = target
+            },
+            Guid.NewGuid().ToString("N"));
+
+        await WaitAsync(async () => await DepthAsync(target) >= 1, TimeSpan.FromSeconds(25),
+            "a node that does not own the connection could not send");
+
+        // And it did not take ownership on the way past.
+        Assert.Null(host.Get(BusAdapters.Sqs, dataSourceId.ToString()));
     }
 
     [Fact]

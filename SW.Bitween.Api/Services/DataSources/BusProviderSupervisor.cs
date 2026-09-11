@@ -343,10 +343,22 @@ public class BusProviderSupervisor(IServiceProvider serviceProvider, IResidentAd
     /// </summary>
     private async Task WriteBackHealthAsync(BitweenDbContext dbContext, CancellationToken cancellationToken)
     {
-        var health = adapters.Describe().ToDictionary(h => h.InstanceKey);
+        // Only the instances that ARE a data source. Describe() answers for everything this host
+        // holds, and a POOLED instance is keyed by its pool slot rather than by a data source —
+        // several can share one key, which made a plain ToDictionary throw "an item with the same
+        // key has already been added" and take the whole reconcile pass down with it.
+        //
+        // Pooled bus instances became routine when a delivery on a node that does not own the
+        // connection started opening a send-only one. They have no health to write back: nothing
+        // owns them, and the row they would write to belongs to the node that does.
+        var health = adapters.Describe()
+            .Where(h => int.TryParse(h.InstanceKey, out var id) && id > 0)
+            .GroupBy(h => h.InstanceKey)
+            .ToDictionary(g => g.Key, g => g.First());
+
         if (health.Count == 0) return;
 
-        var ids = health.Keys.Select(k => int.TryParse(k, out var id) ? id : 0).Where(i => i > 0).ToList();
+        var ids = health.Keys.Select(int.Parse).ToList();
         var rows = await dbContext.Set<DataSource>()
             .Where(d => ids.Contains(d.Id))
             .ToListAsync(cancellationToken);

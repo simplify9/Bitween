@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json.Linq;
 using RabbitMQ.Client;
 using SW.Bitween.Domain;
 using SW.Bitween.Domain.DataSources;
@@ -14,6 +15,7 @@ using SW.Bitween.IntegrationTests.Fixtures;
 using SW.Bitween.Model;
 using SW.PrimitiveTypes;
 using SW.Serverless.Resident;
+using SW.Bitween.Services.Adapters;
 using SW.Bitween.Services.DataSources;
 using Xunit;
 
@@ -277,6 +279,106 @@ public class ExternalBusGatewayTests(BitweenFixture fixture)
 
         await WaitAsync(() => Depth(target) >= 1, TimeSpan.FromSeconds(15),
             "the published message never arrived on the external queue");
+    }
+
+    /// <summary>
+    /// A DELIVERY publishes, which is the half that was missing. Publish had existed since this
+    /// adapter did and nothing in the pipeline ever called it — the handler contract is Handle,
+    /// and this class had none — so an integration could drain a customer's queue and had no way
+    /// to answer on one.
+    ///
+    /// Driven the way the pipeline drives it: Handle, with the endpoint arriving as a
+    /// per-invocation property, because one instance serves every gateway on the broker and where
+    /// to send is the subscription's business rather than the connection's.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_publishes_the_message_it_was_given()
+    {
+        var consumed = Unique("handler-src");
+        var target = Unique("handler-out");
+
+        // A queue the adapter is NOT consuming: depth on one it drains reads 0 whether the publish
+        // worked or not, because the message is taken as fast as it is sent.
+        var dataSourceId = await CreateDataSourceAsync(consumed, withGateway: false);
+        DeclareQueue(target);
+
+        await using var adapter = await StartAsync(dataSourceId);
+
+        var response = await adapter.Instance.InvokeAsync<JObject>("Handle",
+            new XchangeFile("{\"delivered\":true}", "out.json"),
+            properties: new Dictionary<string, string> { ["Endpoint"] = target });
+
+        await WaitAsync(() => Depth(target) >= 1, TimeSpan.FromSeconds(15),
+            "the delivered message never arrived on the external queue");
+
+        // The broker's receipt comes back as the response, so what was sent and under which id is
+        // on the exchange rather than only in a log.
+        Assert.Contains("messageId", response.Value<string>("data") ?? response.ToString());
+    }
+
+    /// <summary>
+    /// A delivery with nowhere to send is refused where it was configured, rather than publishing
+    /// to a queue named the empty string.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_with_no_endpoint_says_so()
+    {
+        var dataSourceId = await CreateDataSourceAsync(Unique("handler-none"), withGateway: false);
+        await using var adapter = await StartAsync(dataSourceId);
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() =>
+            adapter.Instance.InvokeAsync<JObject>("Handle",
+                new XchangeFile("{}", "out.json"),
+                properties: new Dictionary<string, string>()));
+
+        Assert.Contains("no Endpoint and no Exchange", error.Message);
+    }
+
+    /// <summary>
+    /// The multi-node case, and the reason this needed more than a Handle method.
+    ///
+    /// A broker data source is EXCLUSIVE: one node holds the connection so the customer's queue is
+    /// drained once. A subscription's delivery, though, runs on whichever node picked the message
+    /// up — so a publish would fail on every node but the owner, which is to say almost always.
+    ///
+    /// Exclusivity is about CONSUMING, not about connecting. When the owned instance is not here,
+    /// the runtime opens a send-only connection of its own — Consume=false, no endpoints, its own
+    /// pool key — and publishes through that. Nothing is consumed twice, and a delivery works
+    /// wherever it lands.
+    ///
+    /// Here nothing is running under the data source's instance key at all, which is exactly what
+    /// a non-owning node sees.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_publishes_from_a_node_that_does_not_own_the_connection()
+    {
+        var target = Unique("elsewhere-out");
+        var dataSourceId = await CreateDataSourceAsync(Unique("elsewhere-src"), withGateway: false);
+        DeclareQueue(target);
+
+        var host = fixture.App.Services.GetRequiredService<IResidentAdapterHost>();
+        Assert.Null(host.Get(BusAdapters.RabbitMq, dataSourceId.ToString()));
+
+        await using var scope = fixture.App.Services.CreateAsyncScope();
+        var invoker = scope.ServiceProvider.GetRequiredService<IAdapterInvoker>();
+
+        // Exactly what the pipeline passes: the data source id, and the slot's own properties.
+        var properties = new Dictionary<string, string>
+        {
+            [StartupValuesFiller.DataSourceIdKey] = dataSourceId.ToString(),
+            ["Endpoint"] = target
+        };
+
+        await invoker.InvokeAsync<XchangeFile>(BusAdapters.RabbitMq, AdapterRole.Handler,
+            "Handle", new XchangeFile("{\"fromElsewhere\":true}", "out.json"),
+            properties, Guid.NewGuid().ToString("N"));
+
+        await WaitAsync(() => Depth(target) >= 1, TimeSpan.FromSeconds(20),
+            "a node that does not own the connection could not publish");
+
+        // And it did NOT take ownership on the way past: the send-only instance is pooled under
+        // its own key, so the exclusive slot is still free for the node that should hold it.
+        Assert.Null(host.Get(BusAdapters.RabbitMq, dataSourceId.ToString()));
     }
 
     // ---------------------------------------------------------------- controls
