@@ -9,6 +9,7 @@ import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basi
 import { Checkbox, Field, TextInput } from "../../components/ui/forms";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { Panel } from "../../components/ui/Panel";
+import { fetchCapabilities } from "./schema";
 
 /**
  * The SQL this connection is allowed to run.
@@ -293,6 +294,16 @@ function StatementForm({
     statement?.description ?? seed?.description ?? "",
   );
   const [inactive, setInactive] = useState(statement?.inactive ?? false);
+  // What this engine spells a placeholder with, reported by the adapter. Named rather than listed
+  // per engine: there are four now, and a hint that names two of them is wrong for the others.
+  const capabilities = useQuery({
+    queryKey: keys.dataSources.capabilities(dataSourceId),
+    queryFn: () => fetchCapabilities(dataSourceId),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const prefix = capabilities.data?.parameterPrefix || "@";
+
   const [cursorColumn, setCursorColumn] = useState(statement?.cursorColumn ?? "");
   const [keyColumn, setKeyColumn] = useState(statement?.keyColumn ?? "");
 
@@ -356,14 +367,17 @@ function StatementForm({
     <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
       <Field
         label="Name"
-        hint="What a subscription puts in its Statement property. Unique per connection, and matched without regard to case."
+        hint="What a subscription names to run it — its Statement property, or ReceiveStatement for one that polls. Unique per connection, and matched without regard to case."
       >
         <TextInput value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
 
       <Field
         label="SQL"
-        hint="Bind values as parameters — :name on Oracle, @name on PostgreSQL. Never concatenate a value into the text."
+        hint={
+          `Bind values as parameters — ${prefix}name on this connection. Never concatenate a value `
+          + `into the text.`
+        }
       >
         <textarea
           className="min-h-28 w-full rounded-lg border border-ink-200 bg-white px-3 py-2 font-mono text-[13px] text-ink-900"

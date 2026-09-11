@@ -41,6 +41,12 @@ namespace SW.Bitween.Resources.Subscriptions
                     Inactive = subscriber.Inactive,
                     MapperId = subscriber.MapperId,
                     ReceiverId = subscriber.ReceiverId,
+
+                    // Which data source every stage of this subscription runs through. Dropped
+                    // from this projection once, and the cost was quiet: the UI read every bound
+                    // subscription as unbound, so opening one and saving it cleared the binding.
+                    DataSourceId = subscriber.DataSourceId,
+
                     Name = subscriber.Name,
                     PartnerId = subscriber.PartnerId,
                     MapperProperties = subscriber.MapperProperties.ToKeyAndValueCollection(),

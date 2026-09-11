@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
+using Newtonsoft.Json;
 using RabbitMQ.Client.Events;
+using SW.PrimitiveTypes;
 using SW.Serverless.Sdk;
 using SW.Serverless.Sdk.Resident;
 using System;
@@ -24,8 +26,14 @@ namespace SW.Bitween.Adapters.Bus.RabbitMq;
 /// A host rejection becomes BasicNack(requeue: true), so a Bitween outage does not lose the
 /// customer's messages — it just stops draining their queue, which is the correct failure.
 /// </summary>
+// Two roles, one package. "bus" is what makes it configurable as a broker connection; "handler"
+// is what puts it in the delivery picker, because the same resident instance both consumes a
+// customer's queue and publishes back to one. Declared rather than encoded in the id: reclassifying
+// by rename would break every gateway that stores it.
 [AdapterKind("bus")]
-public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBusHandler> logger) : IResidentAdapter
+[AdapterKind("handler")]
+public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBusHandler> logger)
+    : IResidentAdapter, IInfolinkHandler
 {
     private readonly RabbitOptions _options = options.Value;
 
@@ -310,6 +318,57 @@ public class RabbitBusHandler(IOptions<RabbitOptions> options, ILogger<RabbitBus
 
         Interlocked.Increment(ref _published);
         return Task.FromResult<object>(new { messageId, bytes = body.Length });
+    }
+
+    /// <summary>
+    /// Egress through the PIPELINE: a subscription's delivery stage, publishing the message it was
+    /// given to a queue on this broker.
+    ///
+    /// <see cref="Publish"/> has existed since this adapter did, and nothing could reach it —
+    /// Bitween's pipeline calls <c>Handle</c> on a handler, and this class had none, so an operator
+    /// could consume from a customer's broker and had no way to answer on it. This is the two of
+    /// them joined up; the publishing itself is unchanged.
+    ///
+    /// Where to send is the SUBSCRIPTION's business, not the connection's: one instance serves
+    /// every gateway on this broker, so the endpoint travels with the call rather than with the
+    /// process. Deliberately NOT restricted to the endpoints the data source consumes — the common
+    /// case for egress is a queue Bitween does not drain.
+    /// </summary>
+    public Task<XchangeFile> Handle(XchangeFile xchangeFile)
+    {
+        var endpoint = _context?.ValueOf("Endpoint");
+        var exchange = _context?.ValueOf("Exchange");
+
+        if (string.IsNullOrWhiteSpace(endpoint) && string.IsNullOrWhiteSpace(exchange))
+            throw new InvalidOperationException(
+                "This delivery has no Endpoint and no Exchange, so there is nowhere to publish. Set "
+                + "Endpoint to a queue name, or Exchange (with an optional RoutingKey) to publish "
+                + "through an exchange.");
+
+        return PublishAsFile(xchangeFile, endpoint, exchange);
+    }
+
+    async Task<XchangeFile> PublishAsFile(XchangeFile xchangeFile, string endpoint, string exchange)
+    {
+        var receipt = await Publish(new PublishRequest
+        {
+            Endpoint = endpoint,
+            Exchange = exchange,
+            RoutingKey = _context?.ValueOf("RoutingKey"),
+            ContentType = _context?.ValueOf("ContentType"),
+
+            // The exchange id, so a redelivery is recognisable as the same message on the far side.
+            // Publishers that set nothing leave the consumer no way to deduplicate, which is the
+            // complaint this adapter logs when it receives one.
+            MessageId = _context?.ValueOf("xchangeid"),
+
+            Body = xchangeFile?.Data ?? ""
+        });
+
+        // The broker's receipt as the response, so what was sent and under which id is on the
+        // exchange rather than only in a log.
+        return new XchangeFile(
+            JsonConvert.SerializeObject(receipt), xchangeFile?.Filename);
     }
 
     /// <summary>The control the UI needs before a data source is saved. Staged, so a failure names the step.</summary>

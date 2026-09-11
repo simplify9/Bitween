@@ -32,6 +32,7 @@ export function DataSourceBinding({
   onPropertiesChange,
   disabled,
   slot,
+  siblings,
 }: {
   dataSourceId: number | null;
   properties: Record<string, string>;
@@ -40,6 +41,12 @@ export function DataSourceBinding({
   disabled?: boolean;
   /** Named in the hints, so it is clear which stage's statement is being chosen. */
   slot: "handler" | "mapper" | "receiver";
+  /**
+   * What the OTHER stages are set to. The connection belongs to the subscription, not to a stage,
+   * so choosing one here chooses it for all of them — and a stage whose adapter cannot use the
+   * kind that was picked is a subscription that saves cleanly and fails on its first message.
+   */
+  siblings?: { slot: string; adapterId: string | null }[];
 }) {
   const sources = useQuery({
     queryKey: keys.dataSources.list,
@@ -65,10 +72,27 @@ export function DataSourceBinding({
     staleTime: 30_000,
   });
 
-  // Only a relational source can run SQL, and the server refuses a statement on anything else —
-  // so offering a broker here would be offering something that cannot work.
-  const relational = (sources.data ?? []).filter((s) => s.kind === "Relational");
-  const chosen = relational.find((s) => s.id === dataSourceId) ?? null;
+  // A relational source runs SQL; a broker source is published to. Both bind here, and which one
+  // you are looking at decides the whole lower half of this panel.
+  //
+  // A broker is offered in a DELIVERY only. Ingress from a customer's broker comes through a bus
+  // gateway, not through a subscription's receiver — offering it there would be offering
+  // something that cannot work.
+  const usable = (sources.data ?? []).filter(
+    (s) => s.kind === "Relational" || (s.kind === "Broker" && slot !== "receiver"),
+  );
+  const chosen = usable.find((s) => s.id === dataSourceId) ?? null;
+  const broker = chosen?.kind === "Broker";
+
+  // A sibling stage whose adapter is bound to the connection but cannot use the kind that was
+  // chosen. A relational adapter needs a database; a bus adapter needs a broker.
+  const conflicting = (siblings ?? []).filter((sibling) => {
+    if (!chosen || !sibling.adapterId) return false;
+    const wantsBroker = sibling.adapterId.startsWith("bitween.bus.");
+    const wantsDatabase = sibling.adapterId.startsWith("bitween.db.");
+    if (!wantsBroker && !wantsDatabase) return false;
+    return wantsBroker ? chosen.kind !== "Broker" : chosen.kind !== "Relational";
+  });
 
   const setProperty = (name: string, value: string) => {
     const next = { ...properties };
@@ -106,14 +130,17 @@ export function DataSourceBinding({
     <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
       <Field
         label="Connection"
-        hint="The database this runs through. Shared by every stage of this subscription, so they use one pooled connection rather than opening their own."
+        hint="The data source every stage of this subscription runs through — one per subscription, so choosing here chooses for the others too. Shared deliberately: the stages then use one pooled connection rather than opening their own."
       >
         <Select
           value={dataSourceId == null ? "" : String(dataSourceId)}
           disabled={disabled || sources.isLoading}
           options={[
             { value: "", label: "None — this adapter carries its own settings" },
-            ...relational.map((s) => ({ value: String(s.id), label: s.name })),
+            ...usable.map((s) => ({
+              value: String(s.id),
+              label: s.kind === "Broker" ? `${s.name} (broker)` : s.name,
+            })),
           ]}
           onChange={(e) => {
             const next = e.target.value === "" ? null : Number(e.target.value);
@@ -126,9 +153,24 @@ export function DataSourceBinding({
         />
       </Field>
 
-      {relational.length === 0 && !sources.isLoading && (
+      {/*
+        The trap in one connection per subscription: a delivery that publishes to a broker and a
+        source that reads from a database cannot both be served by it. Said at the moment of
+        choosing, because the failure otherwise arrives on the first message with nothing on
+        screen to connect it to this decision.
+      */}
+      {chosen && conflicting.length > 0 && (
+        <p className="text-[12px] text-warn-700">
+          This subscription&apos;s {conflicting.map((c) => c.slot).join(" and ")} also runs through
+          its connection, and {chosen.name} is a {chosen.kind === "Broker" ? "broker" : "database"}
+          {" "}— so {conflicting.length === 1 ? "that stage" : "those stages"} cannot use it. Chain
+          a second subscription instead, with this one&apos;s response feeding it.
+        </p>
+      )}
+
+      {usable.length === 0 && !sources.isLoading && (
         <p className="text-[12px] text-ink-500">
-          No database data sources exist yet.{" "}
+          No data sources exist that this stage can use yet.{" "}
           <Link className="text-accent-600 hover:underline" to="/data-sources">
             Create one
           </Link>{" "}
@@ -136,7 +178,9 @@ export function DataSourceBinding({
         </p>
       )}
 
-      {chosen && (
+      {chosen && broker && <BrokerDelivery connection={chosen.name} properties={properties} disabled={disabled} setProperty={setProperty} />}
+
+      {chosen && !broker && (
         <>
           <Field
             label="Statement"
@@ -283,6 +327,91 @@ export function DataSourceBinding({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Where a delivery publishes on the customer's own broker.
+ *
+ * This is the other half of an external bus connection, and until now it was the missing half:
+ * the adapters could publish and nothing in the pipeline ever asked them to, so an integration
+ * could consume from a customer's queue and had no way to answer on one.
+ *
+ * Only three things are asked for, and the rest is deliberately left to the broker. Exchange and
+ * routing key are RabbitMQ's vocabulary and are simply ignored by a queue-only broker such as SQS
+ * — shown rather than hidden behind provider sniffing, because a form that quietly changes shape
+ * is harder to explain than two fields that do not apply.
+ *
+ * The endpoint is NOT restricted to the queues this connection consumes. The common case for
+ * egress is a queue Bitween does not drain, and constraining it would rule that out.
+ */
+function BrokerDelivery({
+  connection,
+  properties,
+  disabled,
+  setProperty,
+}: {
+  connection: string;
+  properties: Record<string, string>;
+  disabled?: boolean;
+  setProperty: (name: string, value: string) => void;
+}) {
+  const endpoint = properties.Endpoint ?? "";
+  const exchange = properties.Exchange ?? "";
+
+  return (
+    <>
+      <Field
+        label="Publish to"
+        hint={`A queue on ${connection}. For SQS this is the full queue URL; for RabbitMQ, the queue name. It does not have to be a queue this connection consumes — usually it is not.`}
+      >
+        <TextInput
+          value={endpoint}
+          disabled={disabled}
+          spellCheck={false}
+          placeholder="orders.outbound"
+          onChange={(e) => setProperty("Endpoint", e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="Exchange"
+        hint="RabbitMQ only, and optional: publish through an exchange rather than straight to a queue. Ignored by a broker that has no exchanges."
+      >
+        <TextInput
+          value={exchange}
+          disabled={disabled}
+          spellCheck={false}
+          onChange={(e) => setProperty("Exchange", e.target.value)}
+        />
+      </Field>
+
+      {exchange && (
+        <Field label="Routing key" hint="Which binding the exchange should match.">
+          <TextInput
+            value={properties.RoutingKey ?? ""}
+            disabled={disabled}
+            spellCheck={false}
+            onChange={(e) => setProperty("RoutingKey", e.target.value)}
+          />
+        </Field>
+      )}
+
+      {!endpoint && !exchange && (
+        <p className="text-[12px] text-warn-700">
+          Nothing to publish to, so this delivery will fail on its first message. Name a queue, or
+          an exchange.
+        </p>
+      )}
+
+      {/* The thing worth knowing about a broker connection and several nodes, said where the
+          decision is made rather than in a document nobody reads at the time. */}
+      <p className="text-[12px] text-ink-500">
+        A broker connection is held by one node so its queues are drained once, but a delivery runs
+        wherever the message was picked up — so publishing opens a short send-only connection on
+        that node. It never subscribes, so nothing is consumed twice.
+      </p>
+    </>
   );
 }
 

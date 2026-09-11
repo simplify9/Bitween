@@ -4,7 +4,9 @@ using Amazon.SQS;
 using Amazon.SQS.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SW.PrimitiveTypes;
 using SW.Serverless.Sdk;
 using SW.Serverless.Sdk.Resident;
 using System;
@@ -37,8 +39,13 @@ namespace SW.Bitween.Adapters.Bus.Sqs;
 /// envelope they arrive in. The SP-API request/response calls themselves are ordinary HTTPS and
 /// belong in a mapper or handler, not here.
 /// </summary>
+// Two roles, one package. "bus" is what makes it configurable as a broker connection; "handler"
+// is what puts it in the delivery picker, because the same resident instance both drains a
+// customer's queue and sends back to one.
 [AdapterKind("bus")]
-public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> logger) : IResidentAdapter
+[AdapterKind("handler")]
+public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> logger)
+    : IResidentAdapter, IInfolinkHandler
 {
     private readonly SqsOptions _options = options.Value;
 
@@ -319,6 +326,47 @@ public class SqsBusHandler(IOptions<SqsOptions> options, ILogger<SqsBusHandler> 
         Interlocked.Increment(ref _sent);
 
         return new { messageId = response.MessageId, sequenceNumber = response.SequenceNumber };
+    }
+
+    /// <summary>
+    /// Egress through the PIPELINE: a subscription's delivery stage, sending the message it was
+    /// given to a queue these credentials can reach.
+    ///
+    /// <see cref="Publish"/> has existed since this adapter did, and nothing could reach it —
+    /// Bitween's pipeline calls <c>Handle</c> on a handler, and this class had none. This is the
+    /// two joined up; the sending itself is unchanged.
+    ///
+    /// The queue URL is the SUBSCRIPTION's, not the connection's: one instance serves every
+    /// gateway on these credentials, so it travels with the call. Deliberately not restricted to
+    /// the queues this data source consumes — the common case for egress is one it does not.
+    /// </summary>
+    public async Task<XchangeFile> Handle(XchangeFile xchangeFile)
+    {
+        var endpoint = _context?.ValueOf("Endpoint");
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+            throw new InvalidOperationException(
+                "This delivery has no Endpoint, so there is nowhere to send. Set it to the queue "
+                + "URL — the full https://sqs.<region>.amazonaws.com/<account>/<name>, which is "
+                + "what the SDK addresses a queue by.");
+
+        var receipt = await Publish(new PublishRequest
+        {
+            Endpoint = endpoint,
+
+            // Only read by a FIFO queue, and required by one. Defaulting the group to the
+            // exchange id would put every message in its own group and lose the ordering a FIFO
+            // queue exists for, so it is left to configuration.
+            GroupId = _context?.ValueOf("GroupId"),
+
+            // The exchange id makes a redelivery recognisable as the same message, which is what
+            // a FIFO queue deduplicates on within its five-minute window.
+            DeduplicationId = _context?.ValueOf("DeduplicationId") ?? _context?.ValueOf("xchangeid"),
+
+            Body = xchangeFile?.Data ?? ""
+        });
+
+        return new XchangeFile(JsonConvert.SerializeObject(receipt), xchangeFile?.Filename);
     }
 
     public async Task<object> TestConnection()
