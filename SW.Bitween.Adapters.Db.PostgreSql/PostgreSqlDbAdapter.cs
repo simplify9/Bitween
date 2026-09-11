@@ -131,6 +131,25 @@ public class PostgreSqlDbAdapter(IOptions<PostgreSqlOptions> options, ILogger<Po
     };
 
     /// <summary>
+    /// MERGE arrived in PostgreSQL 15. Claiming it against 13 or 14 — both still widely run, and
+    /// both supported until 2025 and 2026 — would have somebody write a statement the server
+    /// cannot parse, and find out on the first message rather than here.
+    /// </summary>
+    protected override void AdjustForVersion(DbCapabilities described) => Narrow(described);
+
+    /// <summary>
+    /// The narrowing itself, reachable without an adapter instance. Proving this needs one server
+    /// per version otherwise, and the rule is a comparison rather than anything the database does.
+    /// </summary>
+    public static void AdjustForVersionForTests(DbCapabilities described) => Narrow(described);
+
+    static void Narrow(DbCapabilities described)
+    {
+        var major = MajorVersionOf(described.ServerVersion);
+        if (major > 0 && major < 15) described.Merge = false;
+    }
+
+    /// <summary>
     /// What this ROLE may do, asked of the server rather than assumed. Role attributes and database
     /// privileges are separate things in PostgreSQL and both matter — REPLICATION in particular,
     /// because it is the gate on log-based CDC if that ever becomes a provider.
@@ -259,12 +278,14 @@ public class PostgreSqlDbAdapter(IOptions<PostgreSqlOptions> options, ILogger<Po
                     Type = TypeOf(reader.GetChar(2)),
                     Comment = reader.IsDBNull(3) ? null : reader.GetString(3),
 
-                    // reltuples, so it is as fresh as the last ANALYZE, and -1 on a table that has
-                    // never been analysed. Reported as an estimate everywhere it surfaces — the
-                    // alternative is COUNT(*) on a stranger's table, which a menu should not do.
-                    RowCount = !request.IncludeRowCounts || reader.IsDBNull(4)
+                    // reltuples, so it is as fresh as the last ANALYZE. It is -1 on a table that
+                    // has never been analysed, and that is UNKNOWN rather than empty — clamping it
+                    // to zero said "no rows" about a table that may hold millions. Reported as an
+                    // estimate everywhere it surfaces; the alternative is COUNT(*) on a stranger's
+                    // table, which a menu should not do.
+                    RowCount = !request.IncludeRowCounts || reader.IsDBNull(4) || reader.GetInt64(4) < 0
                         ? null
-                        : Math.Max(0, reader.GetInt64(4))
+                        : reader.GetInt64(4)
                 });
         }
 

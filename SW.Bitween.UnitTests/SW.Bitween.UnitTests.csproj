@@ -35,6 +35,9 @@
          referencing it from a net10.0 test project is fine and keeps the pure logic — the
          statement allow-list, cursor formatting — testable without a database. -->
     <ProjectReference Include="..\SW.Bitween.Adapters.Db.Core\SW.Bitween.Adapters.Db.Core.csproj" />
+    <!-- For the capability-narrowing rule, which is a version comparison rather than anything the
+         database does — so it is provable without a container per PostgreSQL release. -->
+    <ProjectReference Include="..\SW.Bitween.Adapters.Db.PostgreSql\SW.Bitween.Adapters.Db.PostgreSql.csproj" />
   </ItemGroup>
 
   <ItemGroup>

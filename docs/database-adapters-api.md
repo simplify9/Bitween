@@ -41,6 +41,12 @@ Two rules run through everything below:
 The data source form is generated from the adapter, so this table is what you will see on screen.
 Settings marked **secret** are encrypted at rest and never returned by the API.
 
+> **Meeting one of these engines for the first time?**
+> [database-adapters-per-engine.md](database-adapters-per-engine.md) is the guide behind these
+> tables: what you must set and what you can leave alone, how each engine writes a placeholder and
+> a row limit, what its types arrive as, whether a procedure can return rows, and what its error
+> messages mean. This section is the reference; that one is the explanation.
+
 ### 2.1 Common to both engines
 
 | Setting | Default | What it is for |
