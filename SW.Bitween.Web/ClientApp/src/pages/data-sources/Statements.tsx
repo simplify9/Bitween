@@ -306,10 +306,16 @@ function StatementForm({
   // looks like a button that did nothing.
   const [justSaved, setJustSaved] = useState(false);
 
+  // True when the database never looked at the SQL — the adapter for this connection is not
+  // running, so there was nobody to ask. Said out loud because a save that reported nothing would
+  // look exactly like one that had been verified, and the next thing to notice would be a failed
+  // connection test or a failed message.
+  const [unchecked, setUnchecked] = useState(false);
+
   const save = useMutation({
     mutationFn: async () => {
       if (statement) {
-        await api.updateDataSourceStatement(statement.id, {
+        return api.updateDataSourceStatement(statement.id, {
           name,
           sql,
           description,
@@ -318,18 +324,19 @@ function StatementForm({
           cursorColumn,
           keyColumn,
         });
-      } else {
-        await api.createDataSourceStatement(dataSourceId, {
-          name,
-          sql,
-          description,
-          cursorColumn,
-          keyColumn,
-        });
       }
+
+      return api.createDataSourceStatement(dataSourceId, {
+        name,
+        sql,
+        description,
+        cursorColumn,
+        keyColumn,
+      });
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setError(null);
+      setUnchecked(!saved.checked);
       // Only for an edit. A create closes the form on success, which says it landed by itself —
       // and a "Saved" flash on a form that is disappearing is a flicker, not a message.
       if (statement) {
@@ -435,6 +442,13 @@ function StatementForm({
       {/* Under the fields and above the buttons: the error is about what was typed, and this is
           where the eye already is when the save is pressed. */}
       {error && <FormError>{error}</FormError>}
+
+      {unchecked && !error && (
+        <p className="text-[12px] text-warn-700">
+          Saved, but not checked. This connection is not running here, so the database never saw
+          this SQL — run a connection test once it is up.
+        </p>
+      )}
 
       <div className="flex items-center gap-2">
         {justSaved ? (

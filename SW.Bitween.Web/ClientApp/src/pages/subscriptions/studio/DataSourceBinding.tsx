@@ -333,6 +333,10 @@ function StatementColumns({
     setError(null);
   }, [statement.id, statement.keyColumn, statement.cursorColumn]);
 
+  // True when the database never looked at the SQL — see the statements panel, which says the
+  // same thing for the same reason.
+  const [unchecked, setUnchecked] = useState(false);
+
   const save = useMutation({
     mutationFn: () =>
       api.updateDataSourceStatement(statement.id, {
@@ -344,8 +348,9 @@ function StatementColumns({
         keyColumn,
         cursorColumn,
       }),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setError(null);
+      setUnchecked(!saved.checked);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 2000);
       void queryClient.invalidateQueries({
@@ -395,6 +400,13 @@ function StatementColumns({
       </div>
 
       {error && <FormError>{error}</FormError>}
+
+      {unchecked && !error && (
+        <p className="text-[12px] text-warn-700">
+          Saved, but not checked — this connection is not running here, so the database never saw
+          the change.
+        </p>
+      )}
 
       {!canEdit && (
         <p className="text-[12px] text-ink-500">

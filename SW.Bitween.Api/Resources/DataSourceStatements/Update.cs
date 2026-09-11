@@ -43,8 +43,11 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext,
         // Only when it actually changed: re-checking untouched SQL would refuse a rename, or a
         // change of owner, because of a table someone dropped last week — a fault worth surfacing
         // but not here, and not as a block on an unrelated edit.
+        // True when the SQL did not change: there was nothing to check, which is not the same as
+        // "could not check" and should not warn as though it were.
+        var checkedSql = true;
         if (!string.Equals(entity.Sql, model.Sql, System.StringComparison.Ordinal))
-            await Create.EnsureSqlIsValid(validator, entity.DataSourceId, model.Sql);
+            checkedSql = await Create.EnsureSqlIsValid(validator, entity.DataSourceId, model.Sql);
 
         entity.Name = model.Name.Trim();
         entity.Sql = model.Sql;
@@ -55,7 +58,7 @@ public class Update(BitweenDbContext dbContext, RequestContext requestContext,
         entity.Inactive = model.Inactive;
 
         await dbContext.SaveChangesAsync();
-        return entity.Id;
+        return new { Id = entity.Id, Checked = checkedSql };
     }
 
     private class Validate : AbstractValidator<DataSourceStatementUpdate>

@@ -124,6 +124,78 @@ public class OracleDbAdapter(IOptions<OracleOptions> options, ILogger<OracleDbAd
 
     // ------------------------------------------------------------------ capabilities
 
+    // ------------------------------------------------------------------ checking
+
+    /// <summary>
+    /// Oracle is checked with <c>DBMS_SQL.PARSE</c> rather than by preparing.
+    ///
+    /// ODP.NET's <c>Prepare</c> is a client-side no-op — Oracle validates when a statement is
+    /// executed, not when it is prepared — so the shared check passed everything here, including a
+    /// select from a table that does not exist. A statement reported as verified without being
+    /// looked at is worse than no check, because it is the one nobody goes back to.
+    ///
+    /// PARSE is the real thing: it compiles the statement and resolves every name in it, raising
+    /// ORA-00942 for a missing table and ORA-00936 for a syntax error, and it runs nothing. Bind
+    /// placeholders need no values — parsing is exactly the step before binding.
+    /// </summary>
+    protected override async Task CheckSyntaxAsync(DbConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            declare
+                c integer := dbms_sql.open_cursor;
+            begin
+                begin
+                    dbms_sql.parse(c, :statement, dbms_sql.native);
+                exception
+                    when others then
+                        -- Closed here as well as below: leaving a cursor open on the shared pooled
+                        -- connection would leak one per bad statement somebody tried to save.
+                        dbms_sql.close_cursor(c);
+                        raise;
+                end;
+                dbms_sql.close_cursor(c);
+            end;";
+        command.CommandTimeout = 10;
+
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "statement";
+        parameter.Value = sql;
+        command.Parameters.Add(parameter);
+
+        PrepareCommand(command);
+
+        try
+        {
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            // Rethrown without the PL/SQL stack. Running the parse inside a block means the driver
+            // reports where in OUR block it failed — three ORA-06512 frames through SYS.DBMS_SQL —
+            // underneath the one line that is about the operator's SQL. Keeping them would bury
+            // "table does not exist" under the mechanism used to discover it.
+            throw new InvalidOperationException(FirstOracleError(ex.Message), ex);
+        }
+    }
+
+    /// <summary>
+    /// The first ORA- line, which is the cause; the rest are the frames it was raised through.
+    /// Anything that does not look like an Oracle error is returned whole rather than trimmed to
+    /// nothing.
+    /// </summary>
+    static string FirstOracleError(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return message;
+
+        var lines = message.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var cause = lines.FirstOrDefault(l =>
+            l.TrimStart().StartsWith("ORA-", StringComparison.OrdinalIgnoreCase)
+            && !l.TrimStart().StartsWith("ORA-06512", StringComparison.OrdinalIgnoreCase));
+
+        return (cause ?? lines[0]).Trim();
+    }
+
     protected override DbCapabilities DescribeEngine() => new()
     {
         Engine = "Oracle",
@@ -157,7 +229,11 @@ public class OracleDbAdapter(IOptions<OracleOptions> options, ILogger<OracleDbAd
 
         SchemaDiscovery = true,
         RowCountEstimates = true,
-        ReceiveModes = ["bulk", "incrementing", "timestamp", "timestamp+incrementing", "marker"]
+        ReceiveModes = ["bulk", "incrementing", "timestamp", "timestamp+incrementing", "marker"],
+
+        // `fetch first N rows only`, since 12c. `rownum` is the older idiom and is a trap with an
+        // ORDER BY — it is applied before the sort, so it takes an arbitrary N and then sorts those.
+        LimitStyle = "fetchFirst"
     };
 
     /// <summary>

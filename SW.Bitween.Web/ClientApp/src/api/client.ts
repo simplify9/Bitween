@@ -72,6 +72,7 @@ import type {
   TrailEntry,
   WorkGroupRow,
 } from "./types";
+import type { SaveResult } from "./http/dataSourceStatements";
 
 /**
  * The single data-access contract the UI is written against, implemented by
@@ -378,7 +379,7 @@ export interface ApiClient {
       cursorColumn?: string | null;
       keyColumn?: string | null;
     },
-  ): Promise<{ id: number }>;
+  ): Promise<SaveResult>;
   updateDataSourceStatement(
     id: number,
     changes: {
@@ -390,7 +391,7 @@ export interface ApiClient {
       cursorColumn?: string | null;
       keyColumn?: string | null;
     },
-  ): Promise<void>;
+  ): Promise<SaveResult>;
   deleteDataSourceStatement(id: number): Promise<void>;
   getDataSourceStatementUsage(id: number): Promise<DataSourceStatementUsage>;
   /** The subscription is either an existing id or defined inline; the endpoint commits both as one. */
