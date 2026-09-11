@@ -24,6 +24,10 @@ are the ones that are real:
 | `dev-warehouse-sqlserver.sql` | SQL Server | Everything in a `sales` schema; comments are extended properties; an inline table-valued function. |
 | `dev-warehouse-oracle.sql` | Oracle | Parameters are `:name`; a REF CURSOR procedure; `fetch first` rather than `limit`. |
 
+Each of those differences is explained in
+[docs/database-adapters-per-engine.md](../docs/database-adapters-per-engine.md), along with what to
+configure for each engine and what its errors mean.
+
 ```bash
 # MySQL. --log-bin-trust-function-creators because creating a FUNCTION needs SUPER while binary
 # logging is on, and the warehouse user is not SUPER.

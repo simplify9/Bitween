@@ -188,6 +188,27 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
     }
 
     /// <summary>
+    /// Narrows the declared capability list to what THIS server actually has.
+    ///
+    /// The list is written per engine and is therefore about the engine at its newest. Called once
+    /// the server version is known, which is the only point at which the difference can be told.
+    /// Does nothing unless an engine overrides it — most capabilities have been there for a decade.
+    /// </summary>
+    protected virtual void AdjustForVersion(DbCapabilities described) { }
+
+    /// <summary>
+    /// The major version this server reports, or 0 when it cannot be read. Drivers spell it
+    /// differently — "16.14", "8.4.11", "16.00.4135" — but all of them lead with the major.
+    /// </summary>
+    protected static int MajorVersionOf(string serverVersion)
+    {
+        if (string.IsNullOrWhiteSpace(serverVersion)) return 0;
+
+        var lead = serverVersion.Split('.', ' ')[0];
+        return int.TryParse(lead, out var major) ? major : 0;
+    }
+
+    /// <summary>
     /// Runs once on every connection this adapter opens, before anything uses it.
     ///
     /// For the settings an engine will not take in a connection string. PostgreSQL puts search_path
@@ -361,6 +382,11 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
         // Filled in here rather than declared per engine, so the prefix a caller is told to write
         // and the prefix this adapter actually binds with cannot drift apart.
         described.ParameterPrefix = ParameterPrefix;
+
+        // A chance for an engine to correct what it declared once it knows which VERSION it is
+        // talking to. MERGE arrived in PostgreSQL 15 and sequences in SQL Server 2012; a list that
+        // says "yes" against an older server is a statement somebody writes and cannot run.
+        AdjustForVersion(described);
 
         described.Details["statements"] = string.Join(", ", statements.Names.OrderBy(n => n));
         described.Details["allowAdHocSql"] = Options.AllowAdHocSql.ToString();
