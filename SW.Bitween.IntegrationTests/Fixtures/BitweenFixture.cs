@@ -322,6 +322,14 @@ public sealed class BitweenFixture : IAsyncLifetime
                     "SW.Bitween.Adapters.Db.PostgreSql", BusAdapters.PostgreSql,
                     "SW.Bitween.Adapters.Db.PostgreSql.dll",
                     new Dictionary<string, string> { ["Protocol"] = "2", ["Lifecycle"] = "resident" });
+                await AdapterInstaller.InstallAsync(cloudFiles,
+                    "SW.Bitween.Adapters.Db.MySql", BusAdapters.MySql,
+                    "SW.Bitween.Adapters.Db.MySql.dll",
+                    new Dictionary<string, string> { ["Protocol"] = "2", ["Lifecycle"] = "resident" });
+                await AdapterInstaller.InstallAsync(cloudFiles,
+                    "SW.Bitween.Adapters.Db.SqlServer", BusAdapters.SqlServer,
+                    "SW.Bitween.Adapters.Db.SqlServer.dll",
+                    new Dictionary<string, string> { ["Protocol"] = "2", ["Lifecycle"] = "resident" });
             }
 
             await App.StartAsync();

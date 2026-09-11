@@ -8,6 +8,17 @@ interface SearchyResponse<T> {
   totalCount: number;
 }
 
+/**
+ * What a save answers with. `checked` is false when the database was never asked — the adapter for
+ * this connection is not running on the node that handled the request, so there was nobody to
+ * validate against. Worth saying: a save that reported nothing would look exactly like one that
+ * had been verified.
+ */
+export interface SaveResult {
+  id: number;
+  checked: boolean;
+}
+
 interface RawStatement {
   id: number;
   dataSourceId: number;
@@ -70,10 +81,10 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       cursorColumn?: string | null;
       keyColumn?: string | null;
     },
-  ): Promise<{ id: number }> {
+  ): Promise<SaveResult> {
     // The data source travels in the body, not the route: POST /datasourcestatements/{id} already
     // means "update that statement", so a keyed create would collide with it.
-    const id = await post<number>(`/datasourcestatements`, {
+    const saved = await post<SaveResult>(`/datasourcestatements`, {
       dataSourceId,
       name: input.name,
       sql: input.sql,
@@ -83,7 +94,7 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       keyColumn: input.keyColumn || null,
       inactive: false,
     });
-    return { id };
+    return saved;
   },
 
   async updateDataSourceStatement(
@@ -97,8 +108,8 @@ export const dataSourceStatementMethods: Partial<ApiClient> = {
       cursorColumn?: string | null;
       keyColumn?: string | null;
     },
-  ): Promise<void> {
-    await post(`/datasourcestatements/${id}`, {
+  ): Promise<SaveResult> {
+    return post<SaveResult>(`/datasourcestatements/${id}`, {
       name: changes.name,
       sql: changes.sql,
       description: changes.description ?? null,

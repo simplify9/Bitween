@@ -427,6 +427,69 @@ public class OracleAdapterTests : IClassFixture<OracleFixture>
         Assert.Equal(new[] { 6, 7, 8, 9, 10 }, keys);
     }
 
+    // ---------------------------------------------------------------- validating
+
+    /// <summary>
+    /// ODP.NET's Prepare is a client-side no-op — Oracle compiles a statement when it is executed,
+    /// not when it is prepared — so the shared check passed EVERYTHING here, including a select
+    /// from a table that does not exist. These pin the replacement: DBMS_SQL.PARSE, which compiles
+    /// and resolves names without running anything.
+    /// </summary>
+    [SkippableFact]
+    public async Task Valid_sql_passes_validation()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = $"select id from {OracleFixture.Table} where id = :id" },
+            timeoutSeconds: 120);
+
+        Assert.True(result.Value<bool>("ok"), result.Value<string>("error"));
+    }
+
+    [SkippableFact]
+    public async Task A_dropped_table_is_caught_before_the_statement_is_stored()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = "select 1 from nothing_of_the_sort" }, timeoutSeconds: 120);
+
+        Assert.False(result.Value<bool>("ok"));
+
+        // ORA-00942: table or view does not exist. Named rather than matched on words, because the
+        // message is localised and the number is not.
+        Assert.Contains("ORA-00942", result.Value<string>("error"));
+    }
+
+    [SkippableFact]
+    public async Task A_syntax_error_is_caught()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = $"select id from {OracleFixture.Table} where id = @id" },
+            timeoutSeconds: 120);
+
+        Assert.False(result.Value<bool>("ok"));
+
+        // @ is a database link on Oracle, not a placeholder, so this is ORA-00936 missing
+        // expression — and the hint says to write :id instead.
+        Assert.Contains(":id", result.Value<string>("error"));
+    }
+
+    [SkippableFact]
+    public async Task A_bare_procedure_name_is_accepted_and_says_what_was_not_checked()
+    {
+        var adapter = await AdapterAsync();
+
+        var result = await adapter.InvokeAsync<JObject>("ValidateStatement",
+            new { sql = "some_procedure" }, timeoutSeconds: 120);
+
+        Assert.True(result.Value<bool>("ok"));
+        Assert.Contains("existence not checked", result.Value<string>("note"));
+    }
+
     // ---------------------------------------------------------------- setup
 
     async Task<int> CreateDataSourceAsync()

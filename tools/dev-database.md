@@ -13,6 +13,45 @@ connect to something.
 order lines, an outbox that an integration drains, a set-returning function, a stored procedure and
 a sequence — with 60 orders and 30 unsent shipment notifications.
 
+There is one per engine, and they are deliberately the same schema with the same rows, so a
+statement written against one is recognisably the same job on another and the differences you meet
+are the ones that are real:
+
+| File | Engine | What is different about it |
+|---|---|---|
+| `dev-warehouse.sql` | PostgreSQL | A set-returning function, because a PROCEDURE here cannot return rows. |
+| `dev-warehouse-mysql.sql` | MySQL | A procedure that returns rows by SELECTing. No sequence — a counter table stands in. |
+| `dev-warehouse-sqlserver.sql` | SQL Server | Everything in a `sales` schema; comments are extended properties; an inline table-valued function. |
+| `dev-warehouse-oracle.sql` | Oracle | Parameters are `:name`; a REF CURSOR procedure; `fetch first` rather than `limit`. |
+
+```bash
+# MySQL. --log-bin-trust-function-creators because creating a FUNCTION needs SUPER while binary
+# logging is on, and the warehouse user is not SUPER.
+docker run -d --name bw-mysql \
+  -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=warehouse \
+  -e MYSQL_USER=warehouse -e MYSQL_PASSWORD=warehouse \
+  -p 55441:3306 mysql:8.4 --log-bin-trust-function-creators=1
+docker exec -i bw-mysql mysql -uwarehouse -pwarehouse warehouse < tools/dev-warehouse-mysql.sql
+
+# SQL Server. The 2022 image, not 2019: 2019 has no arm64 build and exits immediately on Apple
+# silicon, which reads as "container is not running" rather than as anything about architecture.
+docker run -d --name bw-mssql \
+  -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=Warehouse!2026" \
+  -p 55442:1433 mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
+docker exec bw-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Warehouse!2026' -C \
+  -Q "create database warehouse"
+docker cp tools/dev-warehouse-sqlserver.sql bw-mssql:/tmp/w.sql
+docker exec bw-mssql /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Warehouse!2026' -C \
+  -d warehouse -i /tmp/w.sql
+
+# Oracle. Slow to start — wait for "DATABASE IS READY TO USE" in the log before seeding.
+docker run -d --name bw-oracle \
+  -e ORACLE_PASSWORD=warehouse -e APP_USER=warehouse -e APP_USER_PASSWORD=warehouse \
+  -p 55443:1521 gvenzl/oracle-free:23-slim-faststart
+docker cp tools/dev-warehouse-oracle.sql bw-oracle:/tmp/w.sql
+docker exec bw-oracle sqlplus -s warehouse/warehouse@localhost/FREEPDB1 @/tmp/w.sql
+```
+
 ```bash
 docker run -d --name bw-sample-db \
   -e POSTGRES_USER=warehouse -e POSTGRES_PASSWORD=warehouse -e POSTGRES_DB=warehouse \

@@ -42,7 +42,7 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext,
                 + "something to a Relational one.");
 
         await EnsureNameIsFree(dbContext, dataSourceId, model.Name, existingId: null);
-        await EnsureSqlIsValid(validator, dataSourceId, model.Sql);
+        var checkedSql = await EnsureSqlIsValid(validator, dataSourceId, model.Sql);
 
         var entity = new DataSourceStatement
         {
@@ -58,7 +58,10 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext,
 
         dbContext.Add(entity);
         await dbContext.SaveChangesAsync();
-        return entity.Id;
+        // The id, and whether the SQL was actually checked. Saying so matters because validation
+        // is best-effort: when the adapter is not running there is nobody to ask, and a save that
+        // reported nothing would look exactly like one that had been verified.
+        return new { Id = entity.Id, Checked = checkedSql };
     }
 
     /// <summary>
@@ -69,12 +72,15 @@ public class Create(BitweenDbContext dbContext, RequestContext requestContext,
     /// connection, and blocking someone from saving a fix because the thing they are fixing it
     /// for is broken would be exactly backwards.
     /// </summary>
-    internal static async Task EnsureSqlIsValid(
+    /// <returns>True when the database actually looked at it; false when nobody could be asked.</returns>
+    internal static async Task<bool> EnsureSqlIsValid(
         SW.Bitween.Services.DataSources.StatementValidator validator, int dataSourceId, string sql)
     {
         var result = await validator.ValidateAsync(dataSourceId, sql);
         if (result.Checked && !result.Ok)
             throw new SWException($"The database will not accept this statement. {result.Error}");
+
+        return result.Checked;
     }
 
     /// <summary>

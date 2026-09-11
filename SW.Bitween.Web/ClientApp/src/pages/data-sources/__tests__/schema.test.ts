@@ -65,7 +65,7 @@ describe("draftStatementFor", () => {
     expect(draftStatementFor(object())).toContain("select *");
   });
 
-  it("calls a procedure rather than selecting from it", () => {
+  it("names a procedure rather than writing a CALL for it", () => {
     const sql = draftStatementFor(
       object({
         type: "procedure",
@@ -77,10 +77,47 @@ describe("draftStatementFor", () => {
       }),
     );
 
-    // Only the inputs are bound: an out parameter is the procedure's answer, not something the
-    // caller supplies. The adapter sends the direction as `In`/`Out`, so the match is
-    // case-insensitive — reading it literally would bind everything or nothing.
-    expect(sql).toBe("call sales.release_order(@order_id)");
+    // A statement meant for Call holds the procedure's NAME, not SQL — that is what
+    // CommandType.StoredProcedure takes, and on Oracle it is the only form that works. Drafting
+    // "call sales.release_order(@order_id)" made a statement whose procedure name was that entire
+    // string, which fails on first use and nowhere near here.
+    expect(sql).toBe("sales.release_order");
+  });
+
+  it("writes the placeholder and the row limit the engine actually takes", () => {
+    const table = object({
+      columns: [
+        { name: "id", dbType: "integer", clrType: "Int32", nullable: false, primaryKey: true, generated: true, ordinal: 1 },
+      ],
+    });
+
+    // Oracle: fetch first, and : for a bind.
+    expect(draftStatementFor(table, { parameterPrefix: ":", limitStyle: "fetchFirst" }))
+      .toContain("fetch first 100 rows only");
+
+    // SQL Server: TOP, and it goes BEFORE the columns rather than after the query.
+    expect(draftStatementFor(table, { parameterPrefix: "@", limitStyle: "top" }))
+      .toContain("select top 100 id");
+
+    const fn = object({
+      type: "function",
+      name: "orders_for",
+      parameters: [{ name: "code", dbType: "varchar2", direction: "In", ordinal: 1 }],
+    });
+
+    expect(draftStatementFor(fn, { parameterPrefix: ":", limitStyle: "fetchFirst" }))
+      .toBe("select * from sales.orders_for(:code)");
+  });
+
+  it("reads the next value of a sequence the way each engine spells it", () => {
+    const seq = object({ type: "sequence", name: "order_seq" });
+
+    expect(draftStatementFor(seq, { parameterPrefix: "@", limitStyle: "limit" }))
+      .toBe("select nextval('sales.order_seq')");
+    expect(draftStatementFor(seq, { parameterPrefix: "@", limitStyle: "top" }))
+      .toBe("select next value for sales.order_seq");
+    expect(draftStatementFor(seq, { parameterPrefix: ":", limitStyle: "fetchFirst" }))
+      .toBe("select sales.order_seq.nextval from dual");
   });
 
   it("selects from a set-returning function", () => {
@@ -95,11 +132,7 @@ describe("draftStatementFor", () => {
     expect(sql).toBe("select * from sales.orders_for_customer(@cid)");
   });
 
-  it("reads the next value of a sequence", () => {
-    expect(draftStatementFor(object({ type: "sequence", name: "order_seq" }))).toBe(
-      "select nextval('sales.order_seq')",
-    );
-  });
+
 });
 
 describe("draftNameFor", () => {

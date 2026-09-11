@@ -6,6 +6,7 @@ import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basi
 import { Select, TextInput } from "../../components/ui/forms";
 import { Panel } from "../../components/ui/Panel";
 import {
+  dialectOf,
   draftNameFor,
   draftStatementFor,
   fetchCapabilities,
@@ -13,6 +14,7 @@ import {
   fetchSchemaPage,
   groupBySchema,
   type DbObject,
+  type SqlDialect,
 } from "./schema";
 
 /** How many objects one page asks for. The adapter clamps anything above 1000. */
@@ -91,6 +93,10 @@ export function SchemaBrowser({
 
   const rows = objects.data?.objects ?? [];
   const hasMore = objects.data?.hasMore ?? false;
+
+  // How to write a placeholder and a row limit for THIS engine. Reported by the adapter rather
+  // than guessed from the label, so a draft cannot use a prefix the connection will refuse.
+  const dialect = dialectOf(capabilities.data);
 
   return (
     <Panel
@@ -179,6 +185,7 @@ export function SchemaBrowser({
                     key={`${object.schema}.${object.name}`}
                     dataSourceId={dataSourceId}
                     object={object}
+                    dialect={dialect}
                     onUseInStatement={onUseInStatement}
                   />
                 ))}
@@ -216,6 +223,7 @@ const LABELS: Record<string, string> = {
   function: "Functions",
   sequence: "Sequences",
   package: "Packages",
+  synonym: "Synonyms",
 };
 
 /**
@@ -225,10 +233,12 @@ const LABELS: Record<string, string> = {
 function ObjectRow({
   dataSourceId,
   object,
+  dialect,
   onUseInStatement,
 }: {
   dataSourceId: number;
   object: DbObject;
+  dialect: SqlDialect;
   onUseInStatement?: (draft: { name: string; sql: string; description: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -283,7 +293,7 @@ function ObjectRow({
             onClick={() =>
               onUseInStatement({
                 name: draftNameFor(full),
-                sql: draftStatementFor(full),
+                sql: draftStatementFor(full, dialect),
                 description: `Generated from ${full.schema}.${full.name}.`,
               })
             }

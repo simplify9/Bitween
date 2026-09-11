@@ -26,8 +26,14 @@
     <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
     <PackageReference Include="Testcontainers.RabbitMq" Version="3.10.0" />
     <PackageReference Include="Testcontainers.Oracle" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.MySql" Version="3.10.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="3.10.0" />
     <!-- The test seeds its schema directly, before the adapter is anywhere near it. -->
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.9.1" />
+    <!-- Seeding only: the adapters carry their own copies, and these are how a test sets a schema
+         up and reads results back without going through the adapter it is testing. -->
+    <PackageReference Include="MySqlConnector" Version="2.3.7" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
     <!-- So an Oracle that is not available here SKIPS rather than fails: the image is nearly five
          gigabytes, and a developer without it should still get every other result in this suite. -->
     <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
@@ -58,6 +64,8 @@
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Bus.Sqs -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Bus.Sqs --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.PostgreSql -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.PostgreSql --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.Oracle -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.Oracle --no-self-contained" />
+    <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.MySql -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.MySql --no-self-contained" />
+    <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.Adapters.Db.SqlServer -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.Adapters.Db.SqlServer --no-self-contained" />
     <Exec Command="dotnet publish $(MSBuildThisFileDirectory)../SW.Bitween.SampleResidentHandler -c $(Configuration) -o $(OutputPath)test-adapters/SW.Bitween.SampleResidentHandler --no-self-contained" />
   </Target>
 

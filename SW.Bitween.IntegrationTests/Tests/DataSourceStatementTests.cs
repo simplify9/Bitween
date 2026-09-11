@@ -259,8 +259,13 @@ public class DataSourceStatementTests(BitweenFixture fixture)
         var handler = ActivatorUtilities.CreateInstance<Resources.DataSourceStatements.Create>(
             scope.ServiceProvider);
 
-        return (int)await handler.Handle(
+        // The handler answers with { Id, Checked } — the id, and whether the database actually
+        // looked at the SQL. Read through the property rather than cast, because the shape is an
+        // anonymous type and a cast to int is what this used to do.
+        var created = await handler.Handle(
             new DataSourceStatementCreate { DataSourceId = dataSourceId, Name = name, Sql = sql });
+
+        return (int)created.GetType().GetProperty("Id")!.GetValue(created)!;
     }
 
     async Task UpdateAsync(int id, DataSourceStatementUpdate model)

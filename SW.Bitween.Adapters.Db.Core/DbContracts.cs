@@ -70,6 +70,26 @@ public class DbCapabilities
     /// <summary>bulk, incrementing, timestamp, timestamp+incrementing, marker.</summary>
     public string[] ReceiveModes { get; set; } = Array.Empty<string>();
 
+    /// <summary>
+    /// How this engine writes a bind placeholder — <c>:</c> or <c>@</c> — filled in by the base
+    /// from the adapter's own setting rather than declared per engine, so the two cannot disagree.
+    ///
+    /// Here because a caller that WRITES SQL needs it: the schema browser drafts a statement from
+    /// a table or a procedure, and a draft using the wrong prefix is a statement the engine refuses.
+    /// </summary>
+    public string ParameterPrefix { get; set; }
+
+    /// <summary>
+    /// How this engine limits a result to the first N rows. Three shapes, and they are not
+    /// interchangeable: <c>limit</c> (PostgreSQL, MySQL) and <c>fetchFirst</c> (Oracle, and SQL
+    /// Server 2012+) go after the query, while <c>top</c> (SQL Server's idiom) goes before the
+    /// column list.
+    ///
+    /// Same reason as the prefix: a drafted statement carries a row limit, and the wrong one does
+    /// not parse.
+    /// </summary>
+    public string LimitStyle { get; set; } = "limit";
+
     /// <summary>Probed with the real credentials — what the engine allows AND this login has.</summary>
     public List<string> Privileges { get; set; } = new();
 

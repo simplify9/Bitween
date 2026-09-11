@@ -183,8 +183,24 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
         var connection = Factory.CreateConnection();
         connection.ConnectionString = connectionString;
         await connection.OpenAsync(cancellationToken);
+        await OnConnectionOpenedAsync(connection, cancellationToken);
         return connection;
     }
+
+    /// <summary>
+    /// Runs once on every connection this adapter opens, before anything uses it.
+    ///
+    /// For the settings an engine will not take in a connection string. PostgreSQL puts search_path
+    /// there and Oracle takes CURRENT_SCHEMA the same way; SQL Server has neither, because its
+    /// default schema belongs to the login rather than to the connection — so it is the one that
+    /// needs this.
+    ///
+    /// A pooled connection carries whatever this did into its next use, which is the point: it is
+    /// paid once per physical connection rather than once per message. Anything set here therefore
+    /// has to be true for every caller of this data source, not for one of them.
+    /// </summary>
+    protected virtual Task OnConnectionOpenedAsync(DbConnection connection,
+        CancellationToken cancellationToken) => Task.CompletedTask;
 
     DbCommand CreateCommand(DbConnection connection, string sql, IDictionary<string, object> parameters,
         int? timeoutSeconds)
@@ -341,6 +357,10 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
                 described.Details["privilegeProbe"] = $"failed: {ex.Message}";
             }
         }
+
+        // Filled in here rather than declared per engine, so the prefix a caller is told to write
+        // and the prefix this adapter actually binds with cannot drift apart.
+        described.ParameterPrefix = ParameterPrefix;
 
         described.Details["statements"] = string.Join(", ", statements.Names.OrderBy(n => n));
         described.Details["allowAdHocSql"] = Options.AllowAdHocSql.ToString();
@@ -613,23 +633,36 @@ public abstract partial class DbResidentAdapterBase : IResidentAdapter, IInfolin
 
         try
         {
-            using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            command.CommandTimeout = 10;
-
-            // The placeholders have to be declared before Prepare, because some drivers validate
-            // that every parameter in the text has been supplied — Npgsql refuses outright — and
-            // a check that fell over on every parameterised statement would be worse than none.
-            DeclarePlaceholders(command);
-            PrepareCommand(command);
-            await Task.Run(() => command.Prepare());
-
+            await CheckSyntaxAsync(connection, sql);
             return (true, null);
         }
         catch (Exception ex)
         {
             return (false, ex.Message + WrongPrefixHint(sql));
         }
+    }
+
+    /// <summary>
+    /// Asks the engine to accept this SQL without running it. Throws when it will not.
+    ///
+    /// PREPARE is the portable form and is what most drivers want: the server parses the text and
+    /// binds every name in it, which is the whole check. It is overridable because one engine
+    /// cannot be asked that way — see the SQL Server adapter, whose driver refuses to prepare a
+    /// command unless every parameter has been given an explicit type, which is precisely what a
+    /// caller checking someone else's SQL does not know.
+    /// </summary>
+    protected virtual async Task CheckSyntaxAsync(DbConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.CommandTimeout = 10;
+
+        // The placeholders have to be declared before Prepare, because some drivers validate that
+        // every parameter in the text has been supplied — Npgsql refuses outright — and a check
+        // that fell over on every parameterised statement would be worse than none.
+        DeclarePlaceholders(command);
+        PrepareCommand(command);
+        await Task.Run(() => command.Prepare());
     }
 
     /// <summary>

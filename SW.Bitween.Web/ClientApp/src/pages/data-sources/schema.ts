@@ -61,7 +61,32 @@ export interface DbCapabilities {
   supportedObjects: string[];
   schemaDiscovery: boolean;
   rowCountEstimates: boolean;
+  /** `:` or `@`. The adapter reports its own, so a draft cannot use the wrong one. */
+  parameterPrefix: string;
+  /** How this engine limits rows: `limit`, `fetchFirst` or `top`. They are not interchangeable. */
+  limitStyle: string;
 }
+
+/**
+ * Everything a generated statement needs to know about the engine it is for.
+ *
+ * The browser used to write `@name` and `limit 100` whatever the connection was, which is right
+ * for PostgreSQL and MySQL and wrong for the other two: Oracle binds `:name` and takes
+ * `fetch first N rows only`, and SQL Server puts `top N` before the column list. A draft that
+ * does not parse is worse than no draft, because it looks like something that was checked.
+ */
+export interface SqlDialect {
+  parameterPrefix: string;
+  limitStyle: string;
+}
+
+/** PostgreSQL's, and the safe assumption while the capability list is still loading. */
+export const DEFAULT_DIALECT: SqlDialect = { parameterPrefix: "@", limitStyle: "limit" };
+
+export const dialectOf = (capabilities: DbCapabilities | undefined): SqlDialect => ({
+  parameterPrefix: capabilities?.parameterPrefix || DEFAULT_DIALECT.parameterPrefix,
+  limitStyle: capabilities?.limitStyle || DEFAULT_DIALECT.limitStyle,
+});
 
 /**
  * Thrown when the adapter answered but not with what was expected. Separate from a transport
@@ -198,27 +223,46 @@ export const qualify = (schema: string, name: string): string =>
  * thing the catalog cannot tell us, and a row limit, because the first thing anyone does with a
  * new statement is run it against a table whose size they do not know.
  */
-export const draftStatementFor = (object: DbObject): string => {
+export const draftStatementFor = (
+  object: DbObject,
+  dialect: SqlDialect = DEFAULT_DIALECT,
+): string => {
   const target = qualify(object.schema, object.name);
+  const bind = (name: string) => `${dialect.parameterPrefix}${name}`;
 
   if (object.type === "procedure" || object.type === "function") {
     // Only what the caller supplies. An out parameter, a return value and a REF CURSOR are the
     // routine's answer — binding them as inputs is how a generated call fails on first run.
     const args = object.parameters
       .filter((p) => SUPPLIED.has(p.direction?.toLowerCase()))
-      .map((p) => `@${p.name}`)
+      .map((p) => bind(p.name))
       .join(", ");
+
+    // A procedure is named, not written as SQL: that is what CommandType.StoredProcedure takes,
+    // and on Oracle it is the only form that works. The parameters are bound by the message.
     return object.type === "function"
       ? `select * from ${target}(${args})`
-      : `call ${target}(${args})`;
+      : target;
   }
 
-  if (object.type === "sequence") return `select nextval('${object.schema}.${object.name}')`;
+  if (object.type === "sequence")
+    return dialect.limitStyle === "limit"
+      ? `select nextval('${object.schema}.${object.name}')`
+      : dialect.limitStyle === "top"
+        ? `select next value for ${target}`
+        : `select ${target}.nextval from dual`;
 
   const columns = object.columns.length
     ? [...object.columns].sort((a, b) => a.ordinal - b.ordinal).map((c) => c.name).join(", ")
     : "*";
-  return `select ${columns}\n  from ${target}\n limit 100`;
+
+  // Three shapes, and they are not interchangeable — TOP goes before the columns, the other two
+  // after the query.
+  if (dialect.limitStyle === "top")
+    return `select top 100 ${columns}\n  from ${target}`;
+
+  const tail = dialect.limitStyle === "fetchFirst" ? "fetch first 100 rows only" : "limit 100";
+  return `select ${columns}\n  from ${target}\n ${tail}`;
 };
 
 /** A name for the statement, derived from the object so two objects never collide. */

@@ -58,6 +58,49 @@ Settings marked **secret** are encrypted at rest and never returned by the API.
 | `ReceiveBatchSize` | 500 | Default rows one poll takes; a subscription may override. |
 | `ReceiveStatement`, `CursorColumn`, `KeyColumn`, `MarkProcessedStatement` | — | **Legacy.** Still honoured if set, hidden from the form. See §6.1 for where each now lives. |
 
+### 2.1a MySQL — `bitween.db.mysql`
+
+Serves MariaDB too. `Database` is also the schema — MySQL has no separate one — so it is what an
+unqualified name resolves against, and a discovery call with no schema means the database this
+connection opened rather than every database on the server.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Host`, `Port` | localhost, 3306 | |
+| `Database` | — | Required. Also the schema. |
+| `UserName`, `Password` | — | |
+| `SslMode` | Preferred | Required or above off localhost. |
+| `ConnectionIdleLifetimeSeconds` | 180 | Keep below the server's `wait_timeout`; a connection the server closed first surfaces as a broken pipe on the next message. |
+| `ServerPrepare` | true | Off for a connection through ProxySQL, where prepared statements pin a backend. Also what makes the save-time check real — with it off, `Prepare` does nothing and every statement reports valid. |
+| `AllowZeroDateTime` | false | MySQL permits `0000-00-00`, which no .NET date type holds. |
+
+No sequences (AUTO_INCREMENT belongs to a column), no MERGE, no RETURNING, no array type. A
+procedure returns result sets by SELECTing — the capability PostgreSQL declares false.
+
+### 2.1b SQL Server — `bitween.db.sqlserver`
+
+Serves Azure SQL too. The default schema belongs to the LOGIN rather than the connection, so
+`Schema` is applied per connection with `EXECUTE AS` — and failure is not fatal, because
+impersonating a schema's owner is a privilege many service accounts do not have.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Host`, `Port` | localhost, 1433 | `Port` is ignored for `host\instance`, which resolves through the Browser service. |
+| `Database` | — | Required. |
+| `UserName`, `Password` | — | |
+| `Schema` | — | Run as this schema, for unqualified names. |
+| `Encrypt` | true | On by default in the modern driver — a change from the old one, and why an instance that worked for years fails on upgrade. |
+| `TrustServerCertificate` | false | Needed for the usual self-signed on-premises certificate. Use knowingly. |
+| `MultipleActiveResultSets` | false | Stops the connection resetting cleanly between uses, which is the opposite of what a shared pool wants. |
+| `SnapshotIsolation` | false | Readers do not block writers. Needs the database to have it enabled. |
+
+MERGE, OUTPUT and snapshot isolation are all real here. Query Notifications over Service Broker
+exists and is not wired, so `changeNotification` is false.
+
+**Its statement check is not the shared one.** `SqlCommand.Prepare` refuses unless every parameter
+has an explicit type — which a caller checking somebody else's SQL does not know — so this adapter
+asks `sys.sp_describe_undeclared_parameters`, which parses the batch and binds every name in it.
+
 ### 2.2 Oracle — `bitween.db.oracle`
 
 | Setting | Default | Notes |
@@ -423,6 +466,13 @@ test or, if nobody ran one, as a failed message days afterwards.
 It is best-effort by construction: the adapter has to be running on this node to answer, and a
 source that is stopped or still starting cannot be asked, so the save proceeds unchecked. Refusing
 to let someone save a fix because the connection they are fixing it for is down would be backwards.
+
+**Oracle's check is not the shared one either**, and for a worse reason: ODP.NET's `Prepare` is a
+client-side no-op — Oracle compiles a statement when it is executed, not when it is prepared — so
+the shared check passed everything, including a select from a table that does not exist. It uses
+`DBMS_SQL.PARSE` instead, which compiles and resolves names while running nothing. The PL/SQL
+frames that raises are stripped, so the answer is the one ORA- line that is about the operator's
+SQL rather than the mechanism used to find it.
 
 Two answers are not plain pass/fail. A bare **procedure name** passes with a `note` saying its
 existence was not checked — it is resolved when called, and preparing it as text is a syntax error
