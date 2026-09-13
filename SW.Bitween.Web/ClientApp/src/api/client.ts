@@ -152,14 +152,19 @@ export interface ApiClient {
   }): Promise<Paged<InformationTypeRow>>;
   getInformationType(id: number): Promise<InformationTypeDetail>;
   /** Same payload as update: a new type arrives complete, promoted properties included. */
+  // `retiredOn` is absent from both on purpose: retiring is its own command, not a field a
+  // save can carry — otherwise every form that round-trips a type could retire or restore it
+  // by accident.
   createInformationType(
-    input: Omit<InformationType, "id" | "createdOn">,
+    input: Omit<InformationType, "id" | "createdOn" | "retiredOn">,
   ): Promise<InformationType>;
   updateInformationType(
     id: number,
-    changes: Omit<InformationType, "id" | "createdOn">,
+    changes: Omit<InformationType, "id" | "createdOn" | "retiredOn">,
   ): Promise<InformationType>;
   deleteInformationType(id: number): Promise<void>;
+  /** Toggles: retires a type that is in use, restores one that is retired. */
+  retireInformationType(id: number): Promise<{ retiredOn: string | null }>;
 
   // — global values —
   listValueSets(): Promise<GlobalValuesSetRow[]>;

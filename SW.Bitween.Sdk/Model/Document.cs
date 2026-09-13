@@ -39,8 +39,20 @@ namespace SW.Bitween.Model
         public int Id { get; set; }
     }
 
+    /// <summary>Empty on purpose — retiring toggles, so there is nothing to send.</summary>
+    public class DocumentRetire
+    {
+    }
+
     public class DocumentRow : DocumentUpdate
     {
+        /// <summary>
+        /// When this type was taken out of use, or null while it is still in use. A retired type
+        /// keeps answering for the exchanges already recorded against it and is no longer offered
+        /// for new work.
+        /// </summary>
+        public DateTime? RetiredOn { get; set; }
+
         /// <summary>
         /// How many subscriptions carry this information type. Counted here because the admin UI
         /// shows it in the list: computing it client-side meant downloading every subscription

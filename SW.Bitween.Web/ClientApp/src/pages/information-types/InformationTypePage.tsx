@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Archive, Trash2, Undo2 } from "lucide-react";
 import { api } from "../../api";
 import { Can, useSessionCan } from "../../auth/guards";
-import { Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
+import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { CodeBadge, Panel, UnsavedBar } from "../../components/ui/Panel";
 import { MiniTable } from "../../components/ui/Table";
@@ -12,6 +12,7 @@ import { HistoryCard } from "../../components/config/HistoryCard";
 import { ExchangesList, SetupList } from "../../components/config/shared";
 import { BackLink } from "../../components/ui/BackLink";
 import { keys } from "../../api/queryKeys";
+import { formatDate } from "../../lib/dates";
 import {
   InformationTypeFields,
   informationTypeChanges,
@@ -58,6 +59,13 @@ export function InformationTypePage() {
     },
   });
 
+  const retire = useMutation({
+    mutationFn: () => api.retireInformationType(typeId),
+    // Every picker reads the list, and the sidebar count with it, so the whole family
+    // is refreshed rather than just this type's own entry.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.informationTypes.all }),
+  });
+
   if (type.isPending) return <LoadingBlock label="Loading information type…" />;
   if (type.isError)
     return (
@@ -79,13 +87,41 @@ export function InformationTypePage() {
           <h1 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-tight text-ink-900">
             {t.name}
             <CodeBadge code={t.code} name={t.name} />
+            {t.retiredOn && (
+              <Badge
+                tone="neutral"
+                title={`Taken out of use on ${formatDate(t.retiredOn)}. Its exchanges still name it; it is no longer offered for new work.`}
+              >
+                Retired
+              </Badge>
+            )}
           </h1>
         </div>
-        <Can permission="documents.delete">
-          <Button variant="danger" onClick={() => setDeleting(true)}>
-            <Trash2 className="size-4" /> Delete
-          </Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+            Ahead of Delete, and the one offered by default: a type that has carried traffic
+            almost always wants to leave the pickers rather than take its exchanges with it,
+            and this is the half of the pair that can be undone.
+          */}
+          <Can permission="documents.edit">
+            <Button onClick={() => retire.mutate()} disabled={retire.isPending}>
+              {t.retiredOn ? (
+                <>
+                  <Undo2 className="size-4" /> Restore
+                </>
+              ) : (
+                <>
+                  <Archive className="size-4" /> Retire
+                </>
+              )}
+            </Button>
+          </Can>
+          <Can permission="documents.delete">
+            <Button variant="danger" onClick={() => setDeleting(true)}>
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          </Can>
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">

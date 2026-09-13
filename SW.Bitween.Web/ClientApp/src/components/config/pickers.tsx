@@ -84,7 +84,12 @@ export function InfoTypePicker({
   /** undefined = closed, null = creating, number = editing that type. */
   const [dialog, setDialog] = useState<number | null | undefined>(undefined);
 
-  const candidates = filter ? (types.data ?? []).filter(filter) : (types.data ?? []);
+  // A retired type is out of the picker, but never out of a config that already names one:
+  // dropping the current value would make a wired-up screen read as unconfigured, and the only
+  // way to save it again would be to pick something else.
+  const candidates = (filter ? (types.data ?? []).filter(filter) : (types.data ?? [])).filter(
+    (t) => t.retiredOn === null || t.id === value,
+  );
 
   return (
     <div>
@@ -99,7 +104,7 @@ export function InfoTypePicker({
           value: String(t.id),
           label: t.name,
           code: t.code,
-          hint: t.format === "Json" ? "JSON" : "XML",
+          hint: t.retiredOn !== null ? "Retired" : t.format === "Json" ? "JSON" : "XML",
         }))}
       />
       <PickerLinks
