@@ -210,7 +210,9 @@ namespace SW.Bitween.Model
         public int InputFileSize { get; set; }
         public string InputFileHash { get; set; }
         public string OutputFileName { get; set; }
+        public int OutputFileSize { get; set; }
         public string ResponseFileName { get; set; }
+        public int ResponseFileSize { get; set; }
 
         public string InputUrl { get; set; }
         public string OutputUrl { get; set; }

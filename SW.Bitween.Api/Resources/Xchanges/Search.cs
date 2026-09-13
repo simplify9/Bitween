@@ -79,6 +79,11 @@ namespace SW.Bitween.Resources.Xchanges
                             InputFileName = xchange.InputName,
                             OutputFileName = result.OutputName,
                             ResponseFileName = result.ResponseName,
+                            // The same three counts the file keys above are already derived from.
+                            // Left unassigned, every stage reported its document as "0 b".
+                            InputFileSize = xchange.InputSize,
+                            OutputFileSize = result.OutputSize,
+                            ResponseFileSize = result.ResponseSize,
                             CorrelationId = xchange.CorrelationId,
                             // xchange.PartnerId is the authoritative source (set at creation from the
                             // gateway/bus-route partner, or the subscription's own PartnerId as a

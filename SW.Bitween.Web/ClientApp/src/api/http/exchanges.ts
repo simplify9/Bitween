@@ -33,6 +33,9 @@ interface RawXchangeRow {
   inputFileName: string | null;
   outputFileName: string | null;
   responseFileName: string | null;
+  inputFileSize: number;
+  outputFileSize: number;
+  responseFileSize: number;
   inputKey: string | null;
   outputKey: string | null;
   responseKey: string | null;
@@ -125,15 +128,19 @@ const toExchangeRow = (raw: RawXchangeRow, partnerNameById: Map<number, string>)
   exception: raw.exception,
   promotedProperties: raw.promotedProperties,
   mapperSkipped: raw.mapperId === null,
-  // Search's projection never populates file sizes/hashes (always 0 at the
-  // source) — show the name, which is real, with a size of 0 rather than
-  // fabricating one. Existence is keyed off `*Key` (backend only emits one once
-  // the file actually has bytes), not the file name, since gateway/manually
-  // created exchanges have no name yet content still exists.
+  // Existence is keyed off `*Key` (backend only emits one once the file actually
+  // has bytes), not the file name, since gateway/manually created exchanges have
+  // no name yet content still exists.
   files: {
-    input: raw.inputKey ? { name: raw.inputFileName ?? "input", size: 0, key: raw.inputKey } : null,
-    mapped: raw.outputKey ? { name: raw.outputFileName ?? "mapped", size: 0, key: raw.outputKey } : null,
-    handled: raw.responseKey ? { name: raw.responseFileName ?? "handled", size: 0, key: raw.responseKey } : null,
+    input: raw.inputKey
+      ? { name: raw.inputFileName ?? "input", size: raw.inputFileSize ?? 0, key: raw.inputKey }
+      : null,
+    mapped: raw.outputKey
+      ? { name: raw.outputFileName ?? "mapped", size: raw.outputFileSize ?? 0, key: raw.outputKey }
+      : null,
+    handled: raw.responseKey
+      ? { name: raw.responseFileName ?? "handled", size: raw.responseFileSize ?? 0, key: raw.responseKey }
+      : null,
   },
 });
 
