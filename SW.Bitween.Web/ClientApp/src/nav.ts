@@ -14,6 +14,7 @@ import {
   RotateCcw,
   ScrollText,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
   Webhook,
@@ -96,7 +97,11 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { label: "Team", path: "/team", icon: Users, permissions: ["users.view", "roles.view"] },
+      // Who can sign in, then what signing in lets them do. Two entries rather than one
+      // "Team" with tabs inside it: they are gated on different permissions, so a session
+      // that holds only one of them used to land on a page whose other half was a dead tab.
+      { label: "Members", path: "/team/members", icon: Users, permissions: ["users.view"] },
+      { label: "Roles", path: "/team/roles", icon: ShieldCheck, permissions: ["roles.view"] },
       { label: "Settings", path: "/settings", icon: Settings, permissions: ["settings.view"] },
       // Last in Administration: it reports on everything above it rather than configuring
       // anything, and it is the one page whose value is that nobody can quietly change it.
