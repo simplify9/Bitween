@@ -151,7 +151,9 @@ export function InformationTypePage() {
           body={
             <>
               <strong className="font-medium text-ink-800">{t.code ?? t.name}</strong> and its promoted
-              properties will be gone for good. Types still used by subscriptions can't be deleted.
+              properties will be gone for good — <strong className="font-medium text-ink-800">along with
+              every exchange recorded against it</strong>, and their payloads. A type still carried by a
+              subscription, or listened for by a bus gateway, can't be deleted.
             </>
           }
           confirmLabel="Delete information type"
