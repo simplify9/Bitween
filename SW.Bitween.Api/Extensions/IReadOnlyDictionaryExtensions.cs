@@ -16,6 +16,11 @@ namespace SW.Bitween
         public static ICollection<KeyAndValue> ToKeyAndValueCollection<TKey, TValue>(
             this IReadOnlyDictionary<TKey, TValue> dict)
         {
+            // A null column is "no entries", not a failure. Rows the domain creates always have
+            // one, but a row inserted any other way took down the whole list response rather
+            // than the single row that was missing it.
+            if (dict == null) return new List<KeyAndValue>();
+
             return dict.Select(kvp => new KeyAndValue
             {
                 Key = kvp.Key.ToString(),
