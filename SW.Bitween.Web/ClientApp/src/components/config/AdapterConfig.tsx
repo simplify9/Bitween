@@ -5,9 +5,13 @@ import { ArrowUpRight, Braces, ChevronDown, ChevronRight, Search } from "lucide-
 import { api, type AdapterInfo, type AdapterKind, type PartnerRow } from "../../api";
 import { Button } from "../ui/basics";
 import { Field } from "../ui/forms";
-import { SearchSelect } from "../ui/SearchSelect";
+import { AdapterPicker, useAdapterCatalog } from "./AdapterPicker";
 import { keys } from "../../api/queryKeys";
 import { NATIVE_MAPPER_ID } from "../../lib/nativeMapper/types";
+
+// Lives with the picker, re-exported here because this is where every screen
+// already imports it from.
+export { useAdapterCatalog };
 
 /**
  * Mappers whose mapping is built in the visual editor rather than typed into
@@ -29,13 +33,6 @@ const KIND_LABELS: Record<AdapterKind, string> = {
   mapper: "Mapper",
   handler: "Handler",
 };
-
-export function useAdapterCatalog(kind: AdapterKind) {
-  return useQuery({
-    queryKey: keys.adapters(kind),
-    queryFn: () => api.listAdapters(kind),
-  });
-}
 
 interface ReferenceToken {
   label: string;
@@ -488,28 +485,14 @@ export function AdapterConfig({
             {KIND_LABELS[kind]}
           </span>
           <div className="w-full max-w-sm">
-            <SearchSelect
-              aria-label={`${kind} adapter`}
+            <AdapterPicker
+              kind={kind}
               value={adapterId ?? ""}
+              catalog={catalog.data ?? []}
+              loading={catalog.isPending}
               disabled={disabled || catalog.isPending}
               onChange={pick}
-              placeholder={`Pick a ${kind}…`}
               clearLabel={required ? undefined : noneLabel}
-              options={[
-                ...(catalog.data ?? []).map((a) => ({
-                  value: a.id,
-                  label: a.label,
-                  code: a.id,
-                  hint: a.native ? "Native" : a.versions.length > 0 ? `v${a.versions.at(-1)}` : "Custom",
-                })),
-                // What is configured, when the catalog does not list it — an adapter that has been
-                // unpublished, or one that no longer declares this kind. Without it the select
-                // reads as empty on a subscription that is in fact wired up, and the only way to
-                // save the page is to pick something else, silently replacing a working adapter.
-                ...(adapterId && !catalog.isPending && !catalog.data?.some((a) => a.id === adapterId)
-                  ? [{ value: adapterId, label: adapterId, code: adapterId, hint: "Not in catalog" }]
-                  : []),
-              ]}
             />
           </div>
           {adapter && (
@@ -517,7 +500,7 @@ export function AdapterConfig({
               {adapter.native
                 ? "Runs in-process"
                 : adapter.versions.length > 0
-                  ? `v${adapter.versions.at(-1)}`
+                  ? `Custom · v${adapter.versions.at(-1)}`
                   : "Custom package"}
               {adapter.props.length > 0 &&
                 ` · ${adapter.props.length} setting${adapter.props.length === 1 ? "" : "s"}`}
