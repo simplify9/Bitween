@@ -86,3 +86,5 @@ concerns.
 |-----|---------|-------------|
 | `service.type` | `ClusterIP` | Service type. |
 | `service.port` | `80` | Service port (also the default `HTTPRoute` backend port). |
+| `serviceAccount.name` | `''` | Existing ServiceAccount the pod runs as, e.g. one bound to an Azure Workload Identity. Empty renders no `serviceAccountName`. The chart does not create it. |
+| `podLabels` | `{}` | Extra labels on the pod template only, never the selector. Values render as strings, e.g. `--set podLabels.azure\.workload\.identity/use=true`. |
