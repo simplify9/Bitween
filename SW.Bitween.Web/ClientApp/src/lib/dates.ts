@@ -59,6 +59,9 @@ export const formatDateTime = (iso: string) => {
 
 /** "14ms", "1.1s", "2m 3s" — from an elapsed millisecond count. */
 export const formatDurationMs = (ms: number): string => {
+  // NaN compares false against every bound below, so without this an unusable
+  // number falls through every branch and is rendered as "NaNh NaNm".
+  if (!Number.isFinite(ms)) return "—";
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
@@ -75,5 +78,11 @@ export const formatDurationMs = (ms: number): string => {
  * all" rather than as a measurement, and hides the difference between a 4ms run
  * and a 900ms one.
  */
-export const duration = (fromIso: string, toIso: string): string =>
-  formatDurationMs(Math.max(0, new Date(toIso).getTime() - new Date(fromIso).getTime()));
+export const duration = (fromIso: string, toIso: string): string => {
+  // Either end missing or unparseable means there is no elapsed time to state —
+  // an em dash, the same as every other field with nothing to show.
+  const from = asDate(fromIso);
+  const to = asDate(toIso);
+  if (!from || !to) return "—";
+  return formatDurationMs(Math.max(0, to.getTime() - from.getTime()));
+};
