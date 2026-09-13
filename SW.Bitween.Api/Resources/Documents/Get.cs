@@ -20,7 +20,10 @@ namespace SW.Bitween.Resources.Documents
         {
             await requestContext.EnsurePermission(dbContext, Model.Permissions.Documents.View);
 
-            return await dbContext.Set<Document>().Search("Id", key).Select(document => new DocumentUpdate
+            // DocumentRow rather than DocumentUpdate: it is the read shape, and RetiredOn belongs
+            // on it rather than on the model used to write a type — retiring is its own command,
+            // not a field an update can set.
+            return await dbContext.Set<Document>().Search("Id", key).Select(document => new DocumentRow
             {
                 Id = document.Id,
                 Code = document.Code,
@@ -30,7 +33,10 @@ namespace SW.Bitween.Resources.Documents
                 DuplicateInterval = document.DuplicateInterval,
                 PromotedProperties = document.PromotedProperties.ToKeyAndValueCollection(),
                 DocumentFormat = document.DocumentFormat,
-                DisregardsUnfilteredMessages = document.DisregardsUnfilteredMessages ?? false
+                DisregardsUnfilteredMessages = document.DisregardsUnfilteredMessages ?? false,
+                RetiredOn = document.RetiredOn,
+                UsedByCount = dbContext.Set<Subscription>()
+                    .Count(subscription => subscription.DocumentId == document.Id)
             }).SingleOrDefaultAsync();
         }
     }

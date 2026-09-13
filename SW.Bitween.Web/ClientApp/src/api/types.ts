@@ -246,6 +246,11 @@ export interface InformationType {
   /** Friendly name → JSONPath/XPath, matched by routes and filters. */
   promotedProperties: { key: string; path: string }[];
   createdOn: string;
+  /**
+   * When this type was taken out of use, or null while it is still in use. A retired type keeps
+   * naming the exchanges already recorded against it and is no longer offered for new work.
+   */
+  retiredOn: string | null;
 }
 export interface InformationTypeRow extends InformationType {
   usedByCount: number;

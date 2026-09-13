@@ -43,6 +43,17 @@ namespace SW.Bitween.Domain
         public DocumentFormat DocumentFormat { get; set; }
         public IReadOnlyDictionary<string, string> PromotedProperties { get; private set; }
 
+        /// <summary>
+        /// When this type was taken out of use, or null while it is still in use.
+        /// </summary>
+        /// <remarks>
+        /// Retiring is what a type that has been used wants instead of deleting: exchanges name
+        /// the type they carried, so removing the row to get it out of a picker would either take
+        /// that history with it or leave it anonymous. A retired type keeps answering for every
+        /// exchange already recorded against it, and simply stops being offered for new work.
+        /// </remarks>
+        public DateTime? RetiredOn { get; private set; }
+
         public void SetDictionaries(IReadOnlyDictionary<string, string> promotedProperties)
         {
             PromotedProperties = promotedProperties;
@@ -56,6 +67,16 @@ namespace SW.Bitween.Domain
         public void SetCode(string code)
         {
             Code = code;
+        }
+
+        public void Retire()
+        {
+            RetiredOn = DateTime.UtcNow;
+        }
+
+        public void Restore()
+        {
+            RetiredOn = null;
         }
     }
 }

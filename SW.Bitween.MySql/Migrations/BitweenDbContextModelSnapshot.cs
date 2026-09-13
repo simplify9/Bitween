@@ -551,6 +551,9 @@ namespace SW.Bitween.MySql.Migrations
                     b.Property<string>("PromotedProperties")
                         .HasColumnType("longtext");
 
+                    b.Property<DateTime?>("RetiredOn")
+                        .HasColumnType("datetime(6)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BusMessageTypeName")

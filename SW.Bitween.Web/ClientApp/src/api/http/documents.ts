@@ -32,6 +32,7 @@ interface RawDocument {
   promotedProperties: RawKeyAndValue[] | null;
   /** Counted by the backend — see DocumentRow.UsedByCount. */
   usedByCount: number;
+  retiredOn: string | null;
 }
 interface RawSubscriptionRef {
   id: number;
@@ -78,6 +79,7 @@ const toInformationType = (d: RawDocument): InformationType => ({
   disregardsUnfilteredMessages: d.disregardsUnfilteredMessages,
   promotedProperties: (d.promotedProperties ?? []).map((p) => ({ key: p.key, path: p.value })),
   createdOn: "",
+  retiredOn: d.retiredOn ?? null,
 });
 
 async function fetchDetail(id: number): Promise<InformationTypeDetail> {
@@ -164,5 +166,12 @@ export const documentMethods = {
 
   async deleteInformationType(id: number): Promise<void> {
     await request(`/documents/${id}`, { method: "DELETE" });
+  },
+
+  async retireInformationType(id: number): Promise<{ retiredOn: string | null }> {
+    // Toggles server-side, so what comes back is the state it landed in rather than
+    // one this caller chose.
+    const res = await post<{ retiredOn: string | null }>(`/documents/${id}/retire`, {});
+    return { retiredOn: res?.retiredOn ?? null };
   },
 } satisfies Partial<ApiClient>;

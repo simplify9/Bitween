@@ -196,7 +196,19 @@ export function InformationTypesPage() {
           }
           columns={[
             { header: "Code", cell: (t) => <CodeBadge code={t.code} name={t.name} /> },
-            { header: "Name", cell: (t) => <span className="font-medium text-ink-900">{t.name}</span> },
+            {
+              header: "Name",
+              cell: (t) => (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className={t.retiredOn ? "text-ink-400" : "font-medium text-ink-900"}>{t.name}</span>
+                  {t.retiredOn && (
+                    <Badge tone="neutral" title="Taken out of use — kept so its exchanges still name it, but no longer offered for new work.">
+                      Retired
+                    </Badge>
+                  )}
+                </span>
+              ),
+            },
             { header: "Format", cell: (t) => <Badge>{t.format.toUpperCase()}</Badge> },
             {
               header: "Bus",

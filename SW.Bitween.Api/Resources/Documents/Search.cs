@@ -35,6 +35,7 @@ namespace SW.Bitween.Resources.Documents
                             DuplicateInterval = document.DuplicateInterval,
                             PromotedProperties = document.PromotedProperties.ToKeyAndValueCollection(),
                             DocumentFormat = document.DocumentFormat,
+                            RetiredOn = document.RetiredOn,
                             // A correlated count, so the "used by" column the UI shows costs one
                             // subquery per row instead of the whole Subscription table over the wire.
                             UsedByCount = dbContext.Set<Subscription>()
