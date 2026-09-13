@@ -4,29 +4,40 @@ import { ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { api } from "../../api";
 import { allKeysIn, usePermissionCatalog } from "../../api/permissions";
 import { Can } from "../../auth/guards";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { keys } from "../../api/queryKeys";
 
-export function RolesTab() {
+export function RolesPage() {
   const navigate = useNavigate();
   const roles = useQuery({ queryKey: keys.roles.list, queryFn: () => api.listRoles() });
   const totalPermissions = allKeysIn(usePermissionCatalog().data ?? []).length;
 
-  if (roles.isPending) return <LoadingBlock label="Loading roles…" />;
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-500">
-          A role is a reusable set of permissions. Open one to see — and shape — exactly what its
-          members can do.
-        </p>
+  const header = (
+    <PageHeader
+      title="Roles"
+      description="A role is a reusable set of permissions. Open one to see — and shape — exactly what its members can do."
+      actions={
         <Can permission="roles.create">
           <Button variant="primary" onClick={() => navigate("/team/roles/new")}>
             <Plus className="size-4" /> New role
           </Button>
         </Can>
+      }
+    />
+  );
+
+  if (roles.isPending)
+    return (
+      <div>
+        {header}
+        <LoadingBlock label="Loading roles…" />
       </div>
+    );
+
+  return (
+    <div>
+      {header}
 
       {(roles.data ?? []).length === 0 ? (
         <EmptyState icon={<ShieldCheck />} title="No roles yet">

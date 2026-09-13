@@ -12,7 +12,7 @@ import { Badge, Button, FormError, LoadingBlock } from "../../components/ui/basi
 import { Checkbox, PasswordInput } from "../../components/ui/forms";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { formatDate, timeAgo, timeUntil } from "../../lib/dates";
-import { statusBadge } from "./MembersTab";
+import { statusBadge } from "./MembersPage";
 import { keys } from "../../api/queryKeys";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

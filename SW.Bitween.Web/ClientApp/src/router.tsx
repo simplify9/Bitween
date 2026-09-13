@@ -43,10 +43,9 @@ import { AggregationsPage } from "./pages/aggregations/AggregationsPage";
 import { NewAggregationPage } from "./pages/aggregations/NewAggregationPage";
 import { RetryPoliciesPage } from "./pages/retry-policies/RetryPoliciesPage";
 import { RetryPolicyPage } from "./pages/retry-policies/RetryPolicyPage";
-import { MembersTab } from "./pages/team/MembersTab";
+import { MembersPage } from "./pages/team/MembersPage";
 import { RoleEditor } from "./pages/team/RoleEditor";
-import { RolesTab } from "./pages/team/RolesTab";
-import { TeamIndexRedirect, TeamPage } from "./pages/team/TeamPage";
+import { RolesPage } from "./pages/team/RolesPage";
 import { WorkGroupPage } from "./pages/work-groups/WorkGroupPage";
 import { WorkGroupsPage } from "./pages/work-groups/WorkGroupsPage";
 
@@ -55,6 +54,12 @@ function HomeRedirect() {
   const { session } = useSession();
   if (!session) return null; // RequireAuth already handled this
   return <Navigate to={homePath(session)} replace />;
+}
+
+/** An old "/team" link lands on whichever of the two pages this session can open. */
+function TeamRedirect() {
+  const { can } = useSession();
+  return <Navigate to={can("users.view") ? "/team/members" : "/team/roles"} replace />;
 }
 
 const placeholderRoutes = NAV_GROUPS.flatMap((group) => group.items)
@@ -117,36 +122,32 @@ export const router = createBrowserRouter([
               </RequirePermission>
             ),
           },
+          // Members and Roles are two sidebar entries, not tabs inside a "Team" page, so
+          // "/team" itself is no longer a page — only a bookmark people may still hold.
+          { path: "team", element: <TeamRedirect /> },
           {
-            path: "team",
-            element: <TeamPage />,
-            children: [
-              { index: true, element: <TeamIndexRedirect /> },
-              {
-                path: "members",
-                element: (
-                  <RequirePermission permission="users.view">
-                    <MembersTab />
-                  </RequirePermission>
-                ),
-              },
-              {
-                path: "members/:id",
-                element: (
-                  <RequirePermission permission="users.view">
-                    <MembersTab />
-                  </RequirePermission>
-                ),
-              },
-              {
-                path: "roles",
-                element: (
-                  <RequirePermission permission="roles.view">
-                    <RolesTab />
-                  </RequirePermission>
-                ),
-              },
-            ],
+            path: "team/members",
+            element: (
+              <RequirePermission permission="users.view">
+                <MembersPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "team/members/:id",
+            element: (
+              <RequirePermission permission="users.view">
+                <MembersPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: "team/roles",
+            element: (
+              <RequirePermission permission="roles.view">
+                <RolesPage />
+              </RequirePermission>
+            ),
           },
           {
             path: "team/roles/new",

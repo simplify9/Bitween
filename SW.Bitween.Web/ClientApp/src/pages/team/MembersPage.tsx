@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, UserPlus, UsersRound } from "lucide-react";
 import { api, type User, type UserStatus } from "../../api";
 import { Can } from "../../auth/guards";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { Avatar } from "../../components/ui/Avatar";
 import { Badge, Button, EmptyState, LoadingBlock } from "../../components/ui/basics";
 import { timeAgo } from "../../lib/dates";
@@ -25,7 +26,7 @@ export function statusBadge(status: UserStatus, lockedUntil?: string | null) {
   return <Badge tone="ok">Active</Badge>;
 }
 
-export function MembersTab() {
+export function MembersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { id: openMemberId } = useParams();
@@ -67,6 +68,27 @@ export function MembersTab() {
 
   return (
     <div>
+      <PageHeader
+        title="Members"
+        description="Everyone who can sign in to this Bitween instance, and what each of them is allowed to do."
+        help={{
+          title: "How access works",
+          body: (
+            <>
+              <p>
+                Every member holds one or more <strong>roles</strong>, and every role is a list of{" "}
+                <strong>permissions</strong> — page by page, action by action. A member can do
+                something if any of their roles allows it; everything else is hidden from them.
+              </p>
+              <p>
+                To bring someone in: create or pick a role under <strong>Roles</strong>, then add
+                them here. You set their first password and pass it on — Bitween doesn't send mail.
+              </p>
+            </>
+          ),
+        }}
+      />
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-56 flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-400" />
