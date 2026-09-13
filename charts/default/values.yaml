@@ -116,7 +116,8 @@ serviceAccount:
   name: ''
 
 # Extra labels on the pod template only, never the selector. Values always render as strings.
-# e.g. --set podLabels.azure\.workload\.identity/use=true
+# app, draft and release are set by the chart and can't be overridden.
+# e.g. --set 'podLabels.azure\.workload\.identity/use=true'
 podLabels: {}
 
 # db is the connection string for the database

@@ -21,13 +21,16 @@ spec:
         draft: {{ .Values.draft | default "draft-app" }}
         release: {{ .Release.Name }}
         {{- range $key, $value := .Values.podLabels }}
+        {{- if has $key (list "app" "draft" "release") }}
+        {{- fail (printf "podLabels.%s is set by the chart and can't be overridden" $key) }}
+        {{- end }}
         {{ $key }}: {{ $value | quote }}
         {{- end }}
       annotations:
         buildID: {{ .Values.buildID | default "" | quote }}
     spec:
       {{- with .Values.serviceAccount.name }}
-      serviceAccountName: {{ . }}
+      serviceAccountName: {{ . | quote }}
       {{- end }}
       {{- if .Values.hostAliases }}
       hostAliases:
