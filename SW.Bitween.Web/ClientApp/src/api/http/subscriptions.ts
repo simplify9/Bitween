@@ -287,10 +287,9 @@ function toSubscriptionRow(
     isRunning: raw.isRunning ?? false,
     consecutiveFailures: raw.consecutiveFailures ?? 0,
     lastException: raw.lastException ?? null,
-    // Search.cs can't select Schedules in this joined query without
-    // breaking SQL translation (Postgres date_part type mismatch), so
-    // schedules is always empty here — showing "No schedule" would be
-    // actively wrong for a job that has one. Leave it unset instead.
+    // Search.cs attaches these from a second query (the joined projection can't
+    // translate Schedule.On). Still left unset rather than "No schedule" for the
+    // types that never have one, so the column stays blank instead of lying.
     scheduleSummary:
       schedules.length > 0 && (type === "Receiving" || type === "Aggregation")
         ? schedulesSummary(schedules)

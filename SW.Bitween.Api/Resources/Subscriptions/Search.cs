@@ -102,12 +102,54 @@ namespace SW.Bitween.Resources.Subscriptions
                 return await SearchWithEdgeCases(query, edgeCaseFilters, searchyRequest);
             }
 
+            var result = await query.Search(searchyRequest.Conditions, searchyRequest.Sorts, searchyRequest.PageSize,
+                searchyRequest.PageIndex).ToListAsync();
+            await AttachSchedules(result);
+
             return new SearchyResponse<SubscriptionSearch>
             {
                 TotalCount = count,
-                Result = await query.Search(searchyRequest.Conditions, searchyRequest.Sorts, searchyRequest.PageSize,
-                    searchyRequest.PageIndex).ToListAsync()
+                Result = result
             };
+        }
+
+        /// <summary>Fills in each returned row's schedules.</summary>
+        /// <remarks>
+        /// A second query rather than part of the projection above: <c>Schedule.On</c> is a
+        /// <see cref="System.TimeSpan"/> stored as ticks, and reading <c>.Days</c>/<c>.Hours</c>/
+        /// <c>.Minutes</c> off it inside that joined query is what Postgres cannot translate — a
+        /// date_part type mismatch. Read flat for the ids actually being returned and shaped in
+        /// memory, which asks nothing of the translator, so the list can finally say when a job
+        /// runs instead of leaving its schedule column blank.
+        /// </remarks>
+        private async Task AttachSchedules(List<SubscriptionSearch> rows)
+        {
+            // Only the two scheduled types have any; asking for the rest is a wasted round trip.
+            var ids = rows
+                .Where(r => r.Type is SubscriptionType.Receiving or SubscriptionType.Aggregation)
+                .Select(r => r.Id)
+                .ToList();
+
+            if (ids.Count == 0) return;
+
+            var byId = await _dbContext.Set<Subscription>().AsNoTracking()
+                .Where(s => ids.Contains(s.Id))
+                .Select(s => new { s.Id, Schedules = s.Schedules.ToList() })
+                .ToDictionaryAsync(x => x.Id, x => x.Schedules);
+
+            foreach (var row in rows)
+            {
+                if (!byId.TryGetValue(row.Id, out var schedules)) continue;
+
+                row.Schedules = schedules.Select(s => new ScheduleView
+                {
+                    Backwards = s.Backwards,
+                    Recurrence = s.Recurrence,
+                    Days = s.On.Days,
+                    Hours = s.On.Hours,
+                    Minutes = s.On.Minutes
+                }).ToList();
+            }
         }
 
         private async Task<SearchyResponse<SubscriptionSearch>> SearchWithEdgeCases(
@@ -138,10 +180,16 @@ namespace SW.Bitween.Resources.Subscriptions
                 };
             }
 
+            // Only the page being returned, same as the normal path — the edge-case filters run
+            // over the whole set in memory, and shaping schedules for all of it would be waste.
+            var page = data.Skip(searchyRequest.PageSize * searchyRequest.PageIndex)
+                .Take(searchyRequest.PageSize).ToList();
+            await AttachSchedules(page);
+
             return new SearchyResponse<SubscriptionSearch>
             {
                 TotalCount = data.Count,
-                Result = data.Skip(searchyRequest.PageSize * searchyRequest.PageIndex).Take(searchyRequest.PageSize)
+                Result = page
             };
         }
 

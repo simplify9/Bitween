@@ -267,21 +267,28 @@ export function ScheduledJobsPage() {
               },
             },
             {
-              // No Schedule column: `Search.cs` can't select Schedules in its
-              // joined query, so `scheduleSummary` is always empty here and the
-              // cell would read "No schedule" for a job that plainly has one.
-              // Next run is real — it's the subscription's own ReceiveOn.
-              header: "Next run",
+              // The rule and its next outcome in one column rather than two: they answer
+              // the same question ("when does this run?"), and an eleventh column pushed
+              // the table wider than its card. The schedule leads because it is the thing
+              // that was missing — a list showing only the next fire could never tell you
+              // a job runs hourly without opening it.
+              header: "Runs",
               className: "whitespace-nowrap",
-              cell: (r) =>
-                r.nextReceiveOn ? (
+              cell: (r) => {
+                if (!r.scheduleSummary && !r.nextReceiveOn) return <span className="text-ink-400">—</span>;
+                return (
                   <>
-                    <span className="text-[13px] font-medium text-ink-800">{timeUntil(r.nextReceiveOn)}</span>
-                    <span className="block text-xs text-ink-400">{formatDateTime(r.nextReceiveOn)}</span>
+                    <span className="text-[13px] font-medium text-ink-800">
+                      {r.scheduleSummary ?? "Not scheduled"}
+                    </span>
+                    <span className="block text-xs text-ink-400">
+                      {r.nextReceiveOn
+                        ? `next ${timeUntil(r.nextReceiveOn)} · ${formatDateTime(r.nextReceiveOn)}`
+                        : "no next run"}
+                    </span>
                   </>
-                ) : (
-                  <span className="text-ink-400">—</span>
-                ),
+                );
+              },
             },
             {
               header: "Partner",
