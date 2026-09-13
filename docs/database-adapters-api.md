@@ -3,7 +3,7 @@
 What `bitween.db.oracle` and `bitween.db.postgresql` expose, and how to configure them for the
 things people actually want to do with a database.
 
-Design rationale is in [provider-plan-databases.md](provider-plan-databases.md); this document is
+Design rationale is in [design/provider-plan-databases.md](design/provider-plan-databases.md); this document is
 the contract.
 
 ---
@@ -39,7 +39,7 @@ Two rules run through everything below:
 ## 2. Connection settings
 
 The data source form is generated from the adapter, so this table is what you will see on screen.
-Settings marked **secret** are encrypted at rest and never returned by the API.
+Settings marked **secret** are never returned by the API, which masks them. They are stored unencrypted in the database.
 
 > **Meeting one of these engines for the first time?**
 > [database-adapters-per-engine.md](database-adapters-per-engine.md) is the guide behind these
@@ -118,7 +118,7 @@ asks `sys.sp_describe_undeclared_parameters`, which parses the batch and binds e
 | `ConnectDescriptor` | — | A full TNS descriptor or Easy Connect string, *instead of* host/port/service. The escape hatch for RAC, Data Guard and wallet-based cloud connections. |
 | `UserName` | — | **required** |
 | `Password` | — | **required, secret** |
-| `Schema` | login's own | What unqualified names resolve against. |
+| `Schema` | login's own | Default schema for the schema browser only. It does not change how unqualified names resolve. |
 | `AsSysDba` | false | Almost never right for an integration login. |
 | `WalletDirectory` | — | Holds `cwallet.sso`, for mTLS or Autonomous Database. Pair with `ConnectDescriptor`. |
 | `FetchSize` | 100 | Rows per round trip. |
@@ -149,7 +149,7 @@ operator, and `value::text` would be read as a parameter called `text`.
 ## 3. Statements
 
 The SQL a data source is allowed to run. **Each statement is its own record**, not a field on the
-data source — `POST /datasources/{id}/datasourcestatements`:
+data source — `POST /datasourcestatements`, with `dataSourceId` in the body:
 
 ```json
 { "name": "insertOrder",
@@ -172,7 +172,7 @@ injection surface fed by ordinary partner data. But a field on the data source m
 query required `data-sources.edit` — the same right that changes the **credentials**.
 
 Hence a separate record with a separate permission, `data-source-statements.*`. Rationale and the
-costs accepted are in [provider-plan-databases.md §12a](provider-plan-databases.md).
+costs accepted are in [design/provider-plan-databases.md §12a](design/provider-plan-databases.md).
 
 ### 3.2 What that buys
 
@@ -182,7 +182,7 @@ costs accepted are in [provider-plan-databases.md §12a](provider-plan-databases
 | **Namespacing** | Unique per data source, case-insensitively — a collision is an error naming the clash, not a silent overwrite. The same name on another data source is a different statement |
 | **Ownership** | `workGroupId` says who to ask before changing it |
 | **Audit** | Created/modified by whom and when, per statement |
-| **Usage** | `GET /datasourcestatements/{id}/usage` lists which subscriptions name it, in which slot, with which operation. `UsageCount` rides on the list rows |
+| **Usage** | `POST /datasourcestatements/{id}/usage` lists which subscriptions name it, in which slot, with which operation. `UsageCount` rides on the list rows |
 | **Retiring** | `inactive: true` drops it from the adapter's set without deleting the row, so a subscription still naming it fails loudly while it is migrated |
 
 ### 3.3 Rules that will stop you
@@ -528,7 +528,7 @@ Subscription: DataSourceId = the ERP source
 ```
 
 The mapper turns the inbound document into `{"id":…, "customer":…, "amount":…}`. The handler binds
-and runs. Response is `{"affectedRows":1}`.
+and runs. The response is the full query result, with `"affectedRows": 1`.
 
 ### 7.3 Enrich a message from a lookup table
 
@@ -602,6 +602,6 @@ dropped, which is otherwise a silent one-row-per-page loss.
 * **Deletes are invisible to polling.** If you need them, you need CDC, which is a different
   provider and not built.
 * **Parameter values are never logged** unless `LogParameterValues` is switched on, and metrics
-  carry the statement name, never the SQL or the values.
+  carry only the engine, never the statement, the SQL or the values.
 * **Errors report the driver's message** — `ORA-…`, PostgreSQL's SQLSTATE — because that is the
   string a DBA can search for.

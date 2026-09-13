@@ -1,60 +1,43 @@
-# Bitween UI — redesign prototype
+# Bitween admin UI
 
-Clean-slate redesign of the Bitween admin UI, hosted by `SW.Bitween.Web`. **Runs entirely on
-mock data** — it never calls the API, even when served by it. Sub-phase 1 covers auth, dynamic
-RBAC, user profile, and team management; other areas exist as permission-gated placeholder
-pages so role gating can be demonstrated across the whole navigation.
+The web interface for Bitween. It is a React single-page app served by `SW.Bitween.Web` from the site root, and it calls the Bitween API under `/api`.
 
-## Running it
+For what each page does, see [docs/admin-ui.md](../../docs/admin-ui.md).
 
-**UI-only (fastest loop):**
+## Commands
 
 ```bash
-npm install
-npm run dev        # → http://localhost:5173/
+yarn install
+yarn build       # type-check and build into ../wwwroot
+yarn test        # Vitest
+yarn lint        # oxlint
+yarn test:e2e    # Playwright against https://localhost:7155
 ```
 
-**Backend-served (how it deploys):**
-
-```bash
-npm run build      # outputs into ../wwwroot with base /
-dotnet run --project .. --launch-profile SW.Bitween.Web.Local
-# → https://localhost:7155/
-```
-
-`dotnet publish` runs the npm build automatically (skip with `-p:SkipClientBuild=true`);
-the root `Dockerfile` builds the UI in its own node stage. The app lives under the host's
-`/bitween` path base — runtime URLs must use `import.meta.env.BASE_URL` (see the project
-instructions in `.github/instructions/`).
-
-Sign in with any prototype account listed on the login page (password `bitween`), or use the
-one-click persona buttons. The floating **Demo** pill (bottom right) switches the signed-in
-person at any time and resets the demo data.
+There is no dev-server proxy. Build the UI, run the API with `dotnet run --project SW.Bitween.Web` from the repository root, and open the address it serves. `dotnet publish` runs the build itself unless `-p:SkipClientBuild=true` is passed. The Dockerfile builds the UI in its own stage.
 
 ## Stack
 
-React 19 · TypeScript · Vite · Tailwind v4 · react-router v8 · TanStack Query · lucide-react.
+React 19, TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, CodeMirror, lucide-react, and MSAL for Microsoft sign-in.
 
-Brand carried over from the existing UI: the crimson ramp from `Bitween-UI/tailwind.config.js`
-(verbatim, as `--color-crimson-*`) and the logo (`public/brand/`). Neutrals (`--color-ink-*`)
-are derived from the logo's wordmark ink `#372f2e`. Tokens live in `src/index.css`.
+## Structure
 
-## Architecture — the parts that matter
+| Path | Purpose |
+|---|---|
+| `src/api/` | The only data layer. `client.ts` is the contract, `http/` implements it per area, and `queryKeys.ts` holds cache keys. |
+| `src/api/permissions.ts` | Labels for the permission catalogue, which the API serves from `GET /api/permissions`. |
+| `src/auth/` | Session context, route and action guards, idle sign-out. |
+| `src/nav.ts` | The navigation. The sidebar, the role editor preview and the post-login redirect all derive from it. |
+| `src/router.tsx` | Routes and their permission gates. |
+| `src/pages/` | One folder per area. `data-sources/` holds data sources, SQL statements and the schema browser. |
+| `src/components/config/` | Shared configuration editors: adapters, schedules, match expressions, pickers. |
+| `src/components/nativeMapper/`, `src/lib/nativeMapper/` | The rules-based mapping editor. |
+| `src/components/mapper/`, `src/lib/mapping/` | The legacy Scriban mapping editor. |
+| `e2e/` | Playwright specs and global setup. |
 
-- **`src/api/` is the only data layer.** Components import `api` from `src/api/index.ts`,
-  which today points at `src/api/mock/mockClient.ts` (a localStorage-backed fake with
-  simulated latency). Implementing `ApiClient` (`src/api/client.ts`) over HTTP and changing
-  that one export swaps the whole app onto the real backend.
-- **`src/api/permissions.ts` is the permission catalog** — every gated area and action.
-  Roles are named sets of these keys; a user's permissions are the union of their roles'.
-- **`src/nav.ts` is the information architecture.** Sidebar, role-editor access preview and
-  post-login redirect all derive from it, each filtered by the session's permissions.
-- **Gating hides, never dims**: `<Can>` for actions, `<RequirePermission>` for routes
-  (`src/auth/guards.tsx`). Unauthorized pages get an explanatory access-denied screen.
-- **Everything is URL-addressable**: tabs are routes, the member drawer is a route, search
-  and filters are query params, dialogs are query params.
-- Deployment assumptions (to revisit): served at root path, single project, client-side
-  routing compatible with being backend-served later.
+## Conventions
 
-Anything the prototype needed that the real backend can't do yet is logged in
-`Bitween-api/BACKEND_CAPABILITIES_NEEDED.md`.
+- Pages and actions a member cannot use are hidden, not disabled.
+- State that matters lives in the URL: filters, tabs, selected stages and dialogs.
+- Detail pages edit a draft and save from a sticky bar.
+- The brand colour comes from the `Theme.PrimaryColor` setting at runtime.

@@ -1,776 +1,253 @@
-# API Reference
+# API reference
 
-This document provides comprehensive API documentation for the Bitween integration middleware. All endpoints follow REST conventions and use JSON for request/response payloads.
+## Conventions
 
-## Base URL
+- The base path is `/api`. Swagger UI is at `/swagger`, with the spec at `/api/swagger.json`.
+- Admin endpoints need `Authorization: Bearer <jwt>` from [sign-in](security.md#sign-in), plus the permission listed.
+- Partner endpoints need the `partnerkey` header instead.
+- Responses use camelCase property names. Requests are accepted in any casing. Enums are strings, and numbers are accepted too.
+- Adapter and partner property sets are lists of `{ "key": "...", "value": "..." }`.
 
-```
-http://localhost:5000/api
-```
+### Errors
 
-## Authentication
+| Status | Meaning |
+|---|---|
+| 400 | Validation failed. The body usually maps an error code to messages, such as `{ "ALREADY_RETRIED": ["..."] }`. |
+| 401 | Not signed in, or missing the permission |
+| 404 | Not found |
 
-Bitween uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
+### Search queries
 
-```
-Authorization: Bearer <your-jwt-token>
-```
+Endpoints marked *searchy* accept these parameters.
 
-### Get Authentication Token
+| Parameter | Example | Meaning |
+|---|---|---|
+| `filter` | `filter=DocumentId:1:3` | `Field:Rule:Value`, repeatable. The UI uses rule 1 for equals and 4 for contains. |
+| `sort` | `sort=StartedOn:2` | `Field:Order`, where 2 is descending |
+| `page`, `size` | `page=0&size=25` | Paging. Always send `size`. |
+| `lookup` | `lookup=true` | Return an id-to-name map instead of rows |
 
-```http
-POST /api/auth/login
-Content-Type: application/json
+They return `{ "result": [...], "totalCount": 123 }`.
 
-{
-  "username": "admin",
-  "password": "password"
-}
-```
+## Partner endpoints
 
-**Response:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiration": "2025-06-04T18:30:00Z"
-}
-```
+| Method and path | Description |
+|---|---|
+| `POST /api/gateway/{urlName}/async` | Submit to an API gateway. Returns 202 with the exchange id. |
+| `POST /api/gateway/{urlName}/sync` | Submit and wait for the result. Optional `Wait-Period` header. |
+| `POST /api/xchanges/{informationTypeIdOrName}` | Legacy API call. Optional `waitresponse` header. |
+| `GET /api/xchanges/{exchangeId}` | Legacy result lookup for the calling partner's own exchanges |
 
-## Partners
+See [Entry points](entry-points.md) for status codes.
 
-Partners represent external systems that integrate with Bitween.
+## Session and account
 
-### List Partners
+| Method and path | Permission | Description |
+|---|---|---|
+| `POST /api/accounts/login` | none | Sign in with a username and password, a Microsoft token, or the refresh cookie. Returns `{ jwt }`. |
+| `POST /api/accounts/logout` | none | Deletes the refresh token and clears site data |
+| `GET /api/accounts/profile` | signed in | The current member, roles and permissions |
+| `POST /api/accounts/changePassword` | signed in | Change your own password |
+| `POST /api/login` | none | Break-glass sign-in against `Bitween:AdminCredentials` |
+| `GET /api/settings/config` | none | Sign-in options and theme |
+| `GET /api/settings/myversion` | signed in | API version |
+| `GET /api/permissions` | signed in | The permission catalogue |
 
-```http
-GET /api/partners
-```
+## Exchanges
 
-**Response:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "name": "External System A",
-      "description": "Our main ERP system",
-      "apiKey": "partner-api-key-123",
-      "isActive": true,
-      "createdOn": "2025-06-01T10:00:00Z"
-    }
-  ],
-  "totalCount": 1,
-  "pageSize": 50,
-  "pageNumber": 1
-}
-```
+| Method and path | Permission | Description |
+|---|---|---|
+| `GET /api/xchanges` | `exchanges.view` or `dashboard.view` | Searchy. See the filters below. |
+| `GET /api/xchanges/statuslist` | `exchanges.view` | Status values for filters |
+| `GET /api/xchanges/retrytree?id=` | `exchanges.view` | The retry chain any attempt belongs to |
+| `POST /api/xchanges` | signed in, no permission checked | Create an exchange by hand |
+| `POST /api/xchanges/{id}/retry` | `exchanges.operate` | `{ reason, reset }` |
+| `POST /api/xchanges/bulkretrypreview` | `exchanges.operate` | Plan a bulk retry without running it |
+| `POST /api/xchanges/bulkretry` | `exchanges.operate` | Run a bulk retry |
+| `GET /api/bitweendocs?documentKey=` | none | Read a stored file |
+| `GET /api/delayedretries` | `exchanges.view` or `dashboard.view` | Searchy. Waiting automatic retries. |
+| `POST /api/delayedretries/{id}/runnow` | `exchanges.operate` | Run a waiting retry now |
 
-### Get Partner
+Exchange search filters, besides ordinary fields:
 
-```http
-GET /api/partners/{id}
-```
+| Filter | Meaning |
+|---|---|
+| `StatusFilter:1:{n}` | 0 processing, 1 success, 2 bad response, 3 failed. Other values are refused. |
+| `LatestOnly:1:true` | Only the newest attempt of each retry chain |
 
-**Response:**
-```json
-{
-  "id": 1,
-  "name": "External System A",
-  "description": "Our main ERP system",
-  "apiKey": "partner-api-key-123",
-  "settings": {
-    "endpoint": "https://erp.company.com/api",
-    "timeout": 30000
-  },
-  "isActive": true,
-  "createdOn": "2025-06-01T10:00:00Z"
-}
-```
+Bulk retry takes `{ ids, filter, excludeIds, reason, reset }`. `filter` is the same query-string fragment the search takes, such as `filter=StatusFilter:1:3&filter=LatestOnly:1:true`, and it replaces `ids` when present. The plan returned by both endpoints lists how many were selected and will be retried, attempts substituted with the end of their chain, and skipped exchanges with reasons. At most 500 exchanges can be retried at once.
 
-### Create Partner
-
-```http
-POST /api/partners
-Content-Type: application/json
-
-{
-  "name": "New Partner",
-  "description": "Partner description",
-  "settings": {
-    "endpoint": "https://partner.com/api",
-    "apiKey": "partner-key"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "id": 2,
-  "name": "New Partner",
-  "description": "Partner description",
-  "apiKey": "generated-api-key-456",
-  "settings": {
-    "endpoint": "https://partner.com/api",
-    "apiKey": "partner-key"
-  },
-  "isActive": true,
-  "createdOn": "2025-06-04T12:00:00Z"
-}
-```
-
-### Update Partner
-
-```http
-PUT /api/partners/{id}
-Content-Type: application/json
-
-{
-  "name": "Updated Partner Name",
-  "description": "Updated description",
-  "isActive": false
-}
-```
-
-### Delete Partner
-
-```http
-DELETE /api/partners/{id}
-```
-
-## Documents
-
-Documents define message types and their structure.
-
-### List Documents
-
-```http
-GET /api/documents
-```
-
-**Query Parameters:**
-- `pageNumber` (int): Page number (default: 1)
-- `pageSize` (int): Page size (default: 50)
-- `search` (string): Search term
-
-**Response:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "name": "CustomerOrder",
-      "format": "JSON",
-      "promotedProperties": {
-        "customerId": "$.customer.id",
-        "orderTotal": "$.order.total",
-        "orderDate": "$.order.date"
-      },
-      "createdOn": "2025-06-01T10:00:00Z"
-    }
-  ],
-  "totalCount": 1,
-  "pageSize": 50,
-  "pageNumber": 1
-}
-```
-
-### Get Document
-
-```http
-GET /api/documents/{id}
-```
-
-### Create Document
-
-```http
-POST /api/documents
-Content-Type: application/json
-
-{
-  "name": "CustomerOrder",
-  "format": "JSON",
-  "description": "Customer order document type",
-  "promotedProperties": {
-    "customerId": "$.customer.id",
-    "orderTotal": "$.order.total",
-    "orderDate": "$.order.date",
-    "orderType": "$.order.type"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "id": 1,
-  "name": "CustomerOrder",
-  "format": "JSON",
-  "description": "Customer order document type",
-  "promotedProperties": {
-    "customerId": "$.customer.id",
-    "orderTotal": "$.order.total",
-    "orderDate": "$.order.date",
-    "orderType": "$.order.type"
-  },
-  "createdOn": "2025-06-04T12:00:00Z"
-}
-```
-
-### Update Document
-
-```http
-PUT /api/documents/{id}
-Content-Type: application/json
-
-{
-  "name": "Updated Document Name",
-  "description": "Updated description",
-  "promotedProperties": {
-    "customerId": "$.customer.id",
-    "orderTotal": "$.order.total"
-  }
-}
-```
-
-### Delete Document
-
-```http
-DELETE /api/documents/{id}
-```
+The retry tree returns `{ rootId, nodes, truncated }`. Each node has its id, `retryFor`, promoted properties, times, status, exception, whether it was manual, and any scheduled retry or blocked reason. It stops at 100 levels or 500 attempts.
 
 ## Subscriptions
 
-Subscriptions define how messages should be processed.
+| Method and path | Permission |
+|---|---|
+| `GET /api/subscriptions` | `subscriptions.view`. Searchy. |
+| `GET /api/subscriptions/{id}` | `subscriptions.view` |
+| `POST /api/subscriptions` | `subscriptions.create` |
+| `POST /api/subscriptions/{id}` | `subscriptions.edit`. Replaces the whole configuration. |
+| `DELETE /api/subscriptions/{id}` | `subscriptions.delete`. Refused while a gateway, route, response link or aggregation points at it. |
+| `POST /api/subscriptions/{id}/pause` | `subscriptions.operate`. Toggles pause. |
+| `POST /api/subscriptions/{id}/receivenow` | `subscriptions.operate` |
+| `POST /api/subscriptions/{id}/aggregatenow` | `subscriptions.operate` |
+| `POST /api/subscriptions/{id}/savemapper` | `subscriptions.edit`. `{ mapperId, mapperProperties }` |
+| `POST /api/subscriptions/{id}/retryusage` | `subscriptions.view` |
+| `POST /api/subscriptions/{id}/resetretryusage` | `subscriptions.operate` |
+| `GET /api/subscriptions/runs?subscriptionId=&limit=` | `subscriptions.view` |
+| `GET /api/subscriptions/receiveattempts?subscriptionId=&outcome=&offset=&limit=` | `subscriptions.view` |
+| `GET /api/subscriptions/lastruns` | `subscriptions.view` |
+| `GET /api/subscriptions/schedulehealth` | `subscriptions.view` |
+| `GET /api/subscriptioncategories` | `subscriptions.view` |
+| `POST /api/subscriptioncategories` | `subscriptions.create` |
+| `POST /api/subscriptioncategories/{id}` | `subscriptions.edit` |
+| `POST /api/subscriptioncategories/{id}/delete` | `subscriptions.delete` |
 
-### List Subscriptions
+A scheduled job that pulls files from S3:
 
-```http
-GET /api/subscriptions
-```
-
-**Query Parameters:**
-- `partnerId` (int): Filter by partner
-- `documentId` (int): Filter by document
-- `type` (string): Filter by subscription type
-
-**Response:**
 ```json
 {
-  "data": [
-    {
-      "id": 1,
-      "name": "Process Customer Orders",
-      "type": "Internal",
-      "documentId": 1,
-      "partnerId": 1,
-      "filterExpression": {
-        "customerId": { "operator": "exists" }
-      },
-      "validatorEndpoint": "http://localhost:7001",
-      "mapperEndpoint": "http://localhost:7002",
-      "handlerEndpoint": "http://localhost:7003",
-      "isActive": true,
-      "createdOn": "2025-06-01T10:00:00Z"
-    }
-  ]
-}
-```
-
-### Get Subscription
-
-```http
-GET /api/subscriptions/{id}
-```
-
-### Create Subscription
-
-```http
-POST /api/subscriptions
-Content-Type: application/json
-
-{
-  "name": "Process Customer Orders",
-  "type": "Internal",
-  "documentId": 1,
-  "partnerId": 1,
-  "filterExpression": {
-    "customerId": { "operator": "exists" },
-    "orderTotal": { "operator": "greaterThan", "value": 100 }
-  },
-  "validatorEndpoint": "http://localhost:7001",
-  "mapperEndpoint": "http://localhost:7002",
-  "handlerEndpoint": "http://localhost:7003",
-  "schedule": {
-    "type": "Recurring",
-    "intervalMinutes": 60
-  }
-}
-```
-
-**Subscription Types:**
-- `ApiCall`: Synchronous processing
-- `Internal`: Asynchronous processing
-- `Receiving`: Scheduled data retrieval
-- `Aggregation`: Batch processing
-
-**Filter Expression Operators:**
-- `exists`: Property exists
-- `equals`: Exact match
-- `notEquals`: Not equal
-- `greaterThan`: Greater than
-- `lessThan`: Less than
-- `contains`: String contains
-- `startsWith`: String starts with
-- `endsWith`: String ends with
-- `in`: Value in list
-- `notIn`: Value not in list
-
-### Update Subscription
-
-```http
-PUT /api/subscriptions/{id}
-Content-Type: application/json
-
-{
-  "name": "Updated Subscription",
-  "isActive": false,
-  "filterExpression": {
-    "orderType": { "operator": "equals", "value": "priority" }
-  }
-}
-```
-
-### Delete Subscription
-
-```http
-DELETE /api/subscriptions/{id}
-```
-
-## Xchanges (Messages)
-
-Xchanges represent individual message processing transactions.
-
-### List Xchanges
-
-```http
-GET /api/xchanges
-```
-
-**Query Parameters:**
-- `pageNumber` (int): Page number
-- `pageSize` (int): Page size
-- `documentId` (int): Filter by document
-- `partnerId` (int): Filter by partner
-- `status` (string): Filter by status
-- `fromDate` (datetime): Filter from date
-- `toDate` (datetime): Filter to date
-- `reference` (string): Filter by reference
-- `correlationId` (string): Filter by correlation ID
-
-**Response:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "reference": "ORDER-001",
-      "correlationId": "corr-123",
-      "documentId": 1,
-      "partnerId": 1,
-      "status": "Processed",
-      "promotedProperties": {
-        "customerId": "CUST-123",
-        "orderTotal": "299.99",
-        "orderDate": "2025-06-04T10:30:00Z"
-      },
-      "inputFileId": "file-input-123",
-      "outputFileId": "file-output-456",
-      "responseFileId": "file-response-789",
-      "createdOn": "2025-06-04T10:30:00Z",
-      "processedOn": "2025-06-04T10:31:00Z"
-    }
+  "name": "Orders from S3",
+  "type": "Receiving",
+  "documentId": 3,
+  "partnerId": 5,
+  "receiverId": "NativeS3Receiver",
+  "receiverProperties": [
+    { "key": "ServiceUrl", "value": "https://s3.example.com" },
+    { "key": "BucketName", "value": "incoming" },
+    { "key": "AccessKeyId", "value": "{{globals.s3.accessKeyId}}" },
+    { "key": "SecretAccessKey", "value": "{{globals.s3.secretAccessKey}}" }
   ],
-  "totalCount": 1,
-  "pageSize": 50,
-  "pageNumber": 1
+  "handlerId": "NativeHttpHandler",
+  "handlerProperties": [ { "key": "Url", "value": "{{partner.erpUrl}}/orders" } ],
+  "schedules": [ { "recurrence": "Hourly", "days": 0, "hours": 0, "minutes": 15 } ],
+  "retryPolicyId": 1,
+  "inactive": false
 }
 ```
 
-### Get Xchange
-
-```http
-GET /api/xchanges/{id}
-```
-
-### Create Xchange
-
-```http
-POST /api/xchanges
-Content-Type: application/json
-
-{
-  "documentId": 1,
-  "reference": "ORDER-002",
-  "correlationId": "corr-456",
-  "data": {
-    "customer": {
-      "id": "CUST-456",
-      "name": "Jane Smith",
-      "email": "jane@example.com"
-    },
-    "order": {
-      "total": 149.99,
-      "date": "2025-06-04T14:30:00Z",
-      "type": "standard",
-      "items": [
-        {
-          "productId": "PROD-1",
-          "quantity": 1,
-          "unitPrice": 149.99
-        }
-      ]
-    }
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "id": 2,
-  "reference": "ORDER-002",
-  "correlationId": "corr-456",
-  "documentId": 1,
-  "status": "Processing",
-  "promotedProperties": {
-    "customerId": "CUST-456",
-    "orderTotal": "149.99",
-    "orderDate": "2025-06-04T14:30:00Z"
-  },
-  "inputFileId": "file-input-789",
-  "createdOn": "2025-06-04T14:30:00Z"
-}
-```
-
-### Get Xchange Results
-
-```http
-GET /api/xchanges/{id}/results
-```
-
-**Response:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "xchangeId": 1,
-      "subscriptionId": 1,
-      "status": "Success",
-      "processingTime": 1250,
-      "outputFileId": "file-output-456",
-      "responseFileId": "file-response-789",
-      "errorMessage": null,
-      "createdOn": "2025-06-04T10:31:00Z"
-    }
-  ]
-}
-```
-
-### Get File Content
-
-```http
-GET /api/xchanges/{id}/files/{fileType}
-```
-
-**File Types:**
-- `input`: Original input file
-- `output`: Processed output file
-- `response`: Response file
-
-**Response:**
-```json
-{
-  "fileName": "order-001.json",
-  "contentType": "application/json",
-  "content": "{ \"customer\": { \"id\": \"CUST-123\" } }",
-  "size": 1024,
-  "createdOn": "2025-06-04T10:30:00Z"
-}
-```
-
-### Reprocess Xchange
-
-```http
-POST /api/xchanges/{id}/reprocess
-```
-
-This will reprocess the message through all matching subscriptions.
-
-## Search
-
-### Search Messages
-
-```http
-GET /api/search
-```
-
-**Query Parameters:**
-- `query` (string): Search term
-- `documentId` (int): Filter by document
-- `partnerId` (int): Filter by partner
-- `fromDate` (datetime): Date range start
-- `toDate` (datetime): Date range end
-- `pageNumber` (int): Page number
-- `pageSize` (int): Page size
-
-**Response:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "reference": "ORDER-001",
-      "documentName": "CustomerOrder",
-      "partnerName": "External System A",
-      "status": "Processed",
-      "promotedProperties": {
-        "customerId": "CUST-123",
-        "orderTotal": "299.99"
-      },
-      "createdOn": "2025-06-04T10:30:00Z"
-    }
-  ],
-  "totalCount": 1,
-  "pageSize": 50,
-  "pageNumber": 1
-}
-```
-
-### Advanced Search
-
-```http
-POST /api/search/advanced
-Content-Type: application/json
-
-{
-  "criteria": [
-    {
-      "field": "promotedProperties.customerId",
-      "operator": "equals",
-      "value": "CUST-123"
-    },
-    {
-      "field": "promotedProperties.orderTotal",
-      "operator": "greaterThan",
-      "value": "100"
-    }
-  ],
-  "logicalOperator": "and",
-  "fromDate": "2025-06-01T00:00:00Z",
-  "toDate": "2025-06-04T23:59:59Z",
-  "pageNumber": 1,
-  "pageSize": 20
-}
-```
-
-## Health Checks
-
-### Application Health
-
-```http
-GET /api/health
-```
-
-**Response:**
-```json
-{
-  "status": "Healthy",
-  "totalDuration": "00:00:00.0123456",
-  "entries": {
-    "database": {
-      "status": "Healthy",
-      "duration": "00:00:00.0050000"
-    },
-    "file_storage": {
-      "status": "Healthy",
-      "duration": "00:00:00.0020000"
-    }
-  }
-}
-```
-
-### Database Health
-
-```http
-GET /api/health/db
-```
-
-### Ready Check
-
-```http
-GET /api/health/ready
-```
-
-### Live Check
-
-```http
-GET /api/health/live
-```
-
-## Notifications
-
-### List Notifications
-
-```http
-GET /api/notifications
-```
-
-### Create Notification
-
-```http
-POST /api/notifications
-Content-Type: application/json
-
-{
-  "xchangeId": 1,
-  "type": "ProcessingComplete",
-  "recipient": "admin@company.com",
-  "subject": "Order Processing Complete",
-  "message": "Order ORDER-001 has been processed successfully"
-}
-```
-
-## Statistics
-
-### Dashboard Statistics
-
-```http
-GET /api/statistics/dashboard
-```
-
-**Response:**
-```json
-{
-  "totalMessages": 1250,
-  "processedToday": 45,
-  "successRate": 98.5,
-  "averageProcessingTime": 850,
-  "activeSubscriptions": 12,
-  "recentActivity": [
-    {
-      "time": "2025-06-04T14:30:00Z",
-      "message": "Processed ORDER-002",
-      "status": "Success"
-    }
-  ]
-}
-```
-
-### Processing Statistics
-
-```http
-GET /api/statistics/processing
-```
-
-**Query Parameters:**
-- `fromDate` (datetime): Date range start
-- `toDate` (datetime): Date range end
-- `groupBy` (string): Group by hour/day/month
-
-## Error Handling
-
-All API endpoints return standard HTTP status codes and error responses:
-
-### Success Responses
-- `200 OK`: Successful request
-- `201 Created`: Resource created successfully
-- `204 No Content`: Successful request with no content
-
-### Error Responses
-- `400 Bad Request`: Invalid request data
-- `401 Unauthorized`: Authentication required
-- `403 Forbidden`: Insufficient permissions
-- `404 Not Found`: Resource not found
-- `409 Conflict`: Resource conflict
-- `422 Unprocessable Entity`: Validation errors
-- `500 Internal Server Error`: Server error
-
-### Error Response Format
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "The request is invalid",
-    "details": [
-      {
-        "field": "name",
-        "message": "Name is required"
-      }
-    ],
-    "traceId": "0HN7SRLF8R2QK:00000001"
-  }
-}
-```
-
-## Rate Limiting
-
-API endpoints are rate limited:
-- **Standard endpoints**: 1000 requests per hour per API key
-- **File upload endpoints**: 100 requests per hour per API key
-- **Search endpoints**: 500 requests per hour per API key
-
-Rate limit information is included in response headers:
-```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 999
-X-RateLimit-Reset: 1622832000
-```
-
-## Versioning
-
-The API is versioned using the URL path:
-```
-/api/v1/partners
-/api/v2/partners
-```
-
-Current version: `v1`
-
-## Webhooks
-
-Configure webhooks to receive notifications about processing events:
-
-### Create Webhook
-
-```http
-POST /api/webhooks
-Content-Type: application/json
-
-{
-  "name": "Order Processing Webhook",
-  "url": "https://your-system.com/webhooks/bitween",
-  "events": ["xchange.created", "xchange.processed", "xchange.failed"],
-  "secret": "your-webhook-secret"
-}
-```
-
-### Webhook Event Format
-
-```json
-{
-  "id": "webhook-event-123",
-  "type": "xchange.processed",
-  "timestamp": "2025-06-04T14:30:00Z",
-  "data": {
-    "xchangeId": 1,
-    "reference": "ORDER-001",
-    "status": "Processed",
-    "processingTime": 1250
-  }
-}
-```
-
-This API reference provides comprehensive documentation for integrating with Bitween. For more examples and detailed integration guides, see the other documentation files.
+A subscription bound to a data source also carries `dataSourceId`.
+
+## Adapters and mapping
+
+| Method and path | Permission | Description |
+|---|---|---|
+| `GET /api/adapters/Catalog?prefix=` | `subscriptions.view` | Every adapter of one kind with its properties. `prefix` is `receivers`, `handlers`, `mappers` or `validators`. |
+| `GET /api/adapters?prefix=` | `subscriptions.view` | Adapter ids of one kind |
+| `GET /api/adapters/Versioned?prefix=` | `subscriptions.view` | Adapter ids with versions |
+| `GET /api/adapters/{id}/GetStartupValues` | `subscriptions.view` | One adapter's properties |
+| `GET /api/adapters/{id}/properties` | `subscriptions.view` | |
+| `GET /api/adapters/{id}/Metadata` | `subscriptions.view` | A custom adapter's package metadata |
+| `POST /api/mappingpreviews` | signed in, no permission checked | Preview rules-based mapping |
+| `POST /api/mappers` | `subscriptions.edit` | Preview a legacy Scriban template |
+
+Adapter descriptions are cached per node, so a newly uploaded package version can show old properties for a while.
+
+## Gateways
+
+| Method and path | Permission |
+|---|---|
+| `GET /api/apigateways`, `GET /api/apigateways/{id}` | `api-gateways.view` |
+| `GET /api/apigateways/attachments?apiGatewayId=&search=&offset=&limit=` | `api-gateways.view` |
+| `POST /api/apigateways` | `api-gateways.create`. `{ name, urlName, inactive }` |
+| `POST /api/apigateways/{id}` | `api-gateways.edit` |
+| `DELETE /api/apigateways/{id}` | `api-gateways.delete` |
+| `POST /api/apigateways/{id}/addpartner` | `api-gateways.edit`. `{ partnerId, subscriptionId }` or `{ partnerId, newIntegration }` |
+| `POST /api/apigateways/{id}/updatepartner` | `api-gateways.edit` |
+| `POST /api/apigateways/{id}/removepartner` | `api-gateways.edit` |
+| `GET /api/busgateways`, `GET /api/busgateways/{id}` | `bus-gateways.view` |
+| `POST /api/busgateways` | `bus-gateways.create`. `{ name, documentId, dataSourceId, endpoint }` |
+| `POST /api/busgateways/{id}` | `bus-gateways.edit` |
+| `DELETE /api/busgateways/{id}` | `bus-gateways.delete` |
+| `POST /api/busgateways/{id}/addroute` | `bus-gateways.edit`. `{ subscriptionId or newIntegration, partnerId, matchExpression }` |
+| `POST /api/busgateways/{id}/updateroute` | `bus-gateways.edit` |
+| `POST /api/busgateways/{id}/removeroute` | `bus-gateways.edit` |
+
+## Data sources
+
+| Method and path | Permission |
+|---|---|
+| `GET /api/datasources` | `data-sources.view`, or signed in with `lookup=true`. Searchy. |
+| `GET /api/datasources/Providers` | `data-sources.view` |
+| `GET /api/datasources/{id}` | `data-sources.view` |
+| `GET /api/datasources/{id}/telemetry` | `data-sources.view` |
+| `POST /api/datasources` | `data-sources.create` |
+| `POST /api/datasources/{id}` | `data-sources.edit` |
+| `DELETE /api/datasources/{id}` | `data-sources.delete` |
+| `POST /api/datasources/{id}/test` | `data-sources.operate` |
+| `POST /api/datasources/{id}/inspect` | `data-sources.view`. `{ command: "Discover" \| "GetStats" \| "Describe", arguments }` |
+| `GET /api/datasourcestatements`, `GET /api/datasourcestatements/{id}` | `data-source-statements.view` |
+| `POST /api/datasourcestatements` | `data-source-statements.create` |
+| `POST /api/datasourcestatements/{id}` | `data-source-statements.edit` |
+| `DELETE /api/datasourcestatements/{id}` | `data-source-statements.delete` |
+| `POST /api/datasourcestatements/{id}/usage` | `data-source-statements.view` |
+
+See [Data sources](data-sources.md) and [Databases](databases.md).
+
+## Configuration
+
+| Method and path | Permission |
+|---|---|
+| `GET /api/documents`, `GET /api/documents/{id}`, `GET /api/documents/{id}/properties` | `documents.view` |
+| `POST /api/documents` | `documents.create` |
+| `POST /api/documents/{id}` | `documents.edit` |
+| `DELETE /api/documents/{id}` | `documents.delete` |
+| `GET /api/partners`, `GET /api/partners/{id}` | `partners.view`. Keys are masked. |
+| `POST /api/partners` | `partners.create` |
+| `POST /api/partners/{id}` | `partners.edit`. Replaces name, properties and API keys. |
+| `DELETE /api/partners/{id}` | `partners.delete` |
+| `GET /api/partners/generatekey` | signed in, no permission checked. Returns a random key as text; nothing is stored. |
+| `GET /api/globaladaptervaluessets`, `GET /api/globaladaptervaluessets/{id}` | `global-values.view` |
+| `POST /api/globaladaptervaluessets` | `global-values.create`. `{ id, name, values }` |
+| `POST /api/globaladaptervaluessets/{id}` | `global-values.edit` |
+| `POST /api/globaladaptervaluessets/{id}/delete` | `global-values.delete` |
+| `GET /api/workgroups?name=&offset=&limit=` | `workgroups.view`. Includes live queue metrics. |
+| `POST /api/workgroups` | `workgroups.create`. `{ name, busMessageName, options: { rabbitMqOptions: { prefetch, priority } } }` |
+| `POST /api/workgroups/{id}` | `workgroups.edit` |
+| `POST /api/workgroups/{id}/delete` | `workgroups.delete`. Refused while subscriptions use it. |
+| `GET /api/retrypolicies`, `GET /api/retrypolicies/{id}` | `retry-policies.view` |
+| `POST /api/retrypolicies` | `retry-policies.create` |
+| `POST /api/retrypolicies/{id}` | `retry-policies.edit` |
+| `DELETE /api/retrypolicies/{id}` | `retry-policies.delete` |
+| `POST /api/retrypolicies/test` | `retry-policies.view` |
+| `POST /api/retrypolicies/{id}/usage` | `retry-policies.view` |
+| `POST /api/retrypolicies/{id}/attempts` | `retry-policies.view` |
+| `POST /api/retrypolicies/{id}/resetusage` | `retry-policies.edit` |
+| `POST /api/retrypolicies/{id}/savealertoverride` | `retry-policies.edit` |
+| `GET /api/notifiers`, `GET /api/notifiers/{id}` | `notifiers.view` |
+| `POST /api/notifiers` | `notifiers.create` |
+| `POST /api/notifiers/{id}` | `notifiers.edit` |
+| `DELETE /api/notifiers/{id}` | `notifiers.delete` |
+| `GET /api/notifications` | `notifiers.view`. Searchy. |
+
+## Administration
+
+| Method and path | Permission |
+|---|---|
+| `GET /api/accounts` | `users.view` |
+| `POST /api/accounts` | `users.create` |
+| `POST /api/accounts/{id}` | `users.edit`, or yourself for the display name |
+| `POST /api/accounts/{id}/setRoles` | `users.edit` |
+| `POST /api/accounts/{id}/setDisabled` | `users.edit` |
+| `POST /api/accounts/{id}/setPassword` | `users.edit` |
+| `POST /api/accounts/{id}/unlock` | `users.edit` |
+| `POST /api/accounts/{id}/remove` | `users.delete` |
+| `GET /api/roles`, `GET /api/roles/{id}` | `roles.view` |
+| `POST /api/roles` | `roles.create` |
+| `POST /api/roles/{id}` | `roles.edit` |
+| `DELETE /api/roles/{id}` | `roles.delete` |
+| `GET /api/settings` | `settings.view` |
+| `POST /api/settings/{key}` | `settings.edit`. `{ value }` |
+| `DELETE /api/settings/{key}` | `settings.edit`. Resets to the product default. |
+| `GET /api/audit?offset=&limit=&entityName=&entityKey=&userId=&correlationId=&from=&to=` | `audit.view` |
+
+## Monitoring
+
+| Method and path | Permission |
+|---|---|
+| `GET /api/ops/summary`, `consumers`, `queues`, `retries`, `deadletters`, `alerts`, `unattendedqueues` | `monitoring.view` or `dashboard.view` |
+| `GET /api/dashboard/MainInfo` | `dashboard.view` |
+| `GET /api/dashboard/ChartsDataPoints` | `dashboard.view` |
+| `GET /api/dashboard/XChangesAndSubscriptionsInfo` | `dashboard.view` |
+| `GET /api/dashboard/retrysummary` | `dashboard.view`. Retries finished in the last 7 days, and the five failing chains with the most attempts. |
+| `GET /health` | none |

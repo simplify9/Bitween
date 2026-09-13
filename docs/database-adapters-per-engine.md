@@ -350,9 +350,9 @@ folder holding `cwallet.sso`) for mTLS or cloud wallets.
 | Setting | Default | Leave it unless… |
 |---|---|---|
 | `Port` | 1521 | |
-| `Schema` | the login's own | You are reading someone else's schema. Sets `CURRENT_SCHEMA`, so unqualified names resolve there. |
+| `Schema` | the login's own | Only the schema browser's default today. It does not set `CURRENT_SCHEMA`, so qualify names in statements. |
 | `BindByName` | `true` | **Never turn this off.** With it off ODP.NET binds by *position*, so a statement using `:id` twice — or one whose parameters arrive in a different order than they appear — silently binds the wrong values. Silently. |
-| `FetchSize` | 100 | Rows per round trip. Raise it for wide reads over a slow link. |
+| `FetchSize` | 100 | Sets the driver's fetch size for the whole adapter process. The adapter multiplies the value by 1024 before applying it. |
 | `AsSysDba` | `false` | Almost never right for an integration login. |
 
 ### Writing a statement
@@ -435,7 +435,7 @@ Independent of engine, and the thing most worth getting right:
 |---|---|---|---|
 | `incrementing` | an always-growing column | cursor column | There is an id. The default answer. |
 | `timestamp` | a modified-at column | cursor column | Rows are updated as well as inserted and you want both. |
-| `timestamp+incrementing` | both | cursor column | Rows share a timestamp and you need a tiebreak. |
+| `timestamp+incrementing` | both | cursor column | Intended for rows that share a timestamp. There is no tie-break yet, so it currently behaves exactly like `timestamp`. |
 | `marker` | a processed-flag column | a mark-processed statement | There is no reliable ordering, or commits arrive out of order. |
 | `bulk` | re-reading everything | a mark-processed statement | The table is a queue that is emptied. |
 

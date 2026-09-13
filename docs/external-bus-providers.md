@@ -32,7 +32,7 @@ event carries a dedupe key.
 | `DataSource` | How to reach the system: endpoint, credentials, health. One per broker. |
 | `BusGateway.DataSourceId` | Which broker feeds this gateway. Null = internal bus. |
 | `BusGateway.Endpoint` | Which queue or topic on it. |
-| `BusGateway.EndpointProperties` | Per-subscription overrides: prefetch, visibility timeout. |
+| `BusGateway.EndpointProperties` | Intended for per-endpoint overrides such as prefetch. Stored and passed to the adapter, but neither adapter reads them yet. |
 | `BusGateway.DocumentId` + routes | Unchanged — what the message *means* and what runs. |
 
 One data source serves many gateways, exactly as one connection serves many queues.
@@ -42,6 +42,8 @@ One data source serves many gateways, exactly as one connection serves many queu
 ```json
 "Bitween": { "BusProvidersEnabled": true, "BusProviderMaxInFlight": 16 }
 ```
+
+Leases use Bitween's own RabbitMQ, so `ConnectionStrings:RabbitMQ` must be set on every node that runs providers.
 
 **Safe on every node.** Each data source is owned through a lease, so exactly one node consumes it
 and the rest stand by. Still opt-in, but for a different reason than before: it opens outbound
@@ -126,7 +128,7 @@ acks only after Bitween persists, nacks with requeue on rejection. `DeclareMode`
 `assert` (passive declare, fail loudly) or `create`; `assert` is the default because silently
 creating queues on a customer's broker is not our call.
 
-Dedupe key is the broker's message id, or a content hash — **not** the delivery tag, which is per
+Dedupe key is the broker's message id — **not** the delivery tag, which is per
 channel and restarts at 1 on every reconnect.
 
 Also supports `Publish` — and is a **handler**, so a subscription's delivery can publish through
@@ -164,7 +166,7 @@ Xchange and acknowledging the broker redelivers **by design**. Duplicates are no
 exceptional, so something has to recognise them.
 
 Each adapter supplies a key — the broker message id for RabbitMQ, the SP-API notification id for
-SQS (stable across a redelivery, where the SQS `MessageId` is not), a content hash otherwise. The
+SQS (stable across a redelivery, where the SQS `MessageId` is not), the SQS `MessageId` otherwise. A RabbitMQ message with no message id gets no key and is never deduplicated. The
 host prefixes the `DataSourceId` and records it in `inbound_message`.
 
 **The key is the primary key, and the database is the arbiter.** A duplicate is detected by the

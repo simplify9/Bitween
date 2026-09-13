@@ -1,288 +1,155 @@
-<div align="center">
-  <img src="icon.png" alt="Bitween Logo" width="120" height="120">
-  <h1>Bitween</h1>
-  <p><strong>Open-Source Integration Middleware Platform</strong></p>
-  
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![.NET](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/)
-  [![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)](https://www.docker.com/)
-  [![Kubernetes](https://img.shields.io/badge/Kubernetes-Ready-green.svg)](https://kubernetes.io/)
-</div>
+# Bitween
 
----
+Bitween is a self-hosted integration platform. It takes business documents in from partners, HTTP calls, message brokers, databases and scheduled pulls. It validates, transforms and delivers them, and keeps a searchable record of every exchange.
 
-## 🚀 Overview
+One .NET 10 service hosts everything: the REST API, the partner-facing gateway endpoints, background processing, the scheduler and the React admin UI.
 
-Bitween is a powerful, open-source integration middleware designed to simplify data exchange between different systems, regardless of protocols and data formats. Built with enterprise-grade scalability and customization in mind, Bitween acts as a central hub for all your integration needs.
+> These docs are written from the source code as of 11 September 2026. They replace the earlier README and `docs/` pages, which described an older version of Bitween.
 
-### Why Bitween?
+## What Bitween does
 
-- **🔗 Protocol Agnostic**: Handle any data format (JSON, XML, EDI, etc.) and communication protocol
-- **🎯 Serverless Adapters**: Custom business logic through pluggable serverless components  
-- **📊 Real-time Processing**: Event-driven architecture for high-throughput message processing
-- **🔒 Enterprise Security**: JWT authentication, multi-tenant isolation, and access controls
-- **📈 Scalable**: Cloud-native design with Kubernetes support and horizontal scaling
-- **🔍 Observable**: Complete audit trails, monitoring, and processing visibility
+- **Many ways in.** Partners call an API gateway. Other systems publish to Bitween's bus, or to their own RabbitMQ or Amazon SQS broker. Scheduled jobs pull from HTTP APIs, S3, Azure Blob, SFTP/FTP, POP3 mailboxes and databases. Aggregations roll finished exchanges up on a schedule.
+- **One pipeline.** Every message becomes an *exchange* that runs through the same stages: filter, map, deliver, route the response.
+- **Adapters for each stage.** Built-in adapters cover HTTP, S3, Azure Blob, SFTP/FTP, POP3 and SMTP, plus a visual rules-based mapper for JSON and XML. Anything else can be a custom adapter that runs out of process.
+- **Long-lived connections.** Data sources hold connections to RabbitMQ and Amazon SQS brokers and to PostgreSQL, MySQL, SQL Server and Oracle databases, so deliveries can publish messages or run SQL.
+- **Reliability built in.** Retry policies match failures and retry them with a delay and a shared budget. Every exchange's retries form a chain you can follow. Exhausted budgets raise alerts, and notifiers report results.
+- **Operable.** Queue health straight from RabbitMQ, data source health, schedule health, run history, receive attempts, a dashboard and an audit trail of every configuration change.
+- **Administered in the browser.** Roles with fine-grained permissions, Microsoft sign-in, and settings and branding that change at runtime.
 
-## 🏗️ Architecture
+## How it fits together
 
-Bitween follows a hub-and-spoke architecture where messages flow through configurable processing pipelines:
-
-```
-External Systems → API Gateway → Processing Pipeline → Target Systems
-                                      ↓
-              Validation → Filtering → Mapping → Handling → Response
-```
-
-### Core Components
-
-- **Web API**: RESTful endpoints for message ingestion and management
-- **Processing Engine**: Asynchronous message processing with domain events
-- **Serverless Framework**: Custom adapter execution environment
-- **Multi-Database Support**: PostgreSQL, MySQL, SQL Server compatibility
-- **Cloud Storage**: File persistence with configurable storage backends
-
-## ⚡ Quick Start
-
-### Prerequisites
-
-- .NET 8.0 SDK
-- Docker (optional)
-- Database (PostgreSQL, MySQL, or SQL Server)
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/simplify9/bitween.git
-cd bitween
+```mermaid
+flowchart LR
+  subgraph In[Entry points]
+    GW[API gateway]
+    BUS[Bus gateway]
+    JOB[Scheduled job]
+    AGG[Aggregation]
+  end
+  subgraph Core[Bitween service]
+    X[(Exchange)]
+    P[Filter, mapper, handler]
+    R[Result and retry policy]
+  end
+  EXT[(Customer broker or database)]
+  EXT --> BUS
+  EXT --> JOB
+  GW --> X
+  BUS --> X
+  JOB --> X
+  AGG --> X
+  X -->|work group queue| P --> R
+  P -->|delivery| OUT[Partner systems]
+  P -->|publish or SQL| EXT
+  R -->|notifiers and alerts| N[Handler adapters]
+  X -. files .-> S[(Object storage)]
+  R -. rows .-> DB[(Bitween database)]
 ```
 
-### 2. Run with Docker
+## Requirements
 
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
+| Component | Supported |
+|---|---|
+| Build | .NET 10 SDK, Node 22 with Yarn for the admin UI |
+| Database | PostgreSQL, SQL Server or MySQL 8 |
+| Message broker | RabbitMQ, with the management plugin for queue health |
+| Object storage | S3-compatible, Azure Blob Storage, Oracle Cloud Object Storage, or local disk in Development |
 
-# Or build Docker image manually
-docker build -t bitween .
-docker run -p 8080:8080 bitween
-```
+## Quick start
 
-### 3. Local Development Setup
+This runs Bitween locally against PostgreSQL, RabbitMQ and local-disk storage.
 
-```bash
-# Restore dependencies
-dotnet restore
+1. Start the dependencies.
 
-# Update database connection in appsettings.json
-# Run database migrations
-./migratedb.sh
+   ```bash
+   docker run -d --name bitween-pg -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+   docker run -d --name bitween-mq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+   ```
 
-# Start the application
-dotnet run --project SW.Bitween.Web
-```
+2. Build the admin UI into the web host's `wwwroot`.
 
-The application will be available at `http://localhost:8080`
+   ```bash
+   cd SW.Bitween.Web/ClientApp
+   yarn install
+   yarn build
+   cd ../..
+   ```
 
-## 🌐 Ecosystem & Companion Projects
+3. Configure and run the service.
 
-Bitween is part of a comprehensive integration ecosystem with additional tools and components:
+   ```bash
+   export ASPNETCORE_ENVIRONMENT=Development
+   export Bitween__DatabaseType=PgSql
+   export ConnectionStrings__BitweenDb="Host=localhost;Port=5432;Database=bitween;Username=postgres;Password=postgres"
+   export ConnectionStrings__RabbitMQ="amqp://guest:guest@localhost:5672/"
+   export Bitween__StorageProvider=Local
+   export CloudFiles__BucketName=bitween
+   export Token__Key="replace-with-a-random-string-of-at-least-32-chars"
+   export Token__Issuer=bitween-local
+   export Token__Audience=bitween-local
+   export Bitween__RabbitMqManagementUrl=http://localhost:15672
+   export Bitween__RabbitMqManagementUsername=guest
+   export Bitween__RabbitMqManagementPassword=guest
 
-### 🖥️ Bitween UI - Web Management Interface
-A modern React-based web interface for managing and monitoring your Bitween integration platform.
+   dotnet run --project SW.Bitween.Web
+   ```
 
-- **Repository**: [BitweenUI](https://github.com/simplify9/BitweenUI)
-- **Features**: Dashboard, configuration management, monitoring, audit logs
-- **Technology**: React, TypeScript, Tailwind CSS, Redux Toolkit
+4. Open https://localhost:5000 and sign in as the seeded administrator.
 
-#### Quick Setup
-```bash
-# Clone the UI repository
-git clone https://github.com/simplify9/BitweenUI.git
-cd BitweenUI
+   ```
+   admin@Bitween.systems
+   Mtm@dmin!2
+   ```
 
-# Install dependencies
-npm install
+The database schema is created on first start. Change the administrator password straight away, and work through the [production checklist](docs/security.md#production-checklist) before exposing an instance. To use brokers or databases as data sources, see [Data sources](docs/data-sources.md#turning-them-on).
 
-# Configure API endpoint (create .env file)
-echo "REACT_APP_API_URL=http://localhost:8080" > .env
+## Documentation
 
-# Start development server
-npm start
-```
+| Page | What it covers |
+|---|---|
+| [Concepts](docs/concepts.md) | Information types, partners, subscriptions, exchanges, data sources and the rest of the vocabulary |
+| [Architecture](docs/architecture.md) | Components, projects, adapter runtimes, data, messaging, storage and caching |
+| [Exchange pipeline](docs/exchange-pipeline.md) | What happens to a message from arrival to result |
+| [Entry points](docs/entry-points.md) | API gateways, bus gateways, scheduled jobs, aggregations and legacy entry points |
+| [Adapters](docs/adapters.md) | The adapter contract, every built-in adapter and its properties, custom adapters |
+| [Mapping](docs/mapping.md) | The rules-based mapper and the legacy Scriban JSON mapper |
+| [Data sources](docs/data-sources.md) | Long-lived connections: enabling them, placement, health and resource limits |
+| [External brokers](docs/external-brokers.md) | Reading from and publishing to a customer's RabbitMQ or Amazon SQS |
+| [Databases](docs/databases.md) | PostgreSQL, MySQL, SQL Server and Oracle: statements, polling and writing |
+| [Retries and alerts](docs/retries-and-alerts.md) | Manual and bulk retry, retry chains, retry policies, budgets, alerts and notifiers |
+| [Scheduling](docs/scheduling.md) | Schedules, jobs, run history and schedule health |
+| [Security](docs/security.md) | Sign-in, tokens, roles and permissions, partner keys, hardening, audit |
+| [Configuration](docs/configuration.md) | Every configuration key, runtime setting and Helm value |
+| [Deployment](docs/deployment.md) | Docker image, Helm chart, databases, storage and CI/CD |
+| [Operations](docs/operations.md) | Monitoring, troubleshooting, logs and data retention |
+| [Admin UI](docs/admin-ui.md) | A tour of the web interface |
+| [API reference](docs/api-reference.md) | REST conventions and every endpoint |
+| [Development](docs/development.md) | Local setup, tests, migrations and extending Bitween |
+| [Known limitations](docs/caveats.md) | Behaviours and gaps in the current code that operators should know about |
 
-The UI will be available at `http://localhost:3000`
+Deeper reference written alongside the features:
 
-#### Production Deployment
-```bash
-# Build for production
-npm run build
+- [Database adapters: API reference](docs/database-adapters-api.md) and the [per-engine guide](docs/database-adapters-per-engine.md)
+- [External bus providers](docs/external-bus-providers.md), the implementation notes for brokers
+- [Design documents](docs/design/README.md): proposals and plans, not a description of current behaviour
 
-# Deploy with Docker
-docker build -t bitween-ui .
-docker run -p 3000:80 bitween-ui
-```
+## Repository layout
 
-### 🔌 Bitween Adapters - Pre-built Integration Components
-A comprehensive collection of production-ready adapters for common integration scenarios.
+| Path | Purpose |
+|---|---|
+| `SW.Bitween.Web` | ASP.NET Core host: startup, authentication, security headers, and the admin UI in `ClientApp` |
+| `SW.Bitween.Api` | Domain model, database context, API handlers, exchange pipeline, jobs, settings and the data source supervisor |
+| `SW.Bitween.NativeAdapters` | Built-in adapters and the rules-based mapper |
+| `SW.Bitween.Adapters.Bus.RabbitMq`, `SW.Bitween.Adapters.Bus.Sqs` | Resident broker adapters |
+| `SW.Bitween.Adapters.Db.*` | Resident database adapters and their shared core |
+| `SW.Bitween.Sdk` | Shared models and the retry policy evaluator, published to NuGet as `SimplyWorks.Bitween.Sdk` |
+| `SW.Bitween.PgSql`, `SW.Bitween.MySql`, `SW.Bitween.MsSql` | Provider-specific database contexts and migrations |
+| `SW.Bitween.Sample*` | Sample custom adapters, including a resident handler |
+| `SW.Bitween.UnitTests`, `SW.Bitween.IntegrationTests` | Test suites |
+| `tools` | Development databases for trying the database adapters |
+| `charts/default` | Helm chart |
+| `Dockerfile` | Container image build |
 
-- **Repository**: [BitweenAdapters](https://github.com/simplify9/BitweenAdapters)
-- **License**: MIT (Open Source)
-- **Technology**: .NET 6+, Serverless-ready
+## License
 
-#### Available Adapters
-
-**Handlers** (Business Logic & Output):
-- **HTTP Handler**: REST API calls and webhooks
-- **SMTP Handler**: Email notifications and bulk sending
-- **FTP/SFTP Handler**: File uploads and transfers
-- **Azure Blob Handler**: Cloud storage operations
-- **S3 Handler**: AWS storage integration
-- **Microsoft Teams Handler**: Teams notifications
-- **SendGrid Handler**: Professional email delivery
-
-**Receivers** (Data Input Sources):
-- **FTP/SFTP Receiver**: Scheduled file polling
-- **HTTP Receiver**: Webhook endpoints and API polling
-- **POP3 Receiver**: Email processing
-- **Azure Blob Receiver**: Cloud storage monitoring
-- **S3 Receiver**: AWS storage file detection
-- **Elasticsearch Receiver**: Search and analytics data
-
-**Mappers** (Data Transformation):
-- **Liquid Mapper**: Template-based transformation
-- **JSON to Delimited Mapper**: Format conversion (CSV, TSV)
-
-#### Quick Start with Adapters
-```bash
-# Clone the adapters repository
-git clone https://github.com/simplify9/BitweenAdapters.git
-cd BitweenAdapters
-
-# Build specific adapter (example: SFTP Handler)
-dotnet build SW.InfolinkAdapters.Handlers.Ftp/
-
-# Run adapter locally
-cd SW.InfolinkAdapters.Handlers.Ftp
-dotnet run
-
-# Deploy as Docker container
-docker build -t bitween-sftp-handler .
-docker run -p 7000:80 bitween-sftp-handler
-```
-
-
-
-### 🆚 Ecosystem Comparison
-
-| Component | Core Only | + UI | + Adapters | Complete Ecosystem |
-|-----------|-----------|------|------------|-------------------|
-| **Integration Platform** | ✅ | ✅ | ✅ | ✅ |
-| **REST API** | ✅ | ✅ | ✅ | ✅ |
-| **Web Dashboard** | ❌ | ✅ | ❌ | ✅ |
-| **Visual Configuration** | ❌ | ✅ | ❌ | ✅ |
-| **Pre-built Connectors** | ❌ | ❌ | ✅ | ✅ |
-| **Monitoring & Analytics** | ❌ | ✅ | ❌ | ✅ |
-| **User Management** | ❌ | ✅ | ❌ | ✅ |
-| **Time to Production** | Days | Hours | Hours | Minutes |
-| **Development Effort** | High | Medium | Low | Minimal |
-
-> 💡 **Recommendation**: Use the complete ecosystem for the best developer experience and fastest time to production.
-
-## 📚 Documentation
-
-### 🌐 Ecosystem & Platform
-- [**Ecosystem Overview**](docs/ecosystem.md) - Complete platform ecosystem and companion projects
-- [**Architecture Overview**](docs/architecture.md) - System design and components
-- [**Domain Model**](docs/domain-model.md) - Core entities and relationships
-- [**Processing Pipeline**](docs/processing-pipeline.md) - Message flow and transformation
-
-### 🛠️ Development Guides
-- [**Quick Setup**](docs/quick-setup.md) - Get started in under 10 minutes
-- [**Getting Started**](docs/getting-started.md) - Development environment setup
-- [**API Reference**](docs/api-reference.md) - REST API documentation
-- [**Custom Adapters**](docs/custom-adapters.md) - Building serverless components
-- [**Configuration**](docs/configuration.md) - Application settings and options
-
-### 🚀 Deployment
-- [**Quick Setup**](docs/quick-setup.md) - Fast development setup
-- [**Production Deployment**](docs/production-deployment.md) - Complete ecosystem deployment
-- [**Docker Deployment**](docs/docker-deployment.md) - Container-based deployment
-- [**Kubernetes**](docs/kubernetes-deployment.md) - Orchestrated deployment
-- [**Database Setup**](docs/database-setup.md) - Multi-database configuration
-- [**Azure Managed Identity**](docs/azure-managed-identity.md) - Secure database authentication with Azure
-
-### 💡 Examples
-- [**Integration Patterns**](docs/integration-patterns.md) - Common usage scenarios
-- [**Sample Adapters**](docs/sample-adapters.md) - Reference implementations
-
-## 🔧 Key Features
-
-### Message Processing
-- **Document Types**: Define message schemas with promoted properties
-- **Subscriptions**: Configure processing rules and routing logic
-- **Filtering**: Route messages based on content and metadata
-- **Transformation**: Custom data mapping and format conversion
-
-### Integration Patterns
-- **Synchronous**: Request-response API calls
-- **Asynchronous**: Event-driven message processing
-- **Scheduled**: Time-based data retrieval and batch processing
-- **Aggregation**: Multi-message consolidation and reporting
-
-### Extensibility
-- **Custom Validators**: Input validation logic
-- **Custom Mappers**: Data transformation rules
-- **Custom Handlers**: Business processing logic
-- **Custom Receivers**: External data source integration
-
-## 🏢 Use Cases
-
-- **B2B Integration**: EDI processing and partner data exchange
-- **API Gateway**: Protocol translation and message routing
-- **Microservice Integration**: Event-driven service communication
-- **Data Synchronization**: Scheduled batch processing between systems
-- **Workflow Automation**: Process orchestration and business rule execution
-
-## 🤝 Contributing
-
-We welcome contributions from the community! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-### Areas for Contribution
-
-- 🐛 Bug fixes and improvements
-- 📚 Documentation enhancements
-- 🔌 New adapter implementations
-- 🧪 Test coverage expansion
-- 🌐 Localization support
-
-## 📞 Support & Community
-
-- **Documentation**: [Comprehensive guides and API reference](docs/)
-- **Issues**: [Report bugs and request features](https://github.com/simplify9/bitween/issues)
-- **Discussions**: [Community discussions and Q&A](https://github.com/simplify9/bitween/discussions)
-- **Company**: [Simplify9](https://www.simplify9.com/)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-Built with ❤️ by [Simplify9](https://www.simplify9.com/) and the open-source community.
-
----
-
-<div align="center">
-  <p>⭐ Star this repository if you find Bitween useful!</p>
-  <p>Made with ❤️ for the integration community</p>
-</div>
-
+MIT. See [LICENSE](LICENSE).
