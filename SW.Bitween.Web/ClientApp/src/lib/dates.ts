@@ -67,11 +67,13 @@ export const formatDurationMs = (ms: number): string => {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
-/** "12s", "1m 42s" — elapsed time between two instants. */
-export const duration = (fromIso: string, toIso: string): string => {
-  const seconds = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-};
+/**
+ * "14ms", "1.1s", "2m 3s" — elapsed time between two instants.
+ *
+ * Milliseconds, not whole seconds: most exchanges finish inside one, so rounding
+ * to the second reported nearly all of them as "0s" — which reads as "no time at
+ * all" rather than as a measurement, and hides the difference between a 4ms run
+ * and a 900ms one.
+ */
+export const duration = (fromIso: string, toIso: string): string =>
+  formatDurationMs(Math.max(0, new Date(toIso).getTime() - new Date(fromIso).getTime()));

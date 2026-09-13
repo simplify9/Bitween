@@ -227,7 +227,8 @@ export function PromotedProps({
    * Shown when the information type promotes nothing, or promotes nothing this
    * payload carried. A bare em dash left the row with no identity at all — the id
    * is a poor name but it is the only one left, and it makes the row addressable.
-   * Truncated because the drawer carries it in full, with a copy button.
+   * Shown whole: an id cut to its first eight characters is not something you can
+   * match against a log line or quote to anyone, which is the only thing it is for.
    */
   fallbackId?: string;
 }) {
@@ -240,11 +241,12 @@ export function PromotedProps({
   // information type can promote three paths that a payload never filled, and
   // "merchant= orderRef= destination=" then names every exchange of that type equally — three
   // chips that say which fields exist and nothing about which record this is.
+  // break-all: the id is one unbroken run of hex with nowhere natural to wrap, and
+  // these lists also sit in ~360px side panels, where nowrap pushed the last column
+  // off the edge.
   if (!namesSomething(properties))
     return fallbackId ? (
-      <span className="font-mono text-xs text-ink-400" title={fallbackId}>
-        {fallbackId.slice(0, 8)}…
-      </span>
+      <span className="font-mono text-xs break-all text-ink-400">{fallbackId}</span>
     ) : (
       <span className="text-[13px] text-ink-400">—</span>
     );
