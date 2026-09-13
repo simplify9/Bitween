@@ -103,6 +103,17 @@ tolerations: []
 
 affinity: {}
 
+# Existing ServiceAccount for the pod to run as, e.g. one bound to an Azure Workload Identity.
+# Empty (default) renders no serviceAccountName, so the namespace's default ServiceAccount is used.
+# The chart does not create the ServiceAccount.
+serviceAccount:
+  name: ''
+
+# Extra labels on the pod template only, never the selector. Values always render as strings.
+# app, draft and release are set by the chart and can't be overridden.
+# e.g. --set 'podLabels.azure\.workload\.identity/use=true'
+podLabels: {}
+
 # db is the connection string for the database
 db: ""
 
