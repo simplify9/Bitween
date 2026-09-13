@@ -134,10 +134,14 @@ namespace SW.Bitween.Resources.Subscriptions
 
                 // Schedules only mean anything on the two scheduled types, and an empty set is
                 // what Subscription.SetSchedules rejects outright.
+                //
+                // The type is the whole condition. Guarding on `Schedules != null` as well let the
+                // rule be skipped by the one case it most needed to catch — omitting the field
+                // entirely — so a scheduled job or aggregation saved with no trigger at all and
+                // then simply never ran.
                 RuleFor(i => i.Schedules)
                     .NotEmpty()
-                    .When(i => i.Schedules != null &&
-                               (i.Type == SubscriptionType.Receiving || i.Type == SubscriptionType.Aggregation))
+                    .When(i => i.Type == SubscriptionType.Receiving || i.Type == SubscriptionType.Aggregation)
                     .WithMessage("Schedules cannot be empty for a scheduled subscription.");
             }
 

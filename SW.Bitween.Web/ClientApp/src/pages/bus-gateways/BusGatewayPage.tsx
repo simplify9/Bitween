@@ -409,6 +409,21 @@ export function BusGatewayPage() {
       : OWNER[node] === "subscription" && !!edit && nodeDirty(node, edit.draft, edit.saved)
     : false;
 
+  /**
+   * Which of this subscription's adapter slots reference a partner value. Read off the
+   * draft rather than the saved record, so picking "No partner" and pasting a
+   * `{{partner.…}}` URL in the same sitting is still caught before the save.
+   */
+  const partnerTokenSlots = (
+    [
+      ["receiver", edit?.draft.receiverProperties],
+      ["mapper", edit?.draft.mapperProperties],
+      ["handler", edit?.draft.handlerProperties],
+    ] as const
+  )
+    .filter(([, props]) => Object.values(props ?? {}).some((v) => v.includes("{{partner.")))
+    .map(([slot]) => slot);
+
   const renderNode = () => {
     if (!node) return null;
     if (node === "route")
@@ -421,6 +436,7 @@ export function BusGatewayPage() {
             informationTypeId={g.informationTypeId}
             informationTypeCode={g.informationTypeCode}
             disabled={!canEdit}
+            partnerTokenSlots={partnerTokenSlots}
             onNewPartner={() => setPartnerDialog(null)}
             onEditPartner={(id) => setPartnerDialog(id)}
             onNewSubscription={() => {

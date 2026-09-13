@@ -106,6 +106,7 @@ export function RouteBody({
   informationTypeId,
   informationTypeCode,
   disabled,
+  partnerTokenSlots,
   onNewPartner,
   onEditPartner,
   onNewSubscription,
@@ -117,6 +118,11 @@ export function RouteBody({
   informationTypeId: number;
   informationTypeCode: string;
   disabled: boolean;
+  /**
+   * Adapter slots on the subscription this route runs whose properties contain a
+   * `{{partner.…}}` token — empty when none do.
+   */
+  partnerTokenSlots: string[];
   onNewPartner: () => void;
   /** Opens the chosen partner's values here, rather than sending you to its page. */
   onEditPartner: (partnerId: number) => void;
@@ -179,6 +185,19 @@ export function RouteBody({
             onCreate={canCreatePartner && !disabled ? onNewPartner : undefined}
             createLabel="New partner"
           />
+          {/*
+            Said here, at save time, because the alternative is finding out at run time:
+            with no partner the token is never substituted and reaches the adapter as the
+            literal text "{{partner.x}}", which surfaces as "UriFormatException: Invalid
+            URI" — an error naming nothing that appears on this screen.
+          */}
+          {draft.partner === "none" && partnerTokenSlots.length > 0 && (
+            <p className="mt-1.5 rounded-lg bg-warn-100 px-2.5 py-2 text-[12px] text-warn-700">
+              The {partnerTokenSlots.join(" and ")} {partnerTokenSlots.length === 1 ? "uses" : "use"}{" "}
+              <code className="font-mono">{"{{partner.…}}"}</code>, which resolves to nothing without
+              a partner. Pick one, or take the token out of the adapter.
+            </p>
+          )}
         </Field>
 
         <Field
