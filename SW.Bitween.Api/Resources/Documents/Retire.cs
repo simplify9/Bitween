@@ -24,6 +24,9 @@ namespace SW.Bitween.Resources.Documents
         {
             await requestContext.EnsurePermission(dbContext, Model.Permissions.Documents.Edit);
 
+            if (key == Document.AggregationDocumentId)
+                throw new SWException("The built-in Aggregation Document can't be retired.");
+
             var entity = await dbContext.FindAsync<Document>(key);
             if (entity == null)
                 throw new SWNotFoundException("Information type not found.");

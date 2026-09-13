@@ -87,6 +87,14 @@ export function InformationTypePage() {
           <h1 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-tight text-ink-900">
             {t.name}
             <CodeBadge code={t.code} name={t.name} />
+            {t.isSystem && (
+              <Badge
+                tone="ink"
+                title="Seeded by Bitween and used by aggregation itself — it can't be retired or deleted."
+              >
+                Built-in
+              </Badge>
+            )}
             {t.retiredOn && (
               <Badge
                 tone="neutral"
@@ -97,31 +105,48 @@ export function InformationTypePage() {
             )}
           </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/*
-            Ahead of Delete, and the one offered by default: a type that has carried traffic
-            almost always wants to leave the pickers rather than take its exchanges with it,
-            and this is the half of the pair that can be undone.
-          */}
-          <Can permission="documents.edit">
-            <Button onClick={() => retire.mutate()} disabled={retire.isPending}>
-              {t.retiredOn ? (
-                <>
-                  <Undo2 className="size-4" /> Restore
-                </>
-              ) : (
-                <>
-                  <Archive className="size-4" /> Retire
-                </>
-              )}
-            </Button>
-          </Can>
-          <Can permission="documents.delete">
-            <Button variant="danger" onClick={() => setDeleting(true)}>
-              <Trash2 className="size-4" /> Delete
-            </Button>
-          </Can>
-        </div>
+        {/*
+          The built-in type is the backend's, not the user's: neither action is offered for it
+          rather than offered and then refused.
+        */}
+        {!t.isSystem && (
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {/*
+                Ahead of Delete, and the one offered by default: a type that has carried traffic
+                almost always wants to leave the pickers rather than take its exchanges with it,
+                and this is the half of the pair that can be undone.
+              */}
+              <Can permission="documents.edit">
+                <Button onClick={() => retire.mutate()} busy={retire.isPending}>
+                  {t.retiredOn ? (
+                    <>
+                      <Undo2 className="size-4" /> Restore
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="size-4" /> Retire
+                    </>
+                  )}
+                </Button>
+              </Can>
+              <Can permission="documents.delete">
+                <Button variant="danger" onClick={() => setDeleting(true)}>
+                  <Trash2 className="size-4" /> Delete
+                </Button>
+              </Can>
+            </div>
+            {/*
+              Retire refuses for reasons the user can act on — a subscription still carrying the
+              type, say — and without this the refusal reached the network tab and nowhere else.
+            */}
+            {retire.error && (
+              <p className="max-w-md text-right text-[13px] text-danger-700">
+                {retire.error.message}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">

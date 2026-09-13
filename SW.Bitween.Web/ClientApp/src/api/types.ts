@@ -251,6 +251,11 @@ export interface InformationType {
    * naming the exchanges already recorded against it and is no longer offered for new work.
    */
   retiredOn: string | null;
+  /**
+   * Seeded by the backend and referenced by machinery rather than by configuration —
+   * the Aggregation Document. Can't be edited away, retired or deleted.
+   */
+  isSystem: boolean;
 }
 export interface InformationTypeRow extends InformationType {
   usedByCount: number;
