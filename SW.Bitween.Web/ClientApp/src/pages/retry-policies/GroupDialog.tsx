@@ -41,7 +41,15 @@ function MatcherRow({
   onChange: (m: RetryMatcher) => void;
   onRemove: () => void;
 }) {
-  const num = "flex-1 min-w-24";
+  /*
+    The free-text field in a condition row: an error fragment, an exception name, a
+    comparison value. The controls beside it are fixed-width pickers whose longest
+    option is known, so an equal share left this one the narrowest thing in the row
+    while being the only one holding arbitrary text — "INVALID_DECL" clipped mid-word.
+    Twice the share of what's left, and a floor wide enough for a real value; the row
+    already wraps, so below that it takes a line of its own rather than shrinking.
+  */
+  const num = "flex-[2] min-w-48";
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-ink-200 p-2.5">
       <Select
