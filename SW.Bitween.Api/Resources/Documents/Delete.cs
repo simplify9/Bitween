@@ -18,6 +18,11 @@ public class Delete(BitweenDbContext dbContext, RequestContext requestContext, I
         {
             await requestContext.EnsurePermission(dbContext, Model.Permissions.Documents.Delete);
 
+            // Seeded by the model and referenced by every aggregation, so it is not the user's
+            // to remove — the same footing as the system partner.
+            if (key == Document.AggregationDocumentId)
+                throw new SWException("The built-in Aggregation Document can't be deleted.");
+
             // Configuration pointing at this type is a real block — a subscription or a bus
             // gateway left behind would name a type that no longer exists. Said plainly, because
             // the database says it as a foreign-key violation, which reached the screen as a bare

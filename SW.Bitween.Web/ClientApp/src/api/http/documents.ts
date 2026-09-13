@@ -20,6 +20,9 @@ interface RawKeyAndValue {
   key: string;
   value: string;
 }
+/** Seeded by the model — mirrors Document.AggregationDocumentId on the backend. */
+const AGGREGATION_DOCUMENT_ID = 10001;
+
 interface RawDocument {
   id: number;
   code: string | null;
@@ -80,6 +83,7 @@ const toInformationType = (d: RawDocument): InformationType => ({
   promotedProperties: (d.promotedProperties ?? []).map((p) => ({ key: p.key, path: p.value })),
   createdOn: "",
   retiredOn: d.retiredOn ?? null,
+  isSystem: d.id === AGGREGATION_DOCUMENT_ID,
 });
 
 async function fetchDetail(id: number): Promise<InformationTypeDetail> {

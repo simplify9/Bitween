@@ -12,6 +12,7 @@ import { Dialog } from "../../components/ui/overlays";
 import { Pagination } from "../../components/ui/Pagination";
 import { Table } from "../../components/ui/Table";
 import { keys } from "../../api/queryKeys";
+import { UsedByCell, useSubscriptionsCache } from "../../components/config/shared";
 
 function CreateNotifierDialog({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
@@ -75,6 +76,9 @@ export function NotifiersPage() {
     placeholderData: keepPreviousData,
   });
   const channels = useAdapterCatalog("handler");
+  // Notifiers carry subscription ids only, so the names come from the shared cache
+  // every other screen already reads.
+  const subscriptions = useSubscriptionsCache();
 
   const setParam = (key: string, value: string | null, resetOffset = key === "q") =>
     setSearchParams(
@@ -172,14 +176,17 @@ export function NotifiersPage() {
             },
             { header: "Channel", cell: (n) => <span className="text-ink-600">{channelLabel(n.channelId)}</span> },
             {
+              // Named, not counted: "1 subscription" tells you a notifier is wired up but
+              // not to what, which is the only thing worth knowing from the list.
               header: "Watches",
+              wrap: true,
               cell: (n) =>
-                n.subscriptionIds.length > 0 ? (
-                  <span className="text-ink-600">
-                    {n.subscriptionIds.length} subscription{n.subscriptionIds.length === 1 ? "" : "s"}
-                  </span>
-                ) : (
+                n.subscriptionIds.length === 0 ? (
                   <span className="text-warn-700">Nothing — never fires</span>
+                ) : (
+                  <UsedByCell
+                    items={(subscriptions.data ?? []).filter((s) => n.subscriptionIds.includes(s.id))}
+                  />
                 ),
             },
             { header: "Status", cell: (n) => (n.enabled ? <Badge tone="ok">Active</Badge> : <Badge>Off</Badge>) },
