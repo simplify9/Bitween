@@ -410,15 +410,19 @@ export function BusGatewayPage() {
     : false;
 
   /**
-   * Which of this subscription's adapter slots reference a partner value. Read off the
-   * draft rather than the saved record, so picking "No partner" and pasting a
+   * Which of the route's subscription's adapter slots reference a partner value. Read off
+   * the draft rather than the saved record, so picking "No partner" and pasting a
    * `{{partner.…}}` URL in the same sitting is still caught before the save.
+   *
+   * `d0`, not `edit.draft`: the partner belongs to the route, so the slots that read it
+   * are the first hop's. `edit` follows whichever hop is open, and a response hop's
+   * properties would answer for a subscription the partner was never set on.
    */
   const partnerTokenSlots = (
     [
-      ["receiver", edit?.draft.receiverProperties],
-      ["mapper", edit?.draft.mapperProperties],
-      ["handler", edit?.draft.handlerProperties],
+      ["receiver", d0?.receiverProperties],
+      ["mapper", d0?.mapperProperties],
+      ["handler", d0?.handlerProperties],
     ] as const
   )
     .filter(([, props]) => Object.values(props ?? {}).some((v) => v.includes("{{partner.")))
