@@ -143,7 +143,7 @@ export function ApiGatewayPage() {
       {/* Endpoint above rather than beside: the attachments table below carries a
           column per configuration field and needs the full width to do it. */}
       <div className="space-y-5">
-        <Panel title="Endpoint" description="Partners authenticate with their API key.">
+        <Panel title="Endpoint" description="Where partners send their documents, and how they identify themselves.">
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="URL name" htmlFor="ag-url">
               <TextInput
@@ -156,6 +156,30 @@ export function ApiGatewayPage() {
             </Field>
             <CopyField value={`/api/Gateway/${urlName}/sync`} label="Synchronous — waits for the result" />
             <CopyField value={`/api/Gateway/${urlName}/async`} label="Asynchronous — returns the exchange id" />
+          </div>
+
+          {/*
+            The URLs alone are not enough to make a call, and the header name appears
+            nowhere else in the product — it is only in the C# that reads it. Without
+            this, handing a partner the endpoint still leaves them guessing.
+          */}
+          <div className="mt-4 border-t border-ink-100 pt-4">
+            <p className="mb-2 text-[11px] font-medium tracking-wide text-ink-400 uppercase">
+              How a partner calls it
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-ink-50 px-3 py-2.5 font-mono text-[12px] leading-relaxed text-ink-700">
+              {`POST /api/Gateway/${urlName}/sync\npartnerkey: <the partner's API key>\n\n<the document, as the body>`}
+            </pre>
+            <p className="mt-2 text-[12px] text-ink-500">
+              The{" "}
+              <code className="rounded bg-ink-100 px-1 py-0.5 font-mono text-[11px]">partnerkey</code>{" "}
+              header is what identifies the caller — it decides which attached partner the exchange
+              runs as, so each partner sends its own. Keys are issued on a{" "}
+              <Link to="/partners" className="font-medium text-crimson-700 hover:underline">
+                partner's page
+              </Link>
+              , and only shown once when created.
+            </p>
           </div>
         </Panel>
 
