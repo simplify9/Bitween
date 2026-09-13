@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.XPath;
+using Newtonsoft.Json;
 using SW.PrimitiveTypes;
 using SW.Bitween.Model;
 
@@ -29,10 +31,25 @@ namespace SW.Bitween
 
             foreach (var pp in doc.PromotedProperties)
             {
-                propReader.TryGetValue(pp.Value, out var ppValue);
-                //TODO check if we need to validate here
-                //if (ppValue is null)
-                //  throw new SWValidationException("PROMOTED_PROPERTY_NOT_FOUND", $"The path {pp.Value} is null on the docuemnt");
+                string ppValue;
+                try
+                {
+                    propReader.TryGetValue(pp.Value, out ppValue);
+                }
+                catch (Exception ex) when (ex is JsonException || ex is XPathException)
+                {
+                    // A path the reader cannot parse throws out of it rather than returning false,
+                    // and unhandled it reached the caller as a bare 400 naming nothing — on every
+                    // message of this information type, since the bad path is on the type itself.
+                    // Which property is broken is the one thing needed to fix it.
+                    throw new SWValidationException("INVALID_PROMOTED_PROPERTY_PATH",
+                        $"Promoted property '{pp.Key}' on information type '{doc.Name}' has a path that cannot be read: '{pp.Value}'. {ex.Message}");
+                }
+
+                // A path that simply doesn't match this payload is not an error: an information
+                // type promotes what its documents *may* carry, and TryGetValue reports that by
+                // returning false, leaving the property null. Only an unreadable path throws.
+
                 // Stored as the payload sent it. It used to be lower-cased here, which was
                 // only ever to pair with the lower-cased term in Xchanges/Search — nothing
                 // matches on this dictionary (match expressions read the payload directly),

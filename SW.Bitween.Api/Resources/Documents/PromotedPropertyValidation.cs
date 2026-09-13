@@ -26,12 +26,26 @@ namespace SW.Bitween.Resources.Documents
                     throw new SWValidationException("INVALID_PROMOTED_PROPERTY_VALUE",
                         $"Promoted property '{pp.Key}' must have a non-empty path value.");
 
+                // Trimmed here *and* written back. Validating the trimmed value while storing the
+                // raw one let " $.ref" pass every check below and then fail at read time, which
+                // 400s every message on this information type rather than this one save.
                 var trimmed = pp.Value.Trim();
+                pp.Value = trimmed;
 
                 if (format == DocumentFormat.Json)
                 {
                     // Must be a JSONPath: starts with '$' or a simple dot-separated identifier path
-                    if (!trimmed.StartsWith("$") && !Regex.IsMatch(trimmed, @"^[a-zA-Z_][a-zA-Z0-9_]*(?:(\.[a-zA-Z_][a-zA-Z0-9_]*)|(\[[0-9]+\]))*$"))
+                    //
+                    // The '$' branch is checked rather than trusted. Treating any leading '$' as
+                    // proof of a JSONPath let "$", "$." and "$.." through, none of which select
+                    // anything — they saved cleanly and failed only once a message arrived. A step
+                    // is a '.'/'..' followed by a name, or a bracket; names stay deliberately
+                    // permissive (anything but a delimiter) so paths that already work keep working.
+                    var valid = trimmed.StartsWith("$")
+                        ? Regex.IsMatch(trimmed, @"^\$(?:\.\.?[^.\[\]]+|\[[^\]]+\])+$")
+                        : Regex.IsMatch(trimmed, @"^[a-zA-Z_][a-zA-Z0-9_]*(?:(\.[a-zA-Z_][a-zA-Z0-9_]*)|(\[[0-9]+\]))*$");
+
+                    if (!valid)
                         throw new SWValidationException("INVALID_PROMOTED_PROPERTY_PATH",
                             $"Promoted property '{pp.Key}' has an invalid JSON path: '{pp.Value}'. Expected a JSONPath expression (e.g. '$.field.subField') or dot-notation path.");
                 }
