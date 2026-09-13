@@ -81,9 +81,15 @@ namespace SW.Bitween.Resources.Xchanges
                             ResponseFileName = result.ResponseName,
                             // The same three counts the file keys above are already derived from.
                             // Left unassigned, every stage reported its document as "0 b".
+                            //
+                            // The result-side two are guarded because the join to XchangeResult is
+                            // a left one: an exchange still running, or one that failed before it
+                            // produced a result, has no row there. Reading a non-nullable int off
+                            // that null threw "Nullable object must have a value" out of the whole
+                            // query — one such exchange 500'd the entire list.
                             InputFileSize = xchange.InputSize,
-                            OutputFileSize = result.OutputSize,
-                            ResponseFileSize = result.ResponseSize,
+                            OutputFileSize = result != null ? result.OutputSize : 0,
+                            ResponseFileSize = result != null ? result.ResponseSize : 0,
                             CorrelationId = xchange.CorrelationId,
                             // xchange.PartnerId is the authoritative source (set at creation from the
                             // gateway/bus-route partner, or the subscription's own PartnerId as a
