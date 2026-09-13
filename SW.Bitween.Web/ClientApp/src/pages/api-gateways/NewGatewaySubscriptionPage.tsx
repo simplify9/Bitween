@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
@@ -88,6 +88,24 @@ export function NewGatewaySubscriptionPage() {
   const handlers = useAdapterCatalog("handler");
 
   const [draft, update] = useDraft<Draft>(EMPTY);
+
+  /**
+   * Fills the name in from the gateway, so the field is one to accept rather than one
+   * to invent. Deliberately not from the partner in `?partnerId=`, even though it is
+   * right there: an attachment is (gateway, partner, subscription), and one subscription
+   * is normally shared by every partner on the gateway. Seeding it with whichever partner
+   * happened to be picked first would name a shared pipeline after one of its callers.
+   *
+   * Seeded once: `touched` latches as soon as the field is edited, so nothing overwrites
+   * a typed name.
+   */
+  const touched = useRef(false);
+  const gatewayName = gateway.data?.name;
+  useEffect(() => {
+    if (touched.current || !gatewayName) return;
+    update({ name: gatewayName });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gatewayName]);
 
   /** Back to the attach page, carrying the partner along if one was already picked. */
   const backToAttach = (extra: Record<string, string>) => {
@@ -265,7 +283,10 @@ export function NewGatewaySubscriptionPage() {
               value={draft.name}
               autoFocus
               placeholder="e.g. Coral orders to SAP"
-              onChange={(e) => update({ name: e.target.value })}
+              onChange={(e) => {
+                touched.current = true;
+                update({ name: e.target.value });
+              }}
             />
           </Field>
         </div>

@@ -1,5 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router";
 import type { MatchCondition, MatchGroup, MatchNode } from "../../api";
+import { useSessionCan } from "../../auth/guards";
 import { matchSummary } from "../../lib/match";
 import { Button } from "../ui/basics";
 import { Select } from "../ui/forms";
@@ -168,13 +170,23 @@ export function MatchExpressionEditor({
   onChange,
   properties,
   disabled,
+  informationTypeId,
 }: {
   value: MatchGroup | null;
   onChange: (value: MatchGroup | null) => void;
   /** Promoted properties of the information type being filtered (friendly name + JSON path). */
   properties: { key: string; path: string }[];
   disabled: boolean;
+  /**
+   * The type those properties come from. Only used to point at it when it has none —
+   * without it the empty state names the fix without offering it.
+   */
+  informationTypeId?: number | null;
 }) {
+  // Not `disabled`: that says whether this filter can be edited, which is a different
+  // grant from the one that would let you go and add the properties it needs.
+  const canEditTypes = useSessionCan("documents.edit");
+
   if (value === null) {
     return (
       <div className="space-y-2.5">
@@ -194,7 +206,15 @@ export function MatchExpressionEditor({
         )}
         {properties.length === 0 && (
           <p className="text-[13px] text-ink-400">
-            Filters match on promoted properties — this information type has none yet.
+            Filters match on promoted properties — this information type has none yet.{" "}
+            {informationTypeId != null && canEditTypes && (
+              <Link
+                to={`/information-types/${informationTypeId}`}
+                className="font-medium text-crimson-700 hover:underline"
+              >
+                Add some
+              </Link>
+            )}
           </p>
         )}
       </div>
