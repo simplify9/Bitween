@@ -25,7 +25,7 @@ test("scheduled job create, adapters, pause/resume, receive now, list, delete", 
 
   // Source — open by default. Receiver adapter plus its one required prop.
   await pickOption(page, "receiver adapter", "NativeHttpReceiver");
-  await expect(page.getByRole("combobox", { name: "receiver adapter" })).toHaveValue("NativeHttpReceiver");
+  await expect(page.getByRole("combobox", { name: "receiver adapter" })).toHaveValue("HttpReceiver");
   await page.locator("#prop-Url").fill("https://example.com/feed");
   await expect(page.locator("#prop-Url")).toHaveValue("https://example.com/feed");
 
@@ -37,7 +37,7 @@ test("scheduled job create, adapters, pause/resume, receive now, list, delete", 
   // Only one stage is open at a time, so #prop-Url is unambiguous here.
   await page.getByRole("button", { name: /^Delivery/ }).click();
   await pickOption(page, "handler adapter", "NativeHttpHandler");
-  await expect(page.getByRole("combobox", { name: "handler adapter" })).toHaveValue("NativeHttpHandler");
+  await expect(page.getByRole("combobox", { name: "handler adapter" })).toHaveValue("HttpHandler");
   await page.locator("#prop-Url").fill("https://example.com/sink");
   await expect(page.locator("#prop-Url")).toHaveValue("https://example.com/sink");
 
@@ -69,10 +69,10 @@ test("scheduled job create, adapters, pause/resume, receive now, list, delete", 
   // summarises what it saved, so both the adapter and its property show without opening it.
   await page.reload();
   const source = page.getByRole("button", { name: /^Source/ });
-  await expect(source).toContainText("NativeHttpReceiver");
+  await expect(source).toContainText("HttpReceiver");
   await expect(source).toContainText("https://example.com/feed");
   const delivery = page.getByRole("button", { name: /^Delivery/ });
-  await expect(delivery).toContainText("NativeHttpHandler");
+  await expect(delivery).toContainText("HttpHandler");
   await expect(delivery).toContainText("https://example.com/sink");
 
   // Narrow by type — the supported filter — so the row can't be paged out of sight. Deliberately

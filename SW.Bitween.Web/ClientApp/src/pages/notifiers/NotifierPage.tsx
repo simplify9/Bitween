@@ -10,7 +10,7 @@ import { Checkbox, Field, TextInput } from "../../components/ui/forms";
 import { EditableTitle, Panel, UnsavedBar } from "../../components/ui/Panel";
 import { ConfirmDialog } from "../../components/ui/overlays";
 import { MiniTable } from "../../components/ui/Table";
-import { SearchSelect } from "../../components/ui/SearchSelect";
+import { AdapterPicker } from "../../components/config/AdapterPicker";
 import { useAdapterCatalog } from "../../components/config/AdapterConfig";
 import { useSubscriptionsCache } from "../../components/config/shared";
 import { timeAgo } from "../../lib/dates";
@@ -219,19 +219,15 @@ export function NotifierPage() {
               <div className="space-y-4">
                 <div className="max-w-sm">
                   <Field label="Deliver via" htmlFor="nf-channel">
-                    <SearchSelect
+                    <AdapterPicker
                       id="nf-channel"
-                      aria-label="Deliver via"
+                      kind="handler"
+                      label="Deliver via"
                       value={draft.channelId}
+                      catalog={channels.data ?? []}
+                      loading={channels.isPending}
                       disabled={!canEdit || channels.isPending}
                       onChange={(v) => set("channelId", v)}
-                      placeholder="Pick a handler…"
-                      options={(channels.data ?? []).map((a) => ({
-                        value: a.id,
-                        label: a.label,
-                        code: a.id,
-                        hint: a.native ? "Native" : a.versions.length > 0 ? `v${a.versions.at(-1)}` : "Custom",
-                      }))}
                     />
                   </Field>
                 </div>

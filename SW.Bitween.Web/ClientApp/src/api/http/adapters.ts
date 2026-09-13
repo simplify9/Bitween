@@ -23,6 +23,25 @@ const KIND_PREFIX: Record<AdapterKind, string> = {
   validator: "validators",
 };
 
+/**
+ * What to call an adapter on screen.
+ *
+ * An adapter's id is its C# class name, so every in-process one is spelled
+ * `NativeSomething` — and with no friendly name coming from the backend, that
+ * prefix was what people read in every picker. It says nothing a user acts on:
+ * where an adapter runs is the *other* list's business now, not part of its name.
+ * Stripped for display only — `id` is untouched, and stays what a subscription
+ * stores, what the row is searchable by, and what is shown when the catalog
+ * doesn't know an adapter.
+ */
+function displayName(key: string): string {
+  // "NativeMapper" would strip to a bare "Mapper", which names the kind rather
+  // than the adapter and reads as the generic one next to "JSONMapper".
+  if (key === "NativeMapper") return "Visual mapper";
+  const stripped = key.replace(/^Native/, "");
+  return stripped === "" ? key : stripped;
+}
+
 function toProps(values: Record<string, RawStartupValue> | null): AdapterProp[] {
   return Object.entries(values ?? {}).map(([key, v]) => ({
     key,
@@ -43,8 +62,7 @@ export const adapterMethods = {
     return (rows ?? []).map((r) => ({
       id: r.key,
       kind,
-      // No backend source for a friendly display name — fall back to the raw id.
-      label: r.key,
+      label: displayName(r.key),
       native: r.native,
       versions: r.versions ?? [],
       props: toProps(r.startupValues),
